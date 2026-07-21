@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "skills": {
+    "express-rest-api": {
+      "source": "pluginagentmarketplace/custom-plugin-nodejs",
+      "sourceType": "github",
+      "computedHash": "a8c4f3a426aa036af7d26b0d8ca22c57d1ce27ed76d19a6d40c48c4b4a5c5b3c"
+    },
+    "solidity-security": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "computedHash": "080c10be84baecfb396906abb085f16ec3e70b027a9355becb4a394c47da0b80"
+    },
+    "typescript-best-practices": {
+      "source": "0xbigboss/claude-code",
+      "sourceType": "github",
+      "computedHash": "b85adad2caf537bb27fa82910cfc356a2176897cda4ae3fcb1d2b021798e1415"
+    }
+  }
+}
