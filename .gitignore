@@ -1,5 +1,3 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
 # Dependencies
 node_modules
 .pnp
@@ -8,33 +6,29 @@ node_modules
 # Local env files
 .env
 .env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*.local
 
 # Testing
 coverage
 
-# Turbo
+# Build outputs
+dist
+build
+out
+.next
 .turbo
-
-# Vercel
 .vercel
 
-# Build Outputs
-.next/
-out/
-build
-dist
-
-
-# Debug
+# Debug / OS
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-
-# Misc
+pnpm-debug.log*
 .DS_Store
 *.pem
-
 .atl
+
+# Nested lockfiles (monorepo uses root lockfile only)
+apps/**/pnpm-lock.yaml
+apps/**/package-lock.json
+apps/**/yarn.lock
