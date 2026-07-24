@@ -31,7 +31,7 @@ export interface GroupMembership {
     slug: string;
     name: string;
     avatarUrl?: string;
-    role: 'admin' | 'member' | 'moderator';
+    role: 'LEADER' | 'CO_LEADER' | 'MEMBER';
 }
 
 export interface UserGroup {

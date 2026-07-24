@@ -3,6 +3,7 @@ import Group, { GroupType } from "../models/Group";
 import User, { MembershipRole } from "../models/User";
 import JoinRequest, { JoinRequestStatus } from "../models/JoinRequest";
 import GroupBan from "../models/GroupBan";
+import { GroupEmail } from "../emails/GroupEmail";
 import { saveGroupAvatar } from "../utils/storage";
 import { generateSlug } from "../utils/slug";
 import { generateInviteCode } from "../utils/code";
@@ -89,6 +90,12 @@ export class GroupController {
 
             if (leaderCount >= 3) {
                 res.status(403).json({ message: "No podés liderar más de 3 grupos" });
+                return;
+            }
+
+            // Check total group membership limit
+            if (user.memberships.length >= 4) {
+                res.status(403).json({ message: "No podés estar en más de 4 grupos al mismo tiempo" });
                 return;
             }
 
@@ -206,6 +213,7 @@ export class GroupController {
                 pendingRequestsCount = await JoinRequest.countDocuments({
                     group: group._id,
                     status: JoinRequestStatus.PENDING,
+                    expiresAt: { $gt: new Date() },
                 });
             }
 
@@ -337,6 +345,7 @@ export class GroupController {
                     group: group._id,
                     user: userId,
                     status: JoinRequestStatus.PENDING,
+                    expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
                 });
                 await joinRequest.save();
 
@@ -457,7 +466,23 @@ export class GroupController {
                 .sort({ createdAt: -1 })
                 .lean();
 
-            const formatted = requests.map((r: any) => ({
+            // Mark expired requests as rejected
+            const now = new Date();
+            const expiredIds = requests
+                .filter((r: any) => new Date(r.expiresAt) < now)
+                .map((r: any) => r._id);
+
+            if (expiredIds.length > 0) {
+                await JoinRequest.updateMany(
+                    { _id: { $in: expiredIds } },
+                    { $set: { status: JoinRequestStatus.REJECTED } }
+                );
+            }
+
+            // Filter out expired requests from response
+            const activeRequests = requests.filter((r: any) => new Date(r.expiresAt) >= now);
+
+            const formatted = activeRequests.map((r: any) => ({
                 id: r._id,
                 user: {
                     id: r.user._id,
@@ -465,6 +490,7 @@ export class GroupController {
                     avatarUrl: r.user.avatarUrl,
                 },
                 createdAt: r.createdAt,
+                expiresAt: r.expiresAt,
             }));
 
             res.status(200).json(formatted);
@@ -500,6 +526,14 @@ export class GroupController {
 
             if (!joinRequest) {
                 res.status(404).json({ message: 'Solicitud no encontrada' });
+                return;
+            }
+
+            // Check if request has expired
+            if (new Date(joinRequest.expiresAt) < new Date()) {
+                joinRequest.status = JoinRequestStatus.REJECTED;
+                await joinRequest.save();
+                res.status(410).json({ message: 'La solicitud expiró', code: 'REQUEST_EXPIRED' });
                 return;
             }
 
@@ -595,6 +629,249 @@ export class GroupController {
         } catch (error) {
             console.error(error);
             res.status(500).json({ message: 'Hubo un error al rechazar la solicitud' });
+        }
+    };
+
+    static updateMemberRole = async (req: Request, res: Response) => {
+        try {
+            const userId = req.user!._id.toString();
+            const { slug, memberId } = req.params;
+            const { role } = req.body;
+
+            const group = await Group.findOne({ slug }).lean();
+
+            if (!group) {
+                res.status(404).json({ message: 'Grupo no encontrado' });
+                return;
+            }
+
+            if (group.leader.toString() !== userId) {
+                res.status(403).json({ message: 'Solo el líder puede gestionar miembros' });
+                return;
+            }
+
+            if (memberId === userId) {
+                res.status(400).json({ message: 'No podés cambiar tu propio rol' });
+                return;
+            }
+
+            if (!Object.values(MembershipRole).includes(role)) {
+                res.status(400).json({ message: 'Rol inválido' });
+                return;
+            }
+
+            const memberIndex = group.memberships.findIndex(
+                (m) => m.user.toString() === memberId
+            );
+
+            if (memberIndex === -1) {
+                res.status(404).json({ message: 'Miembro no encontrado en el grupo' });
+                return;
+            }
+
+            group.memberships[memberIndex].role = role;
+            await Group.findByIdAndUpdate(group._id, {
+                memberships: group.memberships
+            });
+
+            await User.findByIdAndUpdate(memberId, {
+                $set: {
+                    'memberships.$[elem].role': role
+                }
+            }, {
+                arrayFilters: [{ 'elem.group': group._id }]
+            });
+
+            res.status(200).json({ message: 'Rol actualizado exitosamente' });
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ message: 'Hubo un error al actualizar el rol' });
+        }
+    };
+
+    static removeMember = async (req: Request, res: Response) => {
+        try {
+            const userId = req.user!._id.toString();
+            const { slug, memberId } = req.params;
+
+            const group = await Group.findOne({ slug }).lean();
+
+            if (!group) {
+                res.status(404).json({ message: 'Grupo no encontrado' });
+                return;
+            }
+
+            if (group.leader.toString() !== userId) {
+                res.status(403).json({ message: 'Solo el líder puede expulsar miembros' });
+                return;
+            }
+
+            if (memberId === userId) {
+                res.status(400).json({ message: 'No podés expulsarte a vos mismo' });
+                return;
+            }
+
+            const memberIndex = group.memberships.findIndex(
+                (m) => m.user.toString() === memberId
+            );
+
+            if (memberIndex === -1) {
+                res.status(404).json({ message: 'Miembro no encontrado en el grupo' });
+                return;
+            }
+
+            const memberRole = group.memberships[memberIndex].role;
+            if (memberRole === MembershipRole.LEADER || memberRole === MembershipRole.CO_LEADER) {
+                res.status(400).json({ message: 'No podés expulsar a un líder o co-líder' });
+                return;
+            }
+
+            group.memberships.splice(memberIndex, 1);
+            await Group.findByIdAndUpdate(group._id, {
+                memberships: group.memberships
+            });
+
+            await User.findByIdAndUpdate(memberId, {
+                $pull: {
+                    memberships: { group: group._id }
+                }
+            });
+
+            const expelledUser = await User.findById(memberId).select('email name').lean();
+            if (expelledUser) {
+                GroupEmail.sendExpulsionNotification({
+                    email: expelledUser.email,
+                    name: expelledUser.name,
+                    groupName: group.name
+                }).catch(console.error);
+            }
+
+            res.status(200).json({ message: 'Miembro expulsado exitosamente' });
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ message: 'Hubo un error al expulsar al miembro' });
+        }
+    };
+
+    static searchGroups = async (req: Request, res: Response) => {
+        try {
+            const { q } = req.query;
+
+            if (!q || typeof q !== 'string') {
+                res.status(400).json({ message: 'El parámetro de búsqueda es requerido' });
+                return;
+            }
+
+            const query = q.trim();
+
+            if (query.length < 2) {
+                res.status(400).json({ message: 'La búsqueda debe tener al menos 2 caracteres' });
+                return;
+            }
+
+            let groups;
+
+            // Si es exactamente 6 caracteres numéricos, buscar por código
+            if (/^\d{6}$/.test(query)) {
+                groups = await Group.findOne({ inviteCode: query })
+                    .select('name slug inviteCode type avatarUrl memberships')
+                    .lean();
+
+                groups = groups ? [groups] : [];
+            } else {
+                // Buscar por nombre (parcial, case-insensitive)
+                groups = await Group.find({
+                    name: { $regex: query, $options: 'i' }
+                })
+                    .select('name slug inviteCode type avatarUrl memberships')
+                    .limit(20)
+                    .lean();
+            }
+
+            const results = groups.map((group) => ({
+                id: group._id,
+                name: group.name,
+                slug: group.slug,
+                inviteCode: group.inviteCode,
+                type: group.type,
+                avatarUrl: group.avatarUrl,
+                memberCount: group.memberships.length,
+            }));
+
+            res.status(200).json(results);
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ message: 'Hubo un error al buscar grupos' });
+        }
+    };
+
+    static getGroupById = async (req: Request, res: Response) => {
+        try {
+            const { id } = req.params;
+
+            const group = await Group.findById(id)
+                .select('name slug inviteCode type avatarUrl memberships leader')
+                .lean();
+
+            if (!group) {
+                res.status(404).json({ message: 'Grupo no encontrado' });
+                return;
+            }
+
+            res.status(200).json({
+                id: group._id,
+                name: group.name,
+                slug: group.slug,
+                inviteCode: group.inviteCode,
+                type: group.type,
+                avatarUrl: group.avatarUrl,
+                memberCount: group.memberships.length,
+            });
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ message: 'Hubo un error al obtener el grupo' });
+        }
+    };
+
+    static getGroupMembers = async (req: Request, res: Response) => {
+        try {
+            const { id } = req.params;
+
+            const group = await Group.findById(id)
+                .populate<{ memberships: { user: { _id: string; name: string; lastName: string; avatarUrl?: string }; role: MembershipRole; joinedAt: Date }[] }>('memberships.user', 'name lastName avatarUrl')
+                .lean();
+
+            if (!group) {
+                res.status(404).json({ message: 'Grupo no encontrado' });
+                return;
+            }
+
+            const rolePriority: Record<MembershipRole, number> = {
+                [MembershipRole.LEADER]: 0,
+                [MembershipRole.CO_LEADER]: 1,
+                [MembershipRole.MEMBER]: 2,
+                [MembershipRole.ADMIN]: 3,
+            };
+
+            const sortedMembers = [...group.memberships].sort((a, b) => {
+                const prioA = rolePriority[a.role];
+                const prioB = rolePriority[b.role];
+                if (prioA !== prioB) return prioA - prioB;
+                return new Date(a.joinedAt).getTime() - new Date(b.joinedAt).getTime();
+            });
+
+            const members = sortedMembers.map((m) => ({
+                userId: m.user._id,
+                name: `${m.user.name} ${m.user.lastName}`,
+                role: m.role,
+                avatarUrl: m.user.avatarUrl,
+                joinedAt: m.joinedAt,
+            }));
+
+            res.status(200).json(members);
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ message: 'Hubo un error al obtener los miembros' });
         }
     };
 }

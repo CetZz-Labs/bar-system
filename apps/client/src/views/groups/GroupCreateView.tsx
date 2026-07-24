@@ -56,7 +56,7 @@ export default function GroupCreateView() {
     refetchOnWindowFocus: false,
   });
 
-  const ledGroupsCount = groups?.filter((g) => g.role === "admin").length ?? 0;
+  const ledGroupsCount = groups?.filter((g) => g.role === "LEADER").length ?? 0;
   const isLeaderLimitReached = ledGroupsCount >= 3;
 
   useEffect(() => {

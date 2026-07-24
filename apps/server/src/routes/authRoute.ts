@@ -3,6 +3,7 @@ import { AuthController } from "../controllers/AuthController";
 import { body, param } from "express-validator";
 import { handleInputErrors } from "../middleware/validation";
 import { authenticate } from "../middleware/auth";
+import { isOfLegalAge } from "../utils/age";
 
 const router: Router = Router()
 
@@ -12,7 +13,15 @@ router.post('/register',
     body('email').notEmpty().withMessage('El email es requerido').isEmail().withMessage('El email es invalido'),
     body('password').notEmpty().withMessage('La contraseña es requerida').isLength({ min: 8 }).withMessage('La contraseña debe tener al menos 8 caracteres'),
     body('confirmPassword').notEmpty().withMessage('La confirmacion de contraseña es requerida').isLength({ min: 8 }).withMessage('La confirmacion de contraseña debe tener al menos 8 caracteres'),
-    body('birthdate').optional().isDate().withMessage('La fecha de nacimiento es invalida'),
+    body('birthdate')
+        .notEmpty().withMessage('La fecha de nacimiento es requerida')
+        .isDate().withMessage('La fecha de nacimiento es invalida')
+        .custom((value) => {
+            if (!isOfLegalAge(new Date(value))) {
+                throw new Error('Debés ser mayor de 18 años para registrarte');
+            }
+            return true;
+        }),
     handleInputErrors,
     AuthController.createAccount
 )
@@ -75,7 +84,15 @@ router.get('/session',
 router.post('/onboarding',
     authenticate(),
     body('fullName').notEmpty().withMessage('El nombre completo es requerido').isLength({ min: 2, max: 50 }).withMessage('El nombre completo es requerido y debe tener entre 2 y 50 caracteres'),
-    body('birthdate').notEmpty().withMessage('La fecha de nacimiento es requerida'),
+    body('birthdate')
+        .notEmpty().withMessage('La fecha de nacimiento es requerida')
+        .isDate().withMessage('La fecha de nacimiento es invalida')
+        .custom((value) => {
+            if (!isOfLegalAge(new Date(value))) {
+                throw new Error('Debés ser mayor de 18 años');
+            }
+            return true;
+        }),
     handleInputErrors,
     AuthController.onboarding
 )
@@ -89,7 +106,15 @@ router.put('/profile',
     authenticate(),
     body('name').notEmpty().withMessage('El nombre es requerido').isLength({ min: 3 }).withMessage('El nombre debe tener al menos 3 caracteres'),
     body('lastName').notEmpty().withMessage('El apellido es requerido').isLength({ min: 3 }).withMessage('El apellido debe tener al menos 3 caracteres'),
-    body('birthdate').optional().isDate().withMessage('La fecha de nacimiento es invalida'),
+    body('birthdate')
+        .optional()
+        .isDate().withMessage('La fecha de nacimiento es invalida')
+        .custom((value) => {
+            if (!isOfLegalAge(new Date(value))) {
+                throw new Error('Debés ser mayor de 18 años');
+            }
+            return true;
+        }),
     body('avatarUrl').optional().isURL().withMessage('El avatar URL es invalido'),
     handleInputErrors,
     AuthController.updateProfile

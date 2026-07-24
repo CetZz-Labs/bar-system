@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { BarController } from "../controllers/BarController";
-import { authenticate } from "../middleware/auth";
+import { authenticate, requireCompleteProfile } from "../middleware/auth";
 import { body } from "express-validator";
 import { handleInputErrors } from "../middleware/validation";
 import { Role } from "../models/User";
@@ -10,6 +10,7 @@ const router: Router = Router();
 
 router.post('/registro',
     authenticate([Role.USER, Role.ADMIN]),
+    requireCompleteProfile,
     body('name')
         .notEmpty().withMessage('El nombre del bar es requerido')
         .isLength({ min: 3, max: 60 }).withMessage('El nombre debe tener entre 3 y 60 caracteres'),

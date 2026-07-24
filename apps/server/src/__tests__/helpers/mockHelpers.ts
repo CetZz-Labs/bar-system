@@ -13,6 +13,7 @@ export const buildMockUser = (overrides: Partial<IUser> = {}): IUser => ({
   isActive: true,
   profileComplete: false,
   birthdate: new Date('1990-01-01'),
+  phone: undefined,
   avatarUrl: undefined,
   memberships: [],
   createdAt: new Date(),

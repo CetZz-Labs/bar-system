@@ -326,6 +326,7 @@ describe('GroupController.getPendingRequests', () => {
         _id: new Types.ObjectId(),
         user: { _id: requesterId, name: 'Juan', lastName: 'Pérez', avatarUrl: '/uploads/avatars/juan.jpg' },
         createdAt: new Date('2024-01-01'),
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       },
     ]
     vi.mocked(JoinRequest.find).mockReturnValue({

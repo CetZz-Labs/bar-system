@@ -77,3 +77,26 @@ export async function rejectGroupRequest(slug: string, requestId: string) {
 export function getGroupQRUrl(slug: string): string {
   return `${api.defaults.baseURL}/groups/${slug}/qr`;
 }
+
+export async function updateMemberRole(slug: string, memberId: string, role: string) {
+  try {
+    const { data } = await api.patch<{ message: string }>(
+      `/groups/${slug}/members/${memberId}/role`,
+      { role }
+    );
+    return data;
+  } catch (error) {
+    throwStandardError(error);
+  }
+}
+
+export async function removeMember(slug: string, memberId: string) {
+  try {
+    const { data } = await api.delete<{ message: string }>(
+      `/groups/${slug}/members/${memberId}`
+    );
+    return data;
+  } catch (error) {
+    throwStandardError(error);
+  }
+}
