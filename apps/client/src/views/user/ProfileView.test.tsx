@@ -59,8 +59,8 @@ describe('ProfileView', () => {
   };
 
   const mockGroups = [
-    { groupId: 'g1', slug: 'la-banda', name: 'La Banda', role: 'admin' as const, avatarUrl: 'https://example.com/g1.jpg' },
-    { groupId: 'g2', slug: 'amigos', name: 'Amigos', role: 'member' as const },
+    { groupId: 'g1', slug: 'la-banda', name: 'La Banda', role: 'LEADER' as const, avatarUrl: 'https://example.com/g1.jpg' },
+    { groupId: 'g2', slug: 'amigos', name: 'Amigos', role: 'MEMBER' as const },
   ];
 
   beforeEach(() => {

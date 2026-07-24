@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Avatar } from "@/components/ui/Avatar";
 import { toast } from "sonner";
 import { getGroupBySlug } from "@/API/GroupAPI";
+import { useAuth } from "@/hooks/useAuth";
 import type { GroupDetail } from "@/types/group";
 import GroupMemberList from "./components/GroupMemberList";
 import GroupInviteSection from "./components/GroupInviteSection";
@@ -16,6 +17,7 @@ type ErrorType = "not_found" | "forbidden" | "server" | null;
 export default function GroupDetailView() {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
+  const { data: user } = useAuth();
 
   const [group, setGroup] = useState<GroupDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -210,7 +212,13 @@ export default function GroupDetailView() {
           </div>
 
           {/* Members List */}
-          <GroupMemberList members={group.members} />
+          <GroupMemberList
+            members={group.members}
+            canManage={group.canManage}
+            currentUserId={user?._id ?? ""}
+            slug={group.slug}
+            onAction={refetch}
+          />
 
           {/* Pending Requests — visible only for LEADER */}
           {group.canManage && (

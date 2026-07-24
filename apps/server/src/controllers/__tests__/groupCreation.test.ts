@@ -273,6 +273,39 @@ describe('GroupController.createGroup', () => {
     })
   })
 
+  describe('business error: total membership limit exceeded (4 groups)', () => {
+    it('returns 403', async () => {
+      const userId = new Types.ObjectId()
+      const mockUser = {
+        _id: userId,
+        memberships: [
+          { group: new Types.ObjectId(), role: MembershipRole.MEMBER },
+          { group: new Types.ObjectId(), role: MembershipRole.MEMBER },
+          { group: new Types.ObjectId(), role: MembershipRole.MEMBER },
+          { group: new Types.ObjectId(), role: MembershipRole.MEMBER },
+        ],
+        save: vi.fn().mockResolvedValue(true),
+      }
+      vi.mocked(User.findById).mockResolvedValue(mockUser as any)
+
+      const req = buildMockRequest({
+        user: { _id: userId } as any,
+        body: {
+          name: 'Los De Siempre',
+          type: 'OPEN',
+        },
+      })
+      const res = buildMockResponse()
+
+      await GroupController.createGroup(req, res)
+
+      expect(res.status).toHaveBeenCalledWith(403)
+      expect(res.json).toHaveBeenCalledWith({
+        message: 'No podés estar en más de 4 grupos al mismo tiempo',
+      })
+    })
+  })
+
   describe('photo error: file too large', () => {
     it('returns 400', async () => {
       const userId = new Types.ObjectId()

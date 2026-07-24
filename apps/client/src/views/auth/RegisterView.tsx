@@ -25,6 +25,7 @@ export default function RegisterView() {
         fullName: "",
         phone: "",
         email: "",
+        birthdate: "",
         password: "",
         confirmPassword: "",
         referralCode: ""
@@ -65,6 +66,7 @@ export default function RegisterView() {
     const watchedName = watch("fullName")
     const watchedEmail = watch("email")
     const watchedPhone = watch("phone")
+    const watchedBirthdate = watch("birthdate")
 
     return (
         <div className="flex flex-col flex-1 pb-nav px-4 pt-5 min-h-[100dvh]">
@@ -159,6 +161,26 @@ export default function RegisterView() {
                                     {...register("phone", { required: "Ingresá tu teléfono" })}
                                     error={errors.phone?.message}
                                 />
+                                <Input 
+                                    label="FECHA DE NACIMIENTO"
+                                    type="date"
+                                    {...register("birthdate", { 
+                                        required: "Ingresá tu fecha de nacimiento",
+                                        validate: (val: string | undefined) => {
+                                            if (!val) return "Ingresá tu fecha de nacimiento";
+                                            const birth = new Date(val);
+                                            const today = new Date();
+                                            let age = today.getFullYear() - birth.getFullYear();
+                                            const m = today.getMonth() - birth.getMonth();
+                                            if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
+                                                age--;
+                                            }
+                                            if (age < 18) return "Debés ser mayor de 18 años";
+                                            return true;
+                                        }
+                                    })}
+                                    error={errors.birthdate?.message}
+                                />
                             </div>
 
                             <div className="mt-auto pt-8 pb-4">
@@ -167,7 +189,7 @@ export default function RegisterView() {
                                     variant="surface" 
                                     size="lg" 
                                     fullWidth 
-                                    onClick={() => handleNext(['fullName', 'email', 'phone'])}
+                                    onClick={() => handleNext(['fullName', 'email', 'phone', 'birthdate'])}
                                     className="bg-surface-2 hover:bg-surface-3 text-white border-0 py-4 font-semibold w-full flex justify-center items-center gap-2 rounded-xl transition-colors"
                                 >
                                     <span className="text-text-secondary font-ui font-semibold">CONTINUAR</span> 
@@ -290,6 +312,12 @@ export default function RegisterView() {
                                     <div className="flex justify-between items-center text-sm">
                                         <span className="text-text-secondary">Teléfono</span>
                                         <span className="font-medium text-white">{watchedPhone}</span>
+                                    </div>
+                                    <div className="h-[1px] w-full bg-border" />
+
+                                    <div className="flex justify-between items-center text-sm">
+                                        <span className="text-text-secondary">Fecha de nacimiento</span>
+                                        <span className="font-medium text-white">{watchedBirthdate}</span>
                                     </div>
                                 </div>
 

@@ -120,6 +120,7 @@ export class UserController {
             }
 
             const groups = user.memberships.map((membership: any) => ({
+                groupId: membership.group?._id?.toString(),
                 name: membership.group?.name,
                 slug: membership.group?.slug,
                 avatarUrl: membership.group?.avatarUrl,

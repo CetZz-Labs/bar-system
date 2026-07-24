@@ -27,6 +27,7 @@ export interface IUser extends Document {
     email: string;
     password: string;
     birthdate?: Date;
+    phone?: string;
     role: Role;
     avatarUrl?: string; // or string if required
     isActive: boolean;
@@ -58,6 +59,10 @@ const userSchema = new Schema<IUser>({
     },
     birthdate: {
         type: Date,
+    },
+    phone: {
+        type: String,
+        trim: true,
     },
     role: {
         type: String,

@@ -9,9 +9,9 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 
 const ROLE_LABELS: Record<string, string> = {
-  admin: "Líder",
-  moderator: "Co-líder",
-  member: "Miembro",
+  LEADER: "Líder",
+  CO_LEADER: "Co-líder",
+  MEMBER: "Miembro",
 };
 
 export default function GroupsListView() {

@@ -18,20 +18,20 @@ const mockGroups: GroupMembership[] = [
     slug: 'los-de-siempre',
     name: 'Los De Siempre',
     avatarUrl: '/uploads/g1.jpg',
-    role: 'admin',
+    role: 'LEADER',
   },
   {
     groupId: 'g2',
     slug: 'las-chicas',
     name: 'Las Chicas',
-    role: 'member',
+    role: 'MEMBER',
   },
   {
     groupId: 'g3',
     slug: 'rock-city',
     name: 'Rock City',
     avatarUrl: '/uploads/g3.jpg',
-    role: 'moderator',
+    role: 'CO_LEADER',
   },
 ];
 

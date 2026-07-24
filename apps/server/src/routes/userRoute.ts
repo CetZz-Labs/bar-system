@@ -4,6 +4,7 @@ import { authenticate, requireCompleteProfile } from "../middleware/auth";
 import { handleInputErrors } from "../middleware/validation";
 import { body } from "express-validator";
 import multer from "multer";
+import { isOfLegalAge } from "../utils/age";
 
 const router: Router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -19,7 +20,15 @@ router.put(
     "/profile",
     body("name").optional().isString().withMessage("El nombre debe ser un texto"),
     body("lastName").optional().isString().withMessage("El apellido debe ser un texto"),
-    body("birthdate").optional().isISO8601().withMessage("Fecha de nacimiento no válida"),
+    body("birthdate")
+        .optional()
+        .isISO8601().withMessage("Fecha de nacimiento no válida")
+        .custom((value) => {
+            if (!isOfLegalAge(new Date(value))) {
+                throw new Error('Debés ser mayor de 18 años');
+            }
+            return true;
+        }),
     handleInputErrors,
     UserController.updateUserProfile
 );

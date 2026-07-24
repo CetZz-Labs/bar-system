@@ -94,6 +94,70 @@ router.post('/:slug/requests/:requestId/reject',
     GroupController.rejectRequest
 );
 
+router.patch('/:slug/members/:memberId/role',
+    authenticate(),
+    param('slug')
+        .isString()
+        .notEmpty()
+        .withMessage('El slug es requerido'),
+    param('memberId')
+        .isMongoId()
+        .withMessage('El ID del miembro es requerido'),
+    body('role')
+        .isIn(['LEADER', 'CO_LEADER', 'MEMBER', 'ADMIN'])
+        .withMessage('El rol debe ser LEADER, CO_LEADER, MEMBER o ADMIN'),
+    handleInputErrors,
+    GroupController.updateMemberRole
+);
+
+router.delete('/:slug/members/:memberId',
+    authenticate(),
+    param('slug')
+        .isString()
+        .notEmpty()
+        .withMessage('El slug es requerido'),
+    param('memberId')
+        .isMongoId()
+        .withMessage('El ID del miembro es requerido'),
+    handleInputErrors,
+    GroupController.removeMember
+);
+
+router.get('/search',
+    authenticate(),
+    (req, res, next) => {
+        const { q } = req.query;
+        if (!q || typeof q !== 'string') {
+            res.status(400).json({ message: 'El parámetro de búsqueda es requerido' });
+            return;
+        }
+        if (q.trim().length < 2) {
+            res.status(400).json({ message: 'La búsqueda debe tener al menos 2 caracteres' });
+            return;
+        }
+        next();
+    },
+    GroupController.searchGroups
+);
+
+router.get('/:id/members',
+    authenticate(),
+    param('id')
+        .isMongoId()
+        .withMessage('El ID del grupo es requerido'),
+    handleInputErrors,
+    GroupController.getGroupMembers
+);
+
+router.get('/:id',
+    authenticate(),
+    param('id')
+        .isMongoId()
+        .withMessage('El ID del grupo es requerido'),
+    handleInputErrors,
+    GroupController.getGroupById
+);
+
 router.get('/:slug',
     authenticate(),
     param('slug')
