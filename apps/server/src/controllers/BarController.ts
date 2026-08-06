@@ -190,6 +190,31 @@ export class BarController {
         }
     };
 
+    static getActiveBars = async (req: Request, res: Response) => {
+        try {
+            const bars = await Bar.find({ status: BarStatus.ACTIVE })
+                .select('name slug address logoUrl coverUrl schedule description')
+                .sort({ name: 1 })
+                .lean();
+
+            const result = bars.map((bar) => ({
+                id: bar._id,
+                name: bar.name,
+                slug: bar.slug,
+                address: bar.address,
+                logoUrl: bar.logoUrl,
+                coverUrl: bar.coverUrl,
+                schedule: bar.schedule,
+                description: bar.description,
+            }));
+
+            res.status(200).json(result);
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ message: 'Hubo un error al obtener los bares activos' });
+        }
+    };
+
     static getMyBars = async (req: Request, res: Response) => {
         try {
             const userId = req.user!._id;

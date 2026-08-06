@@ -40,6 +40,11 @@ router.post('/registro',
     BarController.registerBar
 );
 
+router.get('/activos',
+    authenticate([Role.USER, Role.ADMIN]),
+    BarController.getActiveBars
+);
+
 router.get('/mis-bares',
     authenticate([Role.USER, Role.ADMIN]),
     BarController.getMyBars

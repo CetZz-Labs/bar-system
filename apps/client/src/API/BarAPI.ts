@@ -1,7 +1,16 @@
 import api from "@/libs/axios";
 import { throwStandardError } from "@/utils/apiError";
-import type { CreateBarFormData, EditBarProfileFormData, MyBar, RegisterBarResponse } from "@/types/bar";
+import type { ActiveBar, CreateBarFormData, EditBarProfileFormData, MyBar, RegisterBarResponse } from "@/types/bar";
 import type { Bar } from "@/types/bar";
+
+export async function getActiveBars() {
+  try {
+    const { data } = await api.get<ActiveBar[]>("/bar/activos");
+    return data;
+  } catch (error) {
+    throwStandardError(error);
+  }
+}
 
 export async function registerBar(body: CreateBarFormData) {
   try {
