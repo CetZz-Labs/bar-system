@@ -10,6 +10,7 @@ import path from 'path'
 import groupRouter from './routes/groupRoute'
 import barRouter from './routes/barRoute'
 import outingRouter from './routes/outingRoute'
+import cashierRouter from './routes/cashierRoute'
 
 if (process.env.NODE_ENV !== 'production') {
     process.loadEnvFile()
@@ -35,6 +36,7 @@ app.use('/api/users', userRouter)
 app.use('/api/groups/:groupId/outings', outingRouter)
 app.use('/api/groups', groupRouter)
 app.use('/api/bar', barRouter)
+app.use('/api/cashier', cashierRouter)
 app.get('/api', (req, res) => {
     res.send('Hello World!')
 })

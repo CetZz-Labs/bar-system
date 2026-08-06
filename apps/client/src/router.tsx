@@ -18,6 +18,9 @@ import JoinGroupView from './views/groups/JoinGroupView'
 import BarRegisterView from './views/bar/BarRegisterView'
 import MyBarsView from './views/bar/MyBarsView'
 import BarProfileView from './views/bar/BarProfileView'
+import CashierLoginView from './views/cashier/CashierLoginView'
+import CashierPanelView from './views/cashier/CashierPanelView'
+import CashierLayout from './layouts/CashierLayout'
 
 export default function Router() {
     return (
@@ -49,6 +52,11 @@ export default function Router() {
                     <Route path="/bar/:id/perfil" element={<BarProfileView />} />
                 </Route>
                 <Route path="/unirse/:inviteCode" element={<JoinGroupView />} />
+
+                <Route path="/bar/:barId/cajero/login" element={<CashierLoginView />} />
+                <Route element={<CashierLayout />}>
+                    <Route path="/bar/:barId/cajero" element={<CashierPanelView />} />
+                </Route>
             </Routes>
         </BrowserRouter>
     )

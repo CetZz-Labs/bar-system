@@ -71,6 +71,9 @@ router.patch('/:id/perfil',
     body('phone')
         .optional()
         .notEmpty().withMessage('El teléfono no puede estar vacío'),
+    body('closingTime')
+        .optional()
+        .matches(/^([01]\d|2[0-3]):([0-5]\d)$/).withMessage('La hora de cierre debe tener formato HH:MM'),
     handleInputErrors,
     BarController.updateBarProfile
 );

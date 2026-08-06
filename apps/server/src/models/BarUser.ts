@@ -2,14 +2,14 @@ import { Document, model, Schema, Types } from "mongoose";
 
 export enum BarUserRole {
     OWNER = 'OWNER',
-    WAITER = 'WAITER',
-    MANAGER = 'MANAGER',
+    CASHIER = 'CASHIER',
 }
 
 export interface IBarUser extends Document {
     bar: Types.ObjectId;
     user: Types.ObjectId;
     role: BarUserRole;
+    isActive: boolean;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -31,6 +31,10 @@ const barUserSchema = new Schema<IBarUser>({
         type: String,
         enum: Object.values(BarUserRole),
         default: BarUserRole.OWNER,
+    },
+    isActive: {
+        type: Boolean,
+        default: true,
     },
 }, {
     timestamps: true,
