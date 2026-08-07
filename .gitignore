@@ -32,3 +32,13 @@ pnpm-debug.log*
 apps/**/pnpm-lock.yaml
 apps/**/package-lock.json
 apps/**/yarn.lock
+
+# AI agent harness — per-developer working memory (progress/history.md and
+# progress/current.template.md stay tracked; see progress/current.template.md)
+progress/current.md
+progress/explorers/*
+progress/implementers/*
+progress/reviewers/*
+!progress/explorers/.gitkeep
+!progress/implementers/.gitkeep
+!progress/reviewers/.gitkeep
