@@ -343,36 +343,43 @@ describe('GroupController.getGroupQR', () => {
 
   describe('happy path', () => {
     it('returns QR image as PNG buffer', async () => {
-      const userId = new Types.ObjectId()
-      const qrBuffer = Buffer.from('fake-qr-image')
+      const originalFrontendUrl = process.env.FRONTEND_URL
+      process.env.FRONTEND_URL = 'https://labanda.app'
 
-      const mockGroup = {
-        _id: new Types.ObjectId(),
-        inviteCode: 'BAN4K2',
-        memberships: [
-          { user: userId, role: MembershipRole.MEMBER, joinedAt: new Date() },
-        ],
+      try {
+        const userId = new Types.ObjectId()
+        const qrBuffer = Buffer.from('fake-qr-image')
+
+        const mockGroup = {
+          _id: new Types.ObjectId(),
+          inviteCode: 'BAN4K2',
+          memberships: [
+            { user: userId, role: MembershipRole.MEMBER, joinedAt: new Date() },
+          ],
+        }
+        vi.mocked(Group.findOne).mockReturnValue(buildMockQuery(mockGroup) as any)
+        vi.mocked(QRCode.toBuffer).mockResolvedValue(qrBuffer)
+
+        const req = buildMockRequest({
+          user: { _id: userId } as any,
+          params: { slug: 'los-de-siempre' },
+        })
+        const res = buildMockResponse()
+
+        await GroupController.getGroupQR(req, res)
+
+        expect(QRCode.toBuffer).toHaveBeenCalledWith('https://labanda.app/unirse/BAN4K2', {
+          type: 'png',
+          width: 512,
+          margin: 2,
+        })
+        expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'image/png')
+        expect(res.setHeader).toHaveBeenCalledWith('Content-Length', qrBuffer.length)
+        expect(res.status).toHaveBeenCalledWith(200)
+        expect(res.send).toHaveBeenCalledWith(qrBuffer)
+      } finally {
+        process.env.FRONTEND_URL = originalFrontendUrl
       }
-      vi.mocked(Group.findOne).mockReturnValue(buildMockQuery(mockGroup) as any)
-      vi.mocked(QRCode.toBuffer).mockResolvedValue(qrBuffer)
-
-      const req = buildMockRequest({
-        user: { _id: userId } as any,
-        params: { slug: 'los-de-siempre' },
-      })
-      const res = buildMockResponse()
-
-      await GroupController.getGroupQR(req, res)
-
-      expect(QRCode.toBuffer).toHaveBeenCalledWith('https://labanda.app/unirse/BAN4K2', {
-        type: 'png',
-        width: 512,
-        margin: 2,
-      })
-      expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'image/png')
-      expect(res.setHeader).toHaveBeenCalledWith('Content-Length', qrBuffer.length)
-      expect(res.status).toHaveBeenCalledWith(200)
-      expect(res.send).toHaveBeenCalledWith(qrBuffer)
     })
   })
 

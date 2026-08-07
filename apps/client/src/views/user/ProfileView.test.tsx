@@ -71,7 +71,7 @@ describe('ProfileView', () => {
       isError: false,
       logoutUser: vi.fn(),
       isProfileComplete: true,
-    } as any);
+    });
   });
 
   it('renders loading state initially', () => {
@@ -240,7 +240,7 @@ describe('ProfileView', () => {
       isError: false,
       logoutUser: mockLogout,
       isProfileComplete: true,
-    } as any);
+    });
 
     mockGetUserProfile.mockResolvedValue(mockProfile);
     mockGetUserGroups.mockResolvedValue([]);
@@ -276,7 +276,7 @@ describe('ProfileView', () => {
       isError: false,
       logoutUser: mockLogout,
       isProfileComplete: true,
-    } as any);
+    });
 
     mockGetUserProfile.mockResolvedValue(mockProfile);
     mockGetUserGroups.mockResolvedValue([]);

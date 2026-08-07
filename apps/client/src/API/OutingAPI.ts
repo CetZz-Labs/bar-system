@@ -39,6 +39,15 @@ export async function updateOuting(groupId: string, outingId: string, input: Upd
   }
 }
 
+export async function cancelOuting(groupId: string, outingId: string) {
+  try {
+    const { data } = await api.patch<Outing>(`/groups/${groupId}/outings/${outingId}/cancel`);
+    return data;
+  } catch (error) {
+    throwStandardError(error);
+  }
+}
+
 // Returns the group's active/pending outing, or null when it has none (404).
 export async function getActiveOuting(groupId: string) {
   try {

@@ -1,9 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { renderWithProviders } from '@/test/renderWithProviders';
 import OutingSection from './OutingSection';
 import * as OutingAPI from '@/API/OutingAPI';
 import * as BarAPI from '@/API/BarAPI';
+import { toast } from 'sonner';
 import type { GroupMember } from '@/types/group';
 import type { Outing } from '@/types/outing';
 
@@ -127,6 +129,98 @@ describe('OutingSection', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Editar salida')).toBeInTheDocument();
+    });
+  });
+
+  it('shows cancel button on the active outing card for LEADER but not for MEMBER', async () => {
+    vi.mocked(OutingAPI.getActiveOuting).mockResolvedValue(mockOuting);
+
+    const { rerender } = renderWithProviders(
+      <OutingSection groupId="group-1" members={mockMembers} currentUserRole="MEMBER" />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Bar de Prueba')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('Cancelar salida')).not.toBeInTheDocument();
+
+    rerender(
+      <OutingSection groupId="group-1" members={mockMembers} currentUserRole="LEADER" />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Cancelar salida')).toBeInTheDocument();
+    });
+  });
+
+  it('does not show cancel button when the active outing is no longer PENDING', async () => {
+    vi.mocked(OutingAPI.getActiveOuting).mockResolvedValue({ ...mockOuting, status: 'ACTIVE' });
+
+    renderWithProviders(
+      <OutingSection groupId="group-1" members={mockMembers} currentUserRole="LEADER" />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Bar de Prueba')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('Cancelar salida')).not.toBeInTheDocument();
+  });
+
+  it('opens a confirmation dialog and cancels the outing on confirm', async () => {
+    const user = userEvent.setup();
+    vi.mocked(OutingAPI.getActiveOuting).mockResolvedValue(mockOuting);
+    vi.mocked(OutingAPI.cancelOuting).mockResolvedValue({ ...mockOuting, status: 'CANCELLED' });
+
+    renderWithProviders(
+      <OutingSection groupId="group-1" members={mockMembers} currentUserRole="LEADER" />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Bar de Prueba')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText('Cancelar salida'));
+
+    // Confirmation dialog appears with its own confirm button.
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText('Sí, cancelar'));
+
+    await waitFor(() => {
+      expect(OutingAPI.cancelOuting).toHaveBeenCalledWith('group-1', 'outing-1');
+    });
+    expect(toast.success).toHaveBeenCalledWith('Salida cancelada');
+  });
+
+  it('shows an error toast when cancelling fails', async () => {
+    const user = userEvent.setup();
+    vi.mocked(OutingAPI.getActiveOuting).mockResolvedValue(mockOuting);
+    vi.mocked(OutingAPI.cancelOuting).mockRejectedValue({
+      type: 'server',
+      message: 'La salida ya no puede cancelarse',
+      status: 409,
+    });
+
+    renderWithProviders(
+      <OutingSection groupId="group-1" members={mockMembers} currentUserRole="LEADER" />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Bar de Prueba')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText('Cancelar salida'));
+
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText('Sí, cancelar'));
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith('La salida ya no puede cancelarse');
     });
   });
 });

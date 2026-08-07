@@ -17,16 +17,19 @@ export function FileUpload({ onFileSelect, previewUrl, error, label, disabled }:
     const [squareWarning, setSquareWarning] = useState(false);
 
     useEffect(() => {
-        if (!previewUrl) {
-            setSquareWarning(false);
-            return;
-        }
+        if (!previewUrl) return;
+        let cancelled = false;
         const img = new Image();
         img.onload = () => {
-            setSquareWarning(img.width !== img.height);
+            if (!cancelled) setSquareWarning(img.width !== img.height);
         };
         img.src = previewUrl;
+        return () => {
+            cancelled = true;
+        };
     }, [previewUrl]);
+
+    const showSquareWarning = previewUrl ? squareWarning : false;
 
     const handleFile = useCallback((file: File) => {
         if (file.size > MAX_SIZE_BYTES) {
@@ -127,7 +130,7 @@ export function FileUpload({ onFileSelect, previewUrl, error, label, disabled }:
                     </>
                 )}
             </button>
-            {squareWarning && (
+            {showSquareWarning && (
                 <div className="flex items-center gap-2 text-text-secondary text-sm">
                     <AlertTriangle size={16} className="text-lime" />
                     <span>La imagen no es cuadrada. Se recortará automáticamente.</span>

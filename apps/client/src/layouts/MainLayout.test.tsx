@@ -24,7 +24,7 @@ describe('MainLayout', () => {
       isError: false,
       logoutUser: vi.fn(),
       isProfileComplete: false,
-    } as any);
+    });
 
     render(
       <MemoryRouter initialEntries={['/bar']}>
@@ -46,7 +46,7 @@ describe('MainLayout', () => {
       isError: false,
       logoutUser: vi.fn(),
       isProfileComplete: false,
-    } as any);
+    });
 
     render(
       <MemoryRouter initialEntries={['/bar']}>
@@ -64,12 +64,12 @@ describe('MainLayout', () => {
 
   it('should redirect to /onboarding when profile is incomplete and not on /onboarding', () => {
     mockUseAuth.mockReturnValue({
-      data: { id: '1', name: '', email: 'test@example.com' },
+      data: { _id: '1', name: '', lastName: '', email: 'test@example.com', isActive: true, role: 'user' },
       isLoading: false,
       isError: false,
       logoutUser: vi.fn(),
       isProfileComplete: false,
-    } as any);
+    });
 
     render(
       <MemoryRouter initialEntries={['/bar']}>
@@ -87,12 +87,12 @@ describe('MainLayout', () => {
 
   it('should render children when profile is complete', () => {
     mockUseAuth.mockReturnValue({
-      data: { id: '1', name: 'Test', lastName: 'User', birthdate: '2000-01-15', email: 'test@example.com' },
+      data: { _id: '1', name: 'Test', lastName: 'User', birthdate: '2000-01-15', email: 'test@example.com', isActive: true, role: 'user' },
       isLoading: false,
       isError: false,
       logoutUser: vi.fn(),
       isProfileComplete: true,
-    } as any);
+    });
 
     render(
       <MemoryRouter initialEntries={['/bar']}>
@@ -109,12 +109,12 @@ describe('MainLayout', () => {
 
   it('should NOT redirect when on /onboarding path with incomplete profile', () => {
     mockUseAuth.mockReturnValue({
-      data: { id: '1', name: '', email: 'test@example.com' },
+      data: { _id: '1', name: '', lastName: '', email: 'test@example.com', isActive: true, role: 'user' },
       isLoading: false,
       isError: false,
       logoutUser: vi.fn(),
       isProfileComplete: false,
-    } as any);
+    });
 
     render(
       <MemoryRouter initialEntries={['/onboarding']}>

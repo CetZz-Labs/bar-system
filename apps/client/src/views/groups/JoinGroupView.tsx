@@ -17,17 +17,13 @@ export default function JoinGroupView() {
   const { data: authData } = useAuth();
 
   const [group, setGroup] = useState<GroupInviteInfo | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<ErrorType>(null);
+  const [loading, setLoading] = useState(!!inviteCode);
+  const [error, setError] = useState<ErrorType>(inviteCode ? null : "not_found");
   const [joining, setJoining] = useState(false);
   const [joinedMessage, setJoinedMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!inviteCode) {
-      setError("not_found");
-      setLoading(false);
-      return;
-    }
+    if (!inviteCode) return;
 
     let cancelled = false;
 

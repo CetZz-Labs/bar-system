@@ -3,6 +3,7 @@ import { Document, model, Schema, Types } from "mongoose";
 export enum NotificationType {
     OUTING_CREATED = 'OUTING_CREATED',
     OUTING_UPDATED = 'OUTING_UPDATED',
+    OUTING_CANCELLED = 'OUTING_CANCELLED',
 }
 
 export interface INotification extends Document {

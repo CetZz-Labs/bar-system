@@ -21,8 +21,8 @@ export default function GroupDetailView() {
   const { data: user } = useAuth();
 
   const [group, setGroup] = useState<GroupDetail | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<ErrorType>(null);
+  const [loading, setLoading] = useState(!!slug);
+  const [error, setError] = useState<ErrorType>(slug ? null : "not_found");
   const [refreshKey, setRefreshKey] = useState(0);
 
   const refetch = useCallback(() => {
@@ -30,15 +30,9 @@ export default function GroupDetailView() {
   }, []);
 
   useEffect(() => {
-    if (!slug) {
-      setError("not_found");
-      setLoading(false);
-      return;
-    }
+    if (!slug) return;
 
     let cancelled = false;
-    setLoading(true);
-    setError(null);
 
     getGroupBySlug(slug)
       .then((data) => {

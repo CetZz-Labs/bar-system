@@ -1,8 +1,11 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { CalendarClock, MapPin, PenLine, PlusCircle } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { CalendarClock, MapPin, PenLine, PlusCircle, XCircle } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
-import { getActiveOuting } from "@/API/OutingAPI";
+import { Modal } from "@/components/ui/Modal";
+import { cancelOuting, getActiveOuting } from "@/API/OutingAPI";
+import { toastApiError } from "@/utils/apiError";
 import type { GroupMember, GroupRole } from "@/types/group";
 import OutingFormModal from "./OutingFormModal";
 
@@ -18,13 +21,31 @@ export default function OutingSection({
   currentUserRole,
 }: OutingSectionProps) {
   const [modalOpen, setModalOpen] = useState(false);
+  const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const canManageOuting = currentUserRole === "LEADER" || currentUserRole === "CO_LEADER";
+  const queryClient = useQueryClient();
 
   const { data: activeOuting, isLoading } = useQuery({
     queryKey: ["outings", "active", groupId],
     queryFn: () => getActiveOuting(groupId),
     enabled: !!groupId,
     refetchOnWindowFocus: false,
+  });
+
+  const cancelMutation = useMutation({
+    mutationFn: () => {
+      if (!activeOuting) throw new Error("No hay una salida activa para cancelar");
+      return cancelOuting(groupId, activeOuting._id);
+    },
+    onSuccess: () => {
+      toast.success("Salida cancelada");
+      queryClient.invalidateQueries({ queryKey: ["outings", "active", groupId] });
+      setCancelModalOpen(false);
+    },
+    onError: (error: unknown) => {
+      toastApiError(error);
+      setCancelModalOpen(false);
+    },
   });
 
   if (isLoading) {
@@ -86,10 +107,16 @@ export default function OutingSection({
           </p>
 
           {canEditOuting && (
-            <Button variant="outline" size="sm" onClick={() => setModalOpen(true)}>
-              <PenLine size={16} className="mr-2" />
-              Editar salida
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => setModalOpen(true)}>
+                <PenLine size={16} className="mr-2" />
+                Editar salida
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setCancelModalOpen(true)}>
+                <XCircle size={16} className="mr-2" />
+                Cancelar salida
+              </Button>
+            </div>
           )}
         </div>
       ) : (
@@ -113,6 +140,19 @@ export default function OutingSection({
           groupId={groupId}
           members={members}
           outing={activeOuting ?? null}
+        />
+      )}
+
+      {canEditOuting && (
+        <Modal
+          isOpen={cancelModalOpen}
+          onClose={() => setCancelModalOpen(false)}
+          onConfirm={() => cancelMutation.mutate()}
+          title="Cancelar salida"
+          description="¿Querés cancelar esta salida? Los invitados van a ser notificados y esta acción no se puede deshacer."
+          confirmText="Sí, cancelar"
+          cancelText="Volver"
+          isPending={cancelMutation.isPending}
         />
       )}
     </div>
