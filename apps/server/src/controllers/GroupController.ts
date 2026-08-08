@@ -753,6 +753,120 @@ export class GroupController {
         }
     };
 
+    static leaveGroup = async (req: Request, res: Response) => {
+        try {
+            const userId = req.user!._id.toString();
+            const { slug } = req.params;
+
+            const group = await Group.findOne({ slug }).lean();
+
+            if (!group) {
+                res.status(404).json({ message: 'Grupo no encontrado' });
+                return;
+            }
+
+            const membershipIndex = group.memberships.findIndex(
+                (m) => m.user.toString() === userId
+            );
+
+            if (membershipIndex === -1) {
+                res.status(403).json({ message: 'No sos miembro de este grupo' });
+                return;
+            }
+
+            const userRole = group.memberships[membershipIndex].role;
+            const isLeader = userRole === MembershipRole.LEADER;
+            const isCoLeader = userRole === MembershipRole.CO_LEADER;
+
+            // Check if user is the only member
+            if (group.memberships.length === 1) {
+                // Dissolve group - remove from users and delete
+                await User.findByIdAndUpdate(userId, {
+                    $pull: { memberships: { group: group._id } }
+                });
+                await Group.findByIdAndDelete(group._id);
+
+                res.status(200).json({
+                    message: 'Abandonaste el grupo. El grupo fue disuelto.',
+                    dissolved: true,
+                });
+                return;
+            }
+
+            // If leader or co-leader, find successor before removing
+            let successor = null;
+            if (isLeader || isCoLeader) {
+                // Find the next leader: first CO_LEADER, then oldest MEMBER
+                const sortedMembers = [...group.memberships]
+                    .filter((m) => m.user.toString() !== userId)
+                    .sort((a, b) => {
+                        const rolePriority: Record<MembershipRole, number> = {
+                            [MembershipRole.LEADER]: 0,
+                            [MembershipRole.CO_LEADER]: 1,
+                            [MembershipRole.MEMBER]: 2,
+                            [MembershipRole.ADMIN]: 3,
+                        };
+                        const prioA = rolePriority[a.role];
+                        const prioB = rolePriority[b.role];
+                        if (prioA !== prioB) return prioA - prioB;
+                        return new Date(a.joinedAt).getTime() - new Date(b.joinedAt).getTime();
+                    });
+
+                successor = sortedMembers[0];
+
+                // Update group leader if current leader is leaving
+                if (isLeader && successor) {
+                    await Group.findByIdAndUpdate(group._id, {
+                        leader: successor.user,
+                        $set: {
+                            'memberships.$[elem].role': MembershipRole.LEADER
+                        }
+                    }, {
+                        arrayFilters: [{ 'elem.user': successor.user }]
+                    });
+
+                    // Update successor's role in User model
+                    await User.findByIdAndUpdate(successor.user, {
+                        $set: {
+                            'memberships.$[elem].role': MembershipRole.LEADER
+                        }
+                    }, {
+                        arrayFilters: [{ 'elem.group': group._id }]
+                    });
+                }
+            }
+
+            // Remove user from group memberships
+            await Group.findByIdAndUpdate(group._id, {
+                $pull: { memberships: { user: userId } }
+            });
+
+            // Remove group from user memberships
+            await User.findByIdAndUpdate(userId, {
+                $pull: { memberships: { group: group._id } }
+            });
+
+            // Get successor name for response
+            let successorName = null;
+            if (successor) {
+                const successorUser = await User.findById(successor.user).select('name lastName').lean();
+                if (successorUser) {
+                    successorName = `${successorUser.name} ${successorUser.lastName}`;
+                }
+            }
+
+            res.status(200).json({
+                message: 'Abandonaste el grupo exitosamente',
+                dissolved: false,
+                needsSuccession: isLeader || isCoLeader,
+                successorName,
+            });
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ message: 'Hubo un error al abandonar el grupo' });
+        }
+    };
+
     static searchGroups = async (req: Request, res: Response) => {
         try {
             const { q } = req.query;

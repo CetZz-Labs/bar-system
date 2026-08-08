@@ -123,6 +123,16 @@ router.delete('/:slug/members/:memberId',
     GroupController.removeMember
 );
 
+router.post('/:slug/leave',
+    authenticate(),
+    param('slug')
+        .isString()
+        .notEmpty()
+        .withMessage('El slug es requerido'),
+    handleInputErrors,
+    GroupController.leaveGroup
+);
+
 router.get('/search',
     authenticate(),
     (req, res, next) => {

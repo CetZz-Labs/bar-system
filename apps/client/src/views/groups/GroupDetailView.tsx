@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router";
 import { motion } from "motion/react";
-import { ArrowLeft, Users, Settings, AlertCircle } from "lucide-react";
+import { ArrowLeft, Users, Settings, AlertCircle, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Avatar } from "@/components/ui/Avatar";
+import { Modal } from "@/components/ui/Modal";
 import { toast } from "sonner";
-import { getGroupBySlug } from "@/API/GroupAPI";
+import { getGroupBySlug, leaveGroup } from "@/API/GroupAPI";
 import { useAuth } from "@/hooks/useAuth";
 import type { GroupDetail } from "@/types/group";
 import GroupMemberList from "./components/GroupMemberList";
@@ -23,6 +24,8 @@ export default function GroupDetailView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<ErrorType>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
+  const [isLeaving, setIsLeaving] = useState(false);
 
   const refetch = useCallback(() => {
     setRefreshKey((k) => k + 1);
@@ -88,6 +91,51 @@ export default function GroupDetailView() {
 
   const handleSettings = () => {
     toast.info("Configuración del grupo disponible próximamente");
+  };
+
+  const handleLeave = async () => {
+    if (!slug) return;
+    setIsLeaving(true);
+    try {
+      const result = await leaveGroup(slug);
+      if (result) {
+        toast.success(result.message);
+        if (result.dissolved) {
+          toast.info("El grupo fue disuelto");
+        }
+      }
+      navigate("/");
+    } catch {
+      toast.error("Ocurrió un error. Intentá de nuevo.");
+    } finally {
+      setIsLeaving(false);
+      setShowLeaveModal(false);
+    }
+  };
+
+  const getLeaveModalText = () => {
+    if (!group) return { title: "", description: "" };
+    const role = group.currentUserRole;
+    const isLeaderOrCoLeader = role === "LEADER" || role === "CO_LEADER";
+
+    if (isLeaderOrCoLeader && group.members.length > 1) {
+      // Find the successor (next in role priority)
+      const rolePriority = { LEADER: 0, CO_LEADER: 1, MEMBER: 2 };
+      const sortedMembers = [...group.members]
+        .filter((m) => m.id !== user?._id)
+        .sort((a, b) => rolePriority[a.role] - rolePriority[b.role]);
+      const successor = sortedMembers[0];
+
+      return {
+        title: "Abandonar grupo",
+        description: `Al abandonar, ${successor?.name ?? "otro miembro"} asume como líder. Perdés acceso al grupo. ¿Continuar?`,
+      };
+    }
+
+    return {
+      title: "Abandonar grupo",
+      description: "¿Estás seguro? Perdés acceso al grupo. Tus puntos contribuidos quedan en el grupo.",
+    };
   };
 
   const renderError = () => {
@@ -250,8 +298,31 @@ export default function GroupDetailView() {
               Configuración del grupo
             </Button>
           )}
+
+          {/* Leave Group — visible for all members */}
+          <Button
+            variant="outline"
+            size="md"
+            className="w-full text-error hover:bg-error/10 hover:border-error/30"
+            onClick={() => setShowLeaveModal(true)}
+          >
+            <LogOut size={18} className="mr-2" />
+            Abandonar grupo
+          </Button>
         </div>
       )}
+
+      {/* Leave Group Modal */}
+      <Modal
+        isOpen={showLeaveModal}
+        onClose={() => setShowLeaveModal(false)}
+        onConfirm={handleLeave}
+        title={getLeaveModalText().title}
+        description={getLeaveModalText().description}
+        confirmText="Abandonar"
+        cancelText="Cancelar"
+        isPending={isLeaving}
+      />
     </motion.div>
   );
 }

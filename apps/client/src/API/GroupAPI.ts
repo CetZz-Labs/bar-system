@@ -100,3 +100,17 @@ export async function removeMember(slug: string, memberId: string) {
     throwStandardError(error);
   }
 }
+
+export async function leaveGroup(slug: string) {
+  try {
+    const { data } = await api.post<{
+      message: string;
+      dissolved: boolean;
+      needsSuccession?: boolean;
+      successorName?: string;
+    }>(`/groups/${slug}/leave`);
+    return data;
+  } catch (error) {
+    throwStandardError(error);
+  }
+}
