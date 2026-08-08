@@ -48,4 +48,20 @@ describe('generateJWT', () => {
     expect(() => generateJWT(payload)).toThrow()
     process.env.JWT_SECRET = originalJWT_SECRET
   })
+
+  it('accepts an extended payload with barId and role, and a custom expiresIn', () => {
+    vi.mocked(jwt.sign).mockReturnValue('cashier-token' as never)
+    const mockId = new Types.ObjectId()
+    const mockBarId = new Types.ObjectId()
+    const payload = { id: mockId, barId: mockBarId, role: 'CASHIER' }
+
+    const result = generateJWT(payload, '12h')
+
+    expect(result).toBe('cashier-token')
+    expect(jwt.sign).toHaveBeenCalledWith(
+      payload,
+      process.env.JWT_SECRET,
+      { expiresIn: '12h' }
+    )
+  })
 })

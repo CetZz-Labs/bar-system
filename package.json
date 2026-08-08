@@ -1,7 +1,7 @@
 {
   "name": "bar-system",
   "private": true,
-  "packageManager": "pnpm@10.28.1",
+  "packageManager": "pnpm@11.18.0",
   "scripts": {
     "dev": "pnpm -r --parallel dev",
     "dev:web": "pnpm --filter @bar/client dev",
@@ -14,13 +14,5 @@
   },
   "engines": {
     "node": ">=18"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "@swc/core",
-      "bcrypt",
-      "esbuild",
-      "sharp"
-    ]
   }
 }

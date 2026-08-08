@@ -29,6 +29,7 @@ export interface IBar extends Document {
     status: BarStatus;
     logoUrl?: string;
     coverUrl?: string;
+    closingTime: string;
 }
 
 const addressSchema = new Schema<IAddress>({
@@ -111,6 +112,11 @@ const barSchema = new Schema<IBar>({
     coverUrl: {
         type: String,
         trim: true,
+    },
+    closingTime: {
+        type: String,
+        match: /^([01]\d|2[0-3]):([0-5]\d)$/,
+        default: '06:00',
     },
 }, {
     timestamps: true,

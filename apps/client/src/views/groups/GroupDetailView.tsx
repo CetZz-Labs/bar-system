@@ -12,6 +12,7 @@ import type { GroupDetail } from "@/types/group";
 import GroupMemberList from "./components/GroupMemberList";
 import GroupInviteSection from "./components/GroupInviteSection";
 import PendingRequestsList from "./components/PendingRequestsList";
+import OutingSection from "./components/OutingSection";
 
 type ErrorType = "not_found" | "forbidden" | "server" | null;
 
@@ -258,6 +259,13 @@ export default function GroupDetailView() {
               </span>
             </div>
           </div>
+
+          {/* Outing Section — active outing card, or "create outing" for LEADER/CO_LEADER */}
+          <OutingSection
+            groupId={group.id}
+            members={group.members}
+            currentUserRole={group.currentUserRole}
+          />
 
           {/* Members List */}
           <GroupMemberList

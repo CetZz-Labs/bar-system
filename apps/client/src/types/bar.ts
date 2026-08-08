@@ -33,6 +33,18 @@ export interface MyBar extends Bar {
   registeredAt: string;
 }
 
+/** Shape returned by GET /bar/activos, used to populate bar selectors. */
+export interface ActiveBar {
+  id: string;
+  name: string;
+  slug: string;
+  address: BarAddress;
+  logoUrl?: string;
+  coverUrl?: string;
+  schedule: BarScheduleSlot[];
+  description?: string;
+}
+
 export interface RegisterBarResponse {
   message: string;
   bar: {
