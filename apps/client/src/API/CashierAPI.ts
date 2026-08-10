@@ -63,6 +63,6 @@ export async function searchCashierGroupsRaw(q: string): Promise<
                 },
             };
         }
-        throwStandardError(error);
+        return throwStandardError(error);
     }
 }

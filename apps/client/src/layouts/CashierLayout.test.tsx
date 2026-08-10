@@ -11,6 +11,7 @@ vi.mock('@/hooks/useCashierAuth', () => ({
 import { useCashierAuth } from '@/hooks/useCashierAuth';
 
 const mockUseCashierAuth = vi.mocked(useCashierAuth);
+type CashierAuthResult = ReturnType<typeof useCashierAuth>;
 
 describe('CashierLayout', () => {
   beforeEach(() => {
@@ -23,7 +24,7 @@ describe('CashierLayout', () => {
       isLoading: true,
       isError: false,
       logoutCashier: vi.fn(),
-    } as any);
+    } satisfies CashierAuthResult);
 
     render(
       <MemoryRouter initialEntries={['/bar/bar-1/cajero']}>
@@ -44,7 +45,7 @@ describe('CashierLayout', () => {
       isLoading: false,
       isError: false,
       logoutCashier: vi.fn(),
-    } as any);
+    } satisfies CashierAuthResult);
 
     render(
       <MemoryRouter initialEntries={['/bar/bar-1/cajero']}>
@@ -71,7 +72,7 @@ describe('CashierLayout', () => {
       isLoading: false,
       isError: false,
       logoutCashier: vi.fn(),
-    } as any);
+    } satisfies CashierAuthResult);
 
     render(
       <MemoryRouter initialEntries={['/bar/bar-1/cajero']}>

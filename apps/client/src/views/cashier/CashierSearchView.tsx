@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useNavigate, useParams } from 'react-router';
 import { motion } from 'motion/react';
 import { Camera, Loader2, QrCode, Search, Users } from 'lucide-react';
 import { searchCashierGroupsRaw } from '@/API/CashierAPI';
@@ -22,6 +23,8 @@ function formatTime(iso: string) {
 }
 
 export default function CashierSearchView() {
+  const { barId } = useParams<{ barId: string }>();
+  const navigate = useNavigate();
   const [query, setQuery] = useState('');
   const [debounced, setDebounced] = useState('');
   const [exactError, setExactError] = useState<CashierSearchExactError | null>(null);
@@ -52,19 +55,6 @@ export default function CashierSearchView() {
     refetchOnWindowFocus: false,
   });
 
-  useEffect(() => {
-    if (debounced.length < 2) {
-      setExactError(null);
-    }
-  }, [debounced]);
-
-  useEffect(() => {
-    return () => {
-      stopScanner();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const stopScanner = () => {
     if (scanTimer.current) {
       window.clearInterval(scanTimer.current);
@@ -74,6 +64,12 @@ export default function CashierSearchView() {
     streamRef.current = null;
     setScanning(false);
   };
+
+  useEffect(() => {
+    return () => {
+      stopScanner();
+    };
+  }, []);
 
   const startScanner = async () => {
     setCameraError(null);
@@ -121,6 +117,9 @@ export default function CashierSearchView() {
   };
 
   const results = searchQuery.data ?? [];
+  // Derivado en vez de sincronizado con un useEffect: el error puntual de
+  // búsqueda exacta ya no aplica una vez que el usuario borra el query.
+  const visibleExactError = debounced.length >= 2 ? exactError : null;
 
   return (
     <motion.div
@@ -180,16 +179,16 @@ export default function CashierSearchView() {
         </div>
       )}
 
-      {exactError && (
+      {visibleExactError && (
         <div
           className="rounded-md border border-error-border bg-error-dim px-4 py-3 text-sm text-error"
           role="alert"
         >
-          {exactError.message}
+          {visibleExactError.message}
         </div>
       )}
 
-      {!exactError && !searchQuery.isFetching && debounced.length >= 2 && results.length === 0 && (
+      {!visibleExactError && !searchQuery.isFetching && debounced.length >= 2 && results.length === 0 && (
         <p className="text-sm text-text-secondary m-0">
           No hay grupos con salida agendada a este bar para hoy.
         </p>
@@ -233,11 +232,9 @@ export default function CashierSearchView() {
               fullWidth
               type="button"
               onClick={() =>
-                toast.message(
-                  item.action === 'check_in'
-                    ? 'Check-in: pendiente LB-55'
-                    : 'Detalle: pendiente LB-55'
-                )
+                item.action === 'check_in'
+                  ? toast.message('Check-in: pendiente LB-55')
+                  : navigate(`/bar/${barId}/cajero/salida/${item.outingId}`, { state: { outing: item } })
               }
             >
               {item.action === 'check_in' ? 'Iniciar check-in' : 'Ver detalle'}

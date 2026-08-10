@@ -4,6 +4,7 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 import { useCashierAuth } from './useCashierAuth';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router';
+import type { CashierSession } from '@/types/cashier';
 
 // Mock the CashierAPI module
 vi.mock('@/API/CashierAPI', () => ({
@@ -42,8 +43,8 @@ describe('useCashierAuth', () => {
       bar: { id: 'bar-1', name: 'Bar Test', closingTime: '06:00' },
       shift: { startedAt: '2026-08-06T20:00:00.000Z' },
       user: { name: 'Test', lastName: 'Cashier' },
-    } as any);
-    mockCashierLogout.mockResolvedValue('Turno cerrado' as any);
+    } satisfies CashierSession);
+    mockCashierLogout.mockResolvedValue('Turno cerrado');
   });
 
   afterEach(() => {
@@ -64,13 +65,13 @@ describe('useCashierAuth', () => {
   });
 
   it('should fetch cashier session data successfully', async () => {
-    const mockSession = {
+    const mockSession: CashierSession = {
       role: 'OWNER',
       bar: { id: 'bar-1', name: 'Bar Test', closingTime: '06:00' },
       shift: { startedAt: '2026-08-06T20:00:00.000Z' },
       user: { name: 'Test', lastName: 'Owner' },
     };
-    mockCashierSession.mockResolvedValue(mockSession as any);
+    mockCashierSession.mockResolvedValue(mockSession);
 
     const { result } = renderHook(() => useCashierAuth('bar-1'), { wrapper: createWrapper() });
 
