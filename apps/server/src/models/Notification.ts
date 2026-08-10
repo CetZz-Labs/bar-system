@@ -4,6 +4,7 @@ export enum NotificationType {
     OUTING_CREATED = 'OUTING_CREATED',
     OUTING_UPDATED = 'OUTING_UPDATED',
     OUTING_CANCELLED = 'OUTING_CANCELLED',
+    GROUP_LEADERSHIP_ACQUIRED = 'GROUP_LEADERSHIP_ACQUIRED',
 }
 
 export interface INotification extends Document {

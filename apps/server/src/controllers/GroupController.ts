@@ -4,6 +4,7 @@ import Group, { GroupType } from "../models/Group";
 import User, { MembershipRole } from "../models/User";
 import JoinRequest, { JoinRequestStatus, IJoinRequest } from "../models/JoinRequest";
 import GroupBan from "../models/GroupBan";
+import Notification from "../models/Notification";
 import { GroupEmail } from "../emails/GroupEmail";
 import { saveGroupAvatar } from "../utils/storage";
 import { generateSlug } from "../utils/slug";
@@ -231,6 +232,24 @@ export class GroupController {
                 });
             }
 
+            // Get unseen departed members for current user
+            // Filter out entries for users who are currently members (they came back)
+            const seenDepartures = group.seenDepartures || [];
+            const departedMembers = (group.departedMembers || []).filter(
+                (d) => !group.memberships.some((m) => m.user.toString() === d.user.toString())
+            );
+            const unseenDepartedMembers = departedMembers.filter(
+                (d) => !seenDepartures.some((seenId) => seenId.toString() === userId)
+            );
+
+            // Get unseen succession notifications for current user
+            // Filter out entries where the new leader is currently a member (they came back)
+            const seenSuccessions = group.seenSuccessions || [];
+            const unseenSuccessions = (group.successionNotifications || []).filter(
+                (s) => !group.memberships.some((m) => m.user.toString() === s.newLeader.toString()) &&
+                !seenSuccessions.some((seenId) => seenId.toString() === userId)
+            );
+
             res.status(200).json({
                 id: group._id,
                 name: group.name,
@@ -245,6 +264,8 @@ export class GroupController {
                 canManage: isLeader,
                 currentUserRole,
                 pendingRequestsCount,
+                unseenDepartedMembers,
+                unseenSuccessions,
             });
         } catch (error) {
             console.error(error);
@@ -768,6 +789,247 @@ export class GroupController {
         } catch (error) {
             console.error(error);
             res.status(500).json({ message: 'Hubo un error al expulsar al miembro' });
+        }
+    };
+
+    static leaveGroup = async (req: Request, res: Response) => {
+        try {
+            const userId = req.user!._id.toString();
+            const { slug } = req.params;
+
+            const group = await Group.findOne({ slug }).lean();
+
+            if (!group) {
+                res.status(404).json({ message: 'Grupo no encontrado' });
+                return;
+            }
+
+            const membershipIndex = group.memberships.findIndex(
+                (m) => m.user.toString() === userId
+            );
+
+            if (membershipIndex === -1) {
+                res.status(403).json({ message: 'No sos miembro de este grupo' });
+                return;
+            }
+
+            const userRole = group.memberships[membershipIndex].role;
+            const isLeader = userRole === MembershipRole.LEADER;
+            const isCoLeader = userRole === MembershipRole.CO_LEADER;
+
+            const departingUser = await User.findById(userId).select('name lastName').lean();
+            const departingName = departingUser ? `${departingUser.name} ${departingUser.lastName}` : 'Un miembro';
+
+            // Check if user is the only member
+            if (group.memberships.length === 1) {
+                // Dissolve group - remove from users and delete
+                await User.findByIdAndUpdate(userId, {
+                    $pull: { memberships: { group: group._id } }
+                });
+                await Group.findByIdAndDelete(group._id);
+
+                res.status(200).json({
+                    message: 'Abandonaste el grupo. El grupo fue disuelto.',
+                    dissolved: true,
+                });
+                return;
+            }
+
+            // If leader or co-leader, find successor before removing
+            let successor: { user: { _id: string; name: string; lastName: string }; role: MembershipRole; joinedAt: Date } | null = null;
+            if (isLeader || isCoLeader) {
+                // Populate members with user info for tiebreaker
+                const groupWithMembers = await Group.findOne({ slug })
+                    .populate<{ memberships: { user: { _id: string; name: string; lastName: string }; role: MembershipRole; joinedAt: Date }[] }>('memberships.user', 'name lastName')
+                    .lean();
+
+                // Find the next leader: first CO_LEADER, then oldest MEMBER (tiebreaker: alphabetical by name)
+                const rolePriority: Record<MembershipRole, number> = {
+                    [MembershipRole.LEADER]: 0,
+                    [MembershipRole.CO_LEADER]: 1,
+                    [MembershipRole.MEMBER]: 2,
+                    [MembershipRole.ADMIN]: 3,
+                };
+
+                const sortedMembers = (groupWithMembers?.memberships || [])
+                    .filter((m) => m.user._id.toString() !== userId)
+                    .sort((a, b) => {
+                        const prioA = rolePriority[a.role];
+                        const prioB = rolePriority[b.role];
+                        if (prioA !== prioB) return prioA - prioB;
+                        // Tiebreaker: oldest first
+                        const dateA = new Date(a.joinedAt).getTime();
+                        const dateB = new Date(b.joinedAt).getTime();
+                        if (dateA !== dateB) return dateA - dateB;
+                        // Final tiebreaker: alphabetical by name
+                        const nameA = `${a.user.name} ${a.user.lastName}`;
+                        const nameB = `${b.user.name} ${b.user.lastName}`;
+                        return nameA.localeCompare(nameB);
+                    });
+
+                successor = sortedMembers[0];
+
+                // Update group leader if current leader is leaving
+                if (isLeader && successor) {
+                    await Group.findByIdAndUpdate(group._id, {
+                        leader: successor.user._id,
+                        $set: {
+                            'memberships.$[elem].role': MembershipRole.LEADER
+                        }
+                    }, {
+                        arrayFilters: [{ 'elem.user': successor.user._id }]
+                    });
+
+                    // Update successor's role in User model
+                    await User.findByIdAndUpdate(successor.user._id, {
+                        $set: {
+                            'memberships.$[elem].role': MembershipRole.LEADER
+                        }
+                    }, {
+                        arrayFilters: [{ 'elem.group': group._id }]
+                    });
+
+                    // Remove CO_LEADER role from other members (co-leader doesn't inherit)
+                    await Group.findByIdAndUpdate(group._id, {
+                        $set: {
+                            'memberships.$[elem].role': MembershipRole.MEMBER
+                        }
+                    }, {
+                        arrayFilters: [{ 'elem.role': MembershipRole.CO_LEADER, 'elem.user': { $ne: successor.user._id } }]
+                    });
+
+                    const successorId = successor.user._id.toString();
+
+                    // Update those members in User model too
+                    const coLeaders = (groupWithMembers?.memberships || []).filter(
+                        (m) => m.role === MembershipRole.CO_LEADER && m.user._id.toString() !== successorId
+                    );
+                    for (const coLeader of coLeaders) {
+                        await User.findByIdAndUpdate(coLeader.user._id, {
+                            $set: {
+                                'memberships.$[elem].role': MembershipRole.MEMBER
+                            }
+                        }, {
+                            arrayFilters: [{ 'elem.group': group._id }]
+                        });
+                    }
+
+                    // Notify the new leader
+                    await Notification.create({
+                        user: successor.user._id,
+                        type: 'GROUP_LEADERSHIP_ACQUIRED',
+                        message: `Ahora sos el líder del grupo ${group.name} porque ${departingName} abandonó`,
+                    });
+
+                    // Save succession notification for banner display
+                    await Group.findByIdAndUpdate(group._id, {
+                        $push: {
+                            successionNotifications: {
+                                newLeader: successor.user._id,
+                                newLeaderName: `${successor.user.name} ${successor.user.lastName}`,
+                                previousLeaderName: departingName,
+                                createdAt: new Date()
+                            }
+                        }
+                    });
+                }
+            }
+
+            // Add to departedMembers
+            await Group.findByIdAndUpdate(group._id, {
+                $push: {
+                    departedMembers: {
+                        user: userId,
+                        name: departingName,
+                        departedAt: new Date()
+                    }
+                }
+            });
+
+            // Remove user from group memberships
+            await Group.findByIdAndUpdate(group._id, {
+                $pull: { memberships: { user: userId } }
+            });
+
+            // Remove group from user memberships
+            await User.findByIdAndUpdate(userId, {
+                $pull: { memberships: { group: group._id } }
+            });
+
+            // Get successor name for response
+            let successorName = null;
+            if (successor) {
+                successorName = `${successor.user.name} ${successor.user.lastName}`;
+            }
+
+            res.status(200).json({
+                message: 'Abandonaste el grupo exitosamente',
+                dissolved: false,
+                needsSuccession: isLeader || isCoLeader,
+                successorName,
+            });
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ message: 'Hubo un error al abandonar el grupo' });
+        }
+    };
+
+    static markDeparturesSeen = async (req: Request, res: Response) => {
+        try {
+            const userId = req.user!._id.toString();
+            const { slug } = req.params;
+
+            const group = await Group.findOne({ slug }).lean();
+
+            if (!group) {
+                res.status(404).json({ message: 'Grupo no encontrado' });
+                return;
+            }
+
+            const isMember = group.memberships.some((m) => m.user.toString() === userId);
+            if (!isMember) {
+                res.status(403).json({ message: 'No sos miembro de este grupo' });
+                return;
+            }
+
+            // Add user to seenDepartures if not already there
+            await Group.findByIdAndUpdate(group._id, {
+                $addToSet: { seenDepartures: userId }
+            });
+
+            res.status(200).json({ message: 'Notificaciones marcadas como vistas' });
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ message: 'Hubo un error al marcar las notificaciones' });
+        }
+    };
+
+    static markSuccessionsSeen = async (req: Request, res: Response) => {
+        try {
+            const userId = req.user!._id.toString();
+            const { slug } = req.params;
+
+            const group = await Group.findOne({ slug }).lean();
+
+            if (!group) {
+                res.status(404).json({ message: 'Grupo no encontrado' });
+                return;
+            }
+
+            const isMember = group.memberships.some((m) => m.user.toString() === userId);
+            if (!isMember) {
+                res.status(403).json({ message: 'No sos miembro de este grupo' });
+                return;
+            }
+
+            await Group.findByIdAndUpdate(group._id, {
+                $addToSet: { seenSuccessions: userId }
+            });
+
+            res.status(200).json({ message: 'Notificaciones marcadas como vistas' });
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ message: 'Hubo un error al marcar las notificaciones' });
         }
     };
 

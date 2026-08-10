@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router";
 import { motion } from "motion/react";
-import { ArrowLeft, Users, Settings, AlertCircle } from "lucide-react";
+import { ArrowLeft, Users, Settings, AlertCircle, LogOut, UserMinus, Crown } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Avatar } from "@/components/ui/Avatar";
+import { Modal } from "@/components/ui/Modal";
 import { toast } from "sonner";
-import { getGroupBySlug } from "@/API/GroupAPI";
+import { getGroupBySlug, leaveGroup, markDeparturesSeen, markSuccessionsSeen } from "@/API/GroupAPI";
 import { useAuth } from "@/hooks/useAuth";
 import type { GroupDetail } from "@/types/group";
 import GroupMemberList from "./components/GroupMemberList";
@@ -24,6 +25,8 @@ export default function GroupDetailView() {
   const [loading, setLoading] = useState(!!slug);
   const [error, setError] = useState<ErrorType>(slug ? null : "not_found");
   const [refreshKey, setRefreshKey] = useState(0);
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
+  const [isLeaving, setIsLeaving] = useState(false);
 
   const refetch = useCallback(() => {
     setRefreshKey((k) => k + 1);
@@ -81,8 +84,99 @@ export default function GroupDetailView() {
     }
   }, [group, slug]);
 
+  useEffect(() => {
+    if (group?.unseenDepartedMembers && group.unseenDepartedMembers.length > 0 && slug) {
+      const names = group.unseenDepartedMembers.map((d) => d.name).join(", ");
+      toast.info(
+        `${names} abandonó el grupo`,
+        {
+          id: `departed-${slug}`,
+          duration: 8000,
+        }
+      );
+    }
+  }, [group, slug]);
+
+  useEffect(() => {
+    if (group?.unseenSuccessions && group.unseenSuccessions.length > 0 && slug) {
+      const succession = group.unseenSuccessions[0];
+      toast.info(
+        `${succession.newLeaderName} es el nuevo líder`,
+        {
+          id: `succession-${slug}`,
+          duration: 8000,
+        }
+      );
+    }
+  }, [group, slug]);
+
+  const handleDismissDepartures = async () => {
+    if (!slug) return;
+    try {
+      await markDeparturesSeen(slug);
+      setRefreshKey((k) => k + 1);
+    } catch {
+      // Silently fail - not critical
+    }
+  };
+
+  const handleDismissSuccessions = async () => {
+    if (!slug) return;
+    try {
+      await markSuccessionsSeen(slug);
+      setRefreshKey((k) => k + 1);
+    } catch {
+      // Silently fail - not critical
+    }
+  };
+
   const handleSettings = () => {
     toast.info("Configuración del grupo disponible próximamente");
+  };
+
+  const handleLeave = async () => {
+    if (!slug) return;
+    setIsLeaving(true);
+    try {
+      const result = await leaveGroup(slug);
+      if (result) {
+        toast.success(result.message);
+        if (result.dissolved) {
+          toast.info("El grupo fue disuelto");
+        }
+      }
+      navigate("/");
+    } catch {
+      toast.error("Ocurrió un error. Intentá de nuevo.");
+    } finally {
+      setIsLeaving(false);
+      setShowLeaveModal(false);
+    }
+  };
+
+  const getLeaveModalText = () => {
+    if (!group) return { title: "", description: "" };
+    const role = group.currentUserRole;
+    const isLeaderOrCoLeader = role === "LEADER" || role === "CO_LEADER";
+
+    if (isLeaderOrCoLeader && group.members.length > 1) {
+      // Find the successor (next in role priority)
+      const rolePriority = { LEADER: 0, CO_LEADER: 1, MEMBER: 2 };
+      const sortedMembers = [...group.members]
+        .filter((m) => m.id !== user?._id)
+        .sort((a, b) => rolePriority[a.role] - rolePriority[b.role]);
+      const successor = sortedMembers[0];
+
+      return {
+        title: "Abandonar grupo",
+        description: `Al abandonar, ${successor?.name ?? "otro miembro"} asume como líder. Perdés acceso al grupo. ¿Continuar?`,
+      };
+    }
+
+    return {
+      title: "Abandonar grupo",
+      description: "¿Estás seguro? Perdés acceso al grupo. Tus puntos contribuidos quedan en el grupo.",
+    };
   };
 
   const renderError = () => {
@@ -163,6 +257,58 @@ export default function GroupDetailView() {
 
       {!loading && !error && group && (
         <div className="flex flex-col items-center gap-6 max-w-sm mx-auto w-full">
+          {/* Departure notification banner */}
+          {group.unseenDepartedMembers && group.unseenDepartedMembers.length > 0 && (
+            <div className="w-full bg-surface-2 border border-border rounded-xl p-4">
+              <div className="flex items-start gap-3">
+                <UserMinus size={20} className="text-amber-400 mt-0.5" />
+                <div className="flex-1">
+                  <p className="text-text-primary text-sm font-medium">
+                    {group.unseenDepartedMembers.length === 1
+                      ? `${group.unseenDepartedMembers[0].name} abandonó el grupo`
+                      : `${group.unseenDepartedMembers.length} miembros abandonaron el grupo`}
+                  </p>
+                  <p className="text-text-secondary text-xs mt-1">
+                    Los puntos contribuidos permanecen en el grupo.
+                  </p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleDismissDepartures}
+                  aria-label="Entendido"
+                >
+                  Entendido
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Succession notification banner */}
+          {group.unseenSuccessions && group.unseenSuccessions.length > 0 && (
+            <div className="w-full bg-surface-2 border border-border rounded-xl p-4">
+              <div className="flex items-start gap-3">
+                <Crown size={20} className="text-amber-400 mt-0.5" />
+                <div className="flex-1">
+                  <p className="text-text-primary text-sm font-medium">
+                    {group.unseenSuccessions[0].newLeaderName} es el nuevo líder
+                  </p>
+                  <p className="text-text-secondary text-xs mt-1">
+                    {group.unseenSuccessions[0].previousLeaderName} abandonó el grupo.
+                  </p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleDismissSuccessions}
+                  aria-label="Entendido"
+                >
+                  Entendido
+                </Button>
+              </div>
+            </div>
+          )}
+
           {/* Avatar */}
           <Avatar
             src={group.avatarUrl}
@@ -252,8 +398,31 @@ export default function GroupDetailView() {
               Configuración del grupo
             </Button>
           )}
+
+          {/* Leave Group — visible for all members */}
+          <Button
+            variant="outline"
+            size="md"
+            className="w-full text-error hover:bg-error/10 hover:border-error/30"
+            onClick={() => setShowLeaveModal(true)}
+          >
+            <LogOut size={18} className="mr-2" />
+            Abandonar grupo
+          </Button>
         </div>
       )}
+
+      {/* Leave Group Modal */}
+      <Modal
+        isOpen={showLeaveModal}
+        onClose={() => setShowLeaveModal(false)}
+        onConfirm={handleLeave}
+        title={getLeaveModalText().title}
+        description={getLeaveModalText().description}
+        confirmText="Abandonar"
+        cancelText="Cancelar"
+        isPending={isLeaving}
+      />
     </motion.div>
   );
 }

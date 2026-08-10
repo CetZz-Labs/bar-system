@@ -136,6 +136,36 @@ router.delete('/:slug/members/:memberId',
     GroupController.removeMember
 );
 
+router.post('/:slug/leave',
+    authenticate(),
+    param('slug')
+        .isString()
+        .notEmpty()
+        .withMessage('El slug es requerido'),
+    handleInputErrors,
+    GroupController.leaveGroup
+);
+
+router.post('/:slug/mark-departures-seen',
+    authenticate(),
+    param('slug')
+        .isString()
+        .notEmpty()
+        .withMessage('El slug es requerido'),
+    handleInputErrors,
+    GroupController.markDeparturesSeen
+);
+
+router.post('/:slug/mark-successions-seen',
+    authenticate(),
+    param('slug')
+        .isString()
+        .notEmpty()
+        .withMessage('El slug es requerido'),
+    handleInputErrors,
+    GroupController.markSuccessionsSeen
+);
+
 router.get('/search',
     authenticate(),
     (req, res, next) => {
