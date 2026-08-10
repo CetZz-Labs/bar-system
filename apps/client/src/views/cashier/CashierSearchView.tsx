@@ -210,7 +210,7 @@ export default function CashierSearchView() {
                 </p>
               </div>
               <span className="text-xs uppercase tracking-wide text-text-secondary">
-                {item.status === 'IN_PROGRESS' ? 'En curso' : 'Activa'}
+                {item.status === 'ACTIVE' ? 'En curso' : 'Activa'}
               </span>
             </div>
 

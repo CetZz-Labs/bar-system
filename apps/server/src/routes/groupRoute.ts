@@ -1,4 +1,5 @@
-import { Router } from "express";
+import { Router, RequestHandler } from "express";
+import mongoose from "mongoose";
 import { GroupController } from "../controllers/GroupController";
 import { authenticate, optionalAuthenticate, requireCompleteProfile } from "../middleware/auth";
 import { handleInputErrors } from "../middleware/validation";
@@ -6,6 +7,18 @@ import { body, param } from "express-validator";
 import { upload } from "../middleware/upload";
 
 const router: Router = Router();
+
+// '/:id' and '/:slug' match the same path shape (single segment). If the
+// segment isn't a valid Mongo ObjectId, skip this route so it falls through
+// to the '/:slug' route below instead of failing with a 400.
+const onlyIfMongoId = (paramName: string): RequestHandler => (req, res, next) => {
+    const value = req.params[paramName];
+    if (typeof value === 'string' && mongoose.Types.ObjectId.isValid(value)) {
+        next();
+        return;
+    }
+    next('route');
+};
 
 router.post('/',
     authenticate(),
@@ -141,6 +154,7 @@ router.get('/search',
 );
 
 router.get('/:id/members',
+    onlyIfMongoId('id'),
     authenticate(),
     param('id')
         .isMongoId()
@@ -150,6 +164,7 @@ router.get('/:id/members',
 );
 
 router.get('/:id',
+    onlyIfMongoId('id'),
     authenticate(),
     param('id')
         .isMongoId()

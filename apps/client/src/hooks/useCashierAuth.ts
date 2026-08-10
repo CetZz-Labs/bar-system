@@ -1,50 +1,37 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from 'react-router';
-import {
-  cashierLogin,
-  cashierLogout,
-  getCashierSession,
-} from '@/API/CashierAPI';
-import { toastApiError } from '@/utils/apiError';
-import { toast } from 'sonner';
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router";
+import { cashierLogout, cashierSession } from "@/API/CashierAPI";
 
-export function useCashierAuth(options?: { enabled?: boolean }) {
-  const queryClient = useQueryClient();
-  const navigate = useNavigate();
+export const useCashierAuth = (barId: string | undefined) => {
+    const navigate = useNavigate()
+    const queryClient = useQueryClient()
 
-  const sessionQuery = useQuery({
-    queryKey: ['cashierSession'],
-    queryFn: getCashierSession,
-    retry: false,
-    refetchOnWindowFocus: false,
-    enabled: options?.enabled !== false,
-  });
+    const { data, isError, isLoading } = useQuery({
+        queryKey: ['cashier-session'],
+        queryFn: cashierSession,
+        retry: false,
+        refetchOnWindowFocus: false,
+        staleTime: 1000 * 30
+    })
 
-  const loginMutation = useMutation({
-    mutationFn: cashierLogin,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['cashierSession'] });
-      toast.success('Sesión de cajero iniciada');
-      navigate('/cashier');
-    },
-    onError: toastApiError,
-  });
+    const { mutate } = useMutation({
+        mutationFn: cashierLogout,
+        onSuccess: () => {
+            queryClient.setQueryData(['cashier-session'], null);
+            navigate(`/bar/${barId}/cajero/login`);
+        },
+        onError: () => {
+            queryClient.setQueryData(['cashier-session'], null);
+            navigate(`/bar/${barId}/cajero/login`);
+        }
+    })
 
-  const logoutMutation = useMutation({
-    mutationFn: cashierLogout,
-    onSuccess: () => {
-      queryClient.removeQueries({ queryKey: ['cashierSession'] });
-      navigate('/cashier/login');
-    },
-    onError: toastApiError,
-  });
+    const logoutCashier = () => mutate()
 
-  return {
-    session: sessionQuery.data,
-    isLoading: sessionQuery.isLoading,
-    isError: sessionQuery.isError,
-    login: loginMutation.mutate,
-    isLoggingIn: loginMutation.isPending,
-    logout: logoutMutation.mutate,
-  };
+    return {
+        data: data || null,
+        isError,
+        isLoading,
+        logoutCashier
+    }
 }

@@ -4,7 +4,8 @@ import Bar from '../models/Bar';
 import { getBarDayRange } from './barDay';
 import { Types } from 'mongoose';
 
-const SEARCHABLE_STATUSES = [OutingStatus.ACTIVE, OutingStatus.IN_PROGRESS];
+/** PENDING = activa (sin check-in); ACTIVE = en curso (LB-49) */
+const SEARCHABLE_STATUSES = [OutingStatus.PENDING, OutingStatus.ACTIVE];
 
 export type CashierSearchResult = {
     outingId: string;
@@ -37,7 +38,7 @@ export function isDirectCodeQuery(raw: string): boolean {
     return extractInviteCodeFromQuery(raw) !== null;
 }
 
-async function mapOutingToResult(outing: {
+type PopulatedOuting = {
     _id: Types.ObjectId;
     status: OutingStatus;
     scheduledFor: Date;
@@ -46,12 +47,11 @@ async function mapOutingToResult(outing: {
         name: string;
         inviteCode: string;
     };
-    invitedMembers: Array<{
-        user?: { _id: Types.ObjectId; name: string; lastName: string } | Types.ObjectId;
-    }>;
-}): Promise<CashierSearchResult> {
-    const members = outing.invitedMembers
-        .map((m) => m.user)
+    invitees: Array<{ _id: Types.ObjectId; name: string; lastName: string } | Types.ObjectId>;
+};
+
+function mapOutingToResult(outing: PopulatedOuting): CashierSearchResult {
+    const members = outing.invitees
         .filter((u): u is { _id: Types.ObjectId; name: string; lastName: string } =>
             !!u && typeof u === 'object' && 'name' in u
         )
@@ -69,23 +69,24 @@ async function mapOutingToResult(outing: {
         scheduledFor: outing.scheduledFor.toISOString(),
         status: outing.status,
         members,
-        action: outing.status === OutingStatus.IN_PROGRESS ? 'detail' : 'check_in',
+        // PENDING = aún sin check-in; ACTIVE = ya en curso
+        action: outing.status === OutingStatus.ACTIVE ? 'detail' : 'check_in',
     };
 }
 
 /**
  * Búsqueda cajero (LB-54).
- * - Texto (≥2): solo grupos con salida ACTIVE/IN_PROGRESS hacia ESTE bar en el día del bar.
+ * - Texto (≥2): solo grupos con salida PENDING/ACTIVE hacia ESTE bar en el día del bar.
  * - Código/QR (6 chars): match directo; mensajes NO_SALIDA / OTHER_BAR si no aplica.
  * Sin logs de búsqueda (privacidad MVP).
  */
 export async function searchGroupsForCashier(
     barId: string,
-    closingHour: string,
+    closingTime: string,
     rawQuery: string
 ): Promise<{ results: CashierSearchResult[] } | CashierSearchExactError> {
     const q = rawQuery.trim();
-    const { start, end } = getBarDayRange(new Date(), closingHour);
+    const { start, end } = getBarDayRange(new Date(), closingTime || '06:00');
     const directCode = extractInviteCodeFromQuery(q);
 
     if (directCode) {
@@ -104,16 +105,12 @@ export async function searchGroupsForCashier(
             scheduledFor: { $gte: start, $lt: end },
         })
             .populate('group', 'name inviteCode')
-            .populate('invitedMembers.user', 'name lastName')
+            .populate('invitees', 'name lastName')
             .lean();
 
         if (outingHere && outingHere.group && typeof outingHere.group === 'object' && 'name' in outingHere.group) {
             return {
-                results: [
-                    await mapOutingToResult(
-                        outingHere as unknown as Parameters<typeof mapOutingToResult>[0]
-                    ),
-                ],
+                results: [mapOutingToResult(outingHere as unknown as PopulatedOuting)],
             };
         }
 
@@ -171,16 +168,14 @@ export async function searchGroupsForCashier(
         scheduledFor: { $gte: start, $lt: end },
     })
         .populate('group', 'name inviteCode')
-        .populate('invitedMembers.user', 'name lastName')
+        .populate('invitees', 'name lastName')
         .sort({ scheduledFor: 1 })
         .lean();
 
     const results: CashierSearchResult[] = [];
     for (const outing of outings) {
         if (outing.group && typeof outing.group === 'object' && 'name' in outing.group) {
-            results.push(
-                await mapOutingToResult(outing as unknown as Parameters<typeof mapOutingToResult>[0])
-            );
+            results.push(mapOutingToResult(outing as unknown as PopulatedOuting));
         }
     }
 
