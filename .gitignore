@@ -33,12 +33,12 @@ apps/**/pnpm-lock.yaml
 apps/**/package-lock.json
 apps/**/yarn.lock
 
-# AI agent harness — per-developer working memory (progress/history.md and
-# progress/current.template.md stay tracked; see progress/current.template.md)
-progress/current.md
-progress/explorers/*
-progress/implementers/*
-progress/reviewers/*
-!progress/explorers/.gitkeep
-!progress/implementers/.gitkeep
-!progress/reviewers/.gitkeep
+# Graphify AST graphs (regenerable; not SSOT — see ../graphify/README.md)
+graphify-out/
+
+# AI agent harness — per-developer working memory. Only progress/history.md
+# and progress/current.template.md are shared/tracked; everything else
+# (current.md, explorers/, implementers/, reviewers/) is local evidence.
+progress/*
+!progress/history.md
+!progress/current.template.md

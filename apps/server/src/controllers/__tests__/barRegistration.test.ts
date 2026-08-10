@@ -75,8 +75,7 @@ vi.mock('../../models/BarUser', () => {
     default: MockBarUser,
     BarUserRole: {
       OWNER: 'OWNER',
-      WAITER: 'WAITER',
-      MANAGER: 'MANAGER',
+      CASHIER: 'CASHIER',
     },
   }
 })

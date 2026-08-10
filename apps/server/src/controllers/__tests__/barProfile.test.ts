@@ -34,8 +34,7 @@ vi.mock('../../models/BarUser', () => ({
   },
   BarUserRole: {
     OWNER: 'OWNER',
-    WAITER: 'WAITER',
-    MANAGER: 'MANAGER',
+    CASHIER: 'CASHIER',
   },
 }))
 
