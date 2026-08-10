@@ -32,3 +32,6 @@ pnpm-debug.log*
 apps/**/pnpm-lock.yaml
 apps/**/package-lock.json
 apps/**/yarn.lock
+
+# Graphify AST graphs (regenerable; not SSOT — see ../graphify/README.md)
+graphify-out/

@@ -20,6 +20,7 @@ import MyBarsView from './views/bar/MyBarsView'
 import BarProfileView from './views/bar/BarProfileView'
 import CashierLoginView from './views/cashier/CashierLoginView'
 import CashierPanelView from './views/cashier/CashierPanelView'
+import CashierSearchView from './views/cashier/CashierSearchView'
 import CashierLayout from './layouts/CashierLayout'
 
 export default function Router() {
@@ -56,6 +57,7 @@ export default function Router() {
                 <Route path="/bar/:barId/cajero/login" element={<CashierLoginView />} />
                 <Route element={<CashierLayout />}>
                     <Route path="/bar/:barId/cajero" element={<CashierPanelView />} />
+                    <Route path="/bar/:barId/cajero/buscar" element={<CashierSearchView />} />
                 </Route>
             </Routes>
         </BrowserRouter>

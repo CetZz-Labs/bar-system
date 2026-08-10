@@ -1,6 +1,6 @@
-import { useParams } from "react-router"
+import { Link, useParams } from "react-router"
 import { motion } from "motion/react"
-import { LogOut, Store, Clock, UserCog } from "lucide-react"
+import { LogOut, Store, Clock, UserCog, Search } from "lucide-react"
 import { Button } from "@/components/ui/Button"
 import { useCashierAuth } from "@/hooks/useCashierAuth"
 
@@ -56,6 +56,13 @@ export default function CashierPanelView() {
                         </div>
                     </div>
                 </div>
+
+                <Link to={`/bar/${barId}/cajero/buscar`} className="mt-2">
+                    <Button type="button" variant="primary" size="lg" fullWidth>
+                        <Search size={20} />
+                        Buscar grupo
+                    </Button>
+                </Link>
 
                 <p className="text-text-muted text-sm mt-4">
                     La gestión de puntos y consumos estará disponible próximamente.

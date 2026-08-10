@@ -6,6 +6,7 @@ import Shift, { ShiftEndReason } from "../models/Shift";
 import AuditLog, { AuditAction } from "../models/AuditLog";
 import { checkPassword } from "../utils/auth";
 import { generateJWT } from "../utils/jwt";
+import { searchGroupsForCashier } from "../utils/cashierSearch";
 
 const CASHIER_COOKIE_NAME = 'cashier_access_token';
 const CASHIER_TOKEN_MAX_AGE = 15 * 24 * 60 * 60 * 1000; // 15 días en ms
@@ -101,7 +102,7 @@ export class CashierController {
 
     static session = async (req: Request, res: Response) => {
         try {
-            const { bar: barId, barUser, shift } = req.cashierContext!;
+            const { bar: barId, barUser, shift, user } = req.cashierContext!;
 
             const bar = await Bar.findById(barId);
             if (!bar) {
@@ -118,6 +119,10 @@ export class CashierController {
                 role: barUser.role,
                 shift: {
                     startedAt: shift.startedAt,
+                },
+                user: {
+                    name: user.name,
+                    lastName: user.lastName,
                 },
             });
         } catch (error) {
@@ -153,6 +158,39 @@ export class CashierController {
         } catch (error) {
             console.error(error);
             res.status(500).json({ message: 'Hubo un error al cerrar el turno' });
+        }
+    };
+
+    /**
+     * GET /api/cashier/groups/search?q=
+     * LB-54 — sin logs de búsqueda (privacidad).
+     */
+    static searchGroups = async (req: Request, res: Response) => {
+        try {
+            const { bar: barId } = req.cashierContext!;
+            const q = String(req.query.q ?? '');
+
+            const bar = await Bar.findById(barId).select('closingTime');
+            if (!bar) {
+                res.status(404).json({ message: 'Bar no encontrado' });
+                return;
+            }
+
+            const outcome = await searchGroupsForCashier(
+                barId.toString(),
+                bar.closingTime || '06:00',
+                q
+            );
+
+            if ('code' in outcome) {
+                res.status(404).json(outcome);
+                return;
+            }
+
+            res.status(200).json(outcome);
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ message: 'Hubo un error al buscar grupos' });
         }
     };
 }

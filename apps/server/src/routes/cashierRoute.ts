@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { body } from "express-validator";
+import { body, query } from "express-validator";
 import { CashierController } from "../controllers/CashierController";
 import { authenticateCashier } from "../middleware/auth";
 import { handleInputErrors } from "../middleware/validation";
@@ -23,6 +23,14 @@ router.get('/session',
 router.post('/logout',
     authenticateCashier,
     CashierController.logout
+);
+
+router.get(
+    '/groups/search',
+    authenticateCashier,
+    query('q').isString().withMessage('q es requerido'),
+    handleInputErrors,
+    CashierController.searchGroups
 );
 
 export default router;
