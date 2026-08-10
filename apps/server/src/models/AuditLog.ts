@@ -5,6 +5,7 @@ export enum AuditAction {
     CASHIER_LOGOUT = 'CASHIER_LOGOUT',
     CASHIER_KICKED_OUT = 'CASHIER_KICKED_OUT',
     SHIFT_AUTO_CLOSED = 'SHIFT_AUTO_CLOSED',
+    CONSUMPTION_CREATED = 'CONSUMPTION_CREATED',
 }
 
 export interface IAuditLog extends Document {

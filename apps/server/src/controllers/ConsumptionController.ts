@@ -2,8 +2,7 @@ import { Request, Response } from "express";
 import { Types } from "mongoose";
 import Consumption, { ConsumptionStatus } from "../models/Consumption";
 import Outing, { OutingStatus } from "../models/Outing";
-import { BarUserRole } from "../models/BarUser";
-import { verifyBarAccess } from "../utils/barAccess";
+import AuditLog, { AuditAction } from "../models/AuditLog";
 import { generate } from "../utils/consumptionQr";
 
 function getOutingStatusError(status: OutingStatus): string | null {
@@ -13,24 +12,10 @@ function getOutingStatusError(status: OutingStatus): string | null {
     return 'La salida todavía no está en curso (falta el check-in), no admite nuevos consumos';
 }
 
-async function authorizeCashier(userId: string, barId: Types.ObjectId | string): Promise<{ ok: true } | { ok: false; status: number; message: string }> {
-    const { hasAccess, role } = await verifyBarAccess(userId, barId.toString());
-
-    if (!hasAccess) {
-        return { ok: false, status: 403, message: 'Esta salida no pertenece a tu bar' };
-    }
-
-    if (role !== BarUserRole.CASHIER) {
-        return { ok: false, status: 403, message: 'No tenés permisos de cajero para esta acción' };
-    }
-
-    return { ok: true };
-}
-
 export class ConsumptionController {
     static createConsumption = async (req: Request, res: Response) => {
         try {
-            const userId = req.user!._id.toString();
+            const cashierContext = req.cashierContext!;
             const outingId = req.params.outingId as string;
             const { amount, breakdown } = req.body;
 
@@ -40,9 +25,10 @@ export class ConsumptionController {
                 return;
             }
 
-            const authResult = await authorizeCashier(userId, outing.bar);
-            if (!authResult.ok) {
-                res.status(authResult.status).json({ message: authResult.message });
+            // authenticateCashier ya validó sesión/turno activo sobre cashierContext.bar;
+            // acá solo falta confirmar que la salida puntual pertenece a ESE bar.
+            if (outing.bar.toString() !== cashierContext.bar.toString()) {
+                res.status(403).json({ message: 'Esta salida no pertenece a tu bar' });
                 return;
             }
 
@@ -63,7 +49,7 @@ export class ConsumptionController {
                 _id: consumptionId,
                 outing: outingId,
                 bar: outing.bar,
-                cashier: userId,
+                cashier: cashierContext.user._id,
                 amount,
                 breakdown,
                 status: ConsumptionStatus.PENDING_LEADER_CONFIRMATION,
@@ -72,17 +58,15 @@ export class ConsumptionController {
                 expiresAt,
             });
 
-            // Auditoría MVP: cajero, hora, monto y grupo/salida quedan en el log de
-            // proceso. No hay colección de auditoría dedicada todavía (fuera de
-            // alcance de LB-60); si se necesita persistirla, es una extensión futura.
-            console.log('[AUDIT] consumption.created', {
-                consumptionId: consumption._id.toString(),
-                cashierId: userId,
-                outingId,
-                groupId: outing.group.toString(),
-                barId: outing.bar.toString(),
-                amount: consumption.amount,
-                at: new Date().toISOString(),
+            // Auditoría (cajero, hora, bar) en la colección real de LB-53, no un
+            // console.log ad hoc. El detalle de negocio (monto, grupo, salida)
+            // ya queda persistido en el propio documento Consumption.
+            await AuditLog.create({
+                bar: cashierContext.bar,
+                user: cashierContext.user._id,
+                action: AuditAction.CONSUMPTION_CREATED,
+                deviceInfo: cashierContext.shift.deviceInfo,
+                ip: req.ip,
             });
 
             res.status(201).json({
@@ -103,7 +87,7 @@ export class ConsumptionController {
 
     static regenerateConsumption = async (req: Request, res: Response) => {
         try {
-            const userId = req.user!._id.toString();
+            const cashierContext = req.cashierContext!;
             const outingId = req.params.outingId as string;
             const consumptionId = req.params.consumptionId as string;
 
@@ -113,9 +97,8 @@ export class ConsumptionController {
                 return;
             }
 
-            const authResult = await authorizeCashier(userId, consumption.bar);
-            if (!authResult.ok) {
-                res.status(authResult.status).json({ message: authResult.message });
+            if (consumption.bar.toString() !== cashierContext.bar.toString()) {
+                res.status(403).json({ message: 'Este consumo no pertenece a tu bar' });
                 return;
             }
 
@@ -155,7 +138,7 @@ export class ConsumptionController {
 
     static getPendingConsumptions = async (req: Request, res: Response) => {
         try {
-            const userId = req.user!._id.toString();
+            const cashierContext = req.cashierContext!;
             const outingId = req.params.outingId as string;
 
             const outing = await Outing.findById(outingId).select('bar').lean();
@@ -164,9 +147,8 @@ export class ConsumptionController {
                 return;
             }
 
-            const authResult = await authorizeCashier(userId, outing.bar);
-            if (!authResult.ok) {
-                res.status(authResult.status).json({ message: authResult.message });
+            if (outing.bar.toString() !== cashierContext.bar.toString()) {
+                res.status(403).json({ message: 'Esta salida no pertenece a tu bar' });
                 return;
             }
 

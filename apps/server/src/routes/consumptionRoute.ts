@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { ConsumptionController } from "../controllers/ConsumptionController";
-import { authenticate } from "../middleware/auth";
+import { authenticateCashier } from "../middleware/auth";
 import { handleInputErrors } from "../middleware/validation";
 import { body, param } from "express-validator";
 
@@ -11,7 +11,7 @@ import { body, param } from "express-validator";
 const router: Router = Router({ mergeParams: true });
 
 router.post('/',
-    authenticate(),
+    authenticateCashier,
     param('outingId')
         .isMongoId()
         .withMessage('El ID de la salida es requerido'),
@@ -37,7 +37,7 @@ router.post('/',
 );
 
 router.patch('/:consumptionId/regenerate',
-    authenticate(),
+    authenticateCashier,
     param('outingId')
         .isMongoId()
         .withMessage('El ID de la salida es requerido'),
@@ -49,7 +49,7 @@ router.patch('/:consumptionId/regenerate',
 );
 
 router.get('/pending',
-    authenticate(),
+    authenticateCashier,
     param('outingId')
         .isMongoId()
         .withMessage('El ID de la salida es requerido'),

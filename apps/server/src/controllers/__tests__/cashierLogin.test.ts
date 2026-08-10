@@ -11,6 +11,9 @@ import { buildMockRequest, buildMockResponse } from '../../__tests__/helpers/moc
 
 vi.mock('../../models/User', () => ({
   default: { findOne: vi.fn() },
+  // Group.ts (importado transitivamente vía utils/cashierSearch.ts) necesita
+  // este export en tiempo de módulo para construir su schema de Mongoose.
+  MembershipRole: { ADMIN: 'ADMIN', MEMBER: 'MEMBER', LEADER: 'LEADER', CO_LEADER: 'CO_LEADER' },
 }))
 
 vi.mock('../../models/BarUser', () => ({

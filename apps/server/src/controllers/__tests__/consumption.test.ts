@@ -2,7 +2,7 @@ import { vi, describe, it, expect, beforeEach } from 'vitest'
 import { ConsumptionController } from '../../controllers/ConsumptionController'
 import Consumption from '../../models/Consumption'
 import Outing from '../../models/Outing'
-import { verifyBarAccess } from '../../utils/barAccess'
+import AuditLog from '../../models/AuditLog'
 import { generate } from '../../utils/consumptionQr'
 import { buildMockRequest, buildMockResponse } from '../../__tests__/helpers/mockHelpers'
 import { Types } from 'mongoose'
@@ -33,17 +33,13 @@ vi.mock('../../models/Outing', () => ({
   },
 }))
 
-vi.mock('../../models/BarUser', () => ({
-  BarUserRole: {
-    OWNER: 'OWNER',
-    WAITER: 'WAITER',
-    MANAGER: 'MANAGER',
-    CASHIER: 'CASHIER',
+vi.mock('../../models/AuditLog', () => ({
+  default: {
+    create: vi.fn(),
   },
-}))
-
-vi.mock('../../utils/barAccess', () => ({
-  verifyBarAccess: vi.fn(),
+  AuditAction: {
+    CONSUMPTION_CREATED: 'CONSUMPTION_CREATED',
+  },
 }))
 
 vi.mock('../../utils/consumptionQr', () => ({
@@ -69,19 +65,32 @@ function buildSelectSortLeanQuery(data: any) {
   return query
 }
 
+// req.cashierContext es poblado por el middleware authenticateCashier (LB-53),
+// no por el controller — acá lo simulamos directo, tal como haría el middleware
+// tras validar sesión + turno activo sobre `bar`.
+function buildCashierContext(overrides: any = {}) {
+  return {
+    user: { _id: new Types.ObjectId() },
+    bar: new Types.ObjectId(),
+    barUser: { role: 'CASHIER' },
+    shift: { deviceInfo: 'test-device' },
+    ...overrides,
+  }
+}
+
 describe('ConsumptionController.createConsumption', () => {
-  let cashierId: Types.ObjectId
+  let barId: Types.ObjectId
   let outingId: Types.ObjectId
   let groupId: Types.ObjectId
-  let barId: Types.ObjectId
+  let cashierContext: any
   let mockOuting: any
   let mockGeneratedQr: any
 
   beforeEach(() => {
-    cashierId = new Types.ObjectId()
     outingId = new Types.ObjectId()
     groupId = new Types.ObjectId()
     barId = new Types.ObjectId()
+    cashierContext = buildCashierContext({ bar: barId })
 
     mockOuting = {
       _id: outingId,
@@ -98,14 +107,14 @@ describe('ConsumptionController.createConsumption', () => {
     }
 
     vi.mocked(Outing.findById).mockReset().mockReturnValue(buildLeanQuery(mockOuting) as any)
-    vi.mocked(verifyBarAccess).mockReset().mockResolvedValue({ hasAccess: true, role: 'CASHIER' as any })
     vi.mocked(generate).mockReset().mockResolvedValue(mockGeneratedQr)
     vi.mocked(Consumption.create).mockReset()
+    vi.mocked(AuditLog.create).mockReset().mockResolvedValue({} as any)
   })
 
   function buildRequest(overrides: any = {}) {
     return buildMockRequest({
-      user: { _id: cashierId } as any,
+      cashierContext,
       params: { outingId: outingId.toString() },
       body: { amount: 12000 },
       ...overrides,
@@ -113,7 +122,7 @@ describe('ConsumptionController.createConsumption', () => {
   }
 
   describe('happy path', () => {
-    it('creates the consumption and returns the QR + manual code', async () => {
+    it('creates the consumption, audits it and returns the QR + manual code', async () => {
       const createdId = new Types.ObjectId()
       vi.mocked(Consumption.create).mockResolvedValue({
         _id: createdId,
@@ -132,11 +141,19 @@ describe('ConsumptionController.createConsumption', () => {
         expect.objectContaining({
           outing: outingId.toString(),
           bar: barId,
-          cashier: cashierId.toString(),
+          cashier: cashierContext.user._id,
           amount: 12000,
           status: 'PENDING_LEADER_CONFIRMATION',
           qrToken: 'signed-jwt-token',
           manualCode: '123456',
+        })
+      )
+      expect(AuditLog.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          bar: barId,
+          user: cashierContext.user._id,
+          action: 'CONSUMPTION_CREATED',
+          deviceInfo: 'test-device',
         })
       )
       expect(res.status).toHaveBeenCalledWith(201)
@@ -165,8 +182,9 @@ describe('ConsumptionController.createConsumption', () => {
   })
 
   describe('authorization', () => {
-    it('returns 403 when the cashier has no BarUser membership on the outing bar', async () => {
-      vi.mocked(verifyBarAccess).mockResolvedValue({ hasAccess: false })
+    it('returns 403 when the outing belongs to a different bar than the cashier session', async () => {
+      const otherBar = new Types.ObjectId()
+      vi.mocked(Outing.findById).mockReturnValue(buildLeanQuery({ ...mockOuting, bar: otherBar }) as any)
 
       const req = buildRequest()
       const res = buildMockResponse()
@@ -175,18 +193,6 @@ describe('ConsumptionController.createConsumption', () => {
 
       expect(res.status).toHaveBeenCalledWith(403)
       expect(res.json).toHaveBeenCalledWith({ message: 'Esta salida no pertenece a tu bar' })
-      expect(Consumption.create).not.toHaveBeenCalled()
-    })
-
-    it('returns 403 when the BarUser role is not CASHIER', async () => {
-      vi.mocked(verifyBarAccess).mockResolvedValue({ hasAccess: true, role: 'WAITER' as any })
-
-      const req = buildRequest()
-      const res = buildMockResponse()
-
-      await ConsumptionController.createConsumption(req, res)
-
-      expect(res.status).toHaveBeenCalledWith(403)
       expect(Consumption.create).not.toHaveBeenCalled()
     })
   })
@@ -244,18 +250,18 @@ describe('ConsumptionController.createConsumption', () => {
 })
 
 describe('ConsumptionController.regenerateConsumption', () => {
-  let cashierId: Types.ObjectId
-  let outingId: Types.ObjectId
   let barId: Types.ObjectId
+  let outingId: Types.ObjectId
   let consumptionId: Types.ObjectId
+  let cashierContext: any
   let mockConsumption: any
   let mockGeneratedQr: any
 
   beforeEach(() => {
-    cashierId = new Types.ObjectId()
     outingId = new Types.ObjectId()
     barId = new Types.ObjectId()
     consumptionId = new Types.ObjectId()
+    cashierContext = buildCashierContext({ bar: barId })
 
     mockConsumption = {
       _id: consumptionId,
@@ -278,13 +284,12 @@ describe('ConsumptionController.regenerateConsumption', () => {
     }
 
     vi.mocked(Consumption.findOne).mockReset().mockResolvedValue(mockConsumption)
-    vi.mocked(verifyBarAccess).mockReset().mockResolvedValue({ hasAccess: true, role: 'CASHIER' as any })
     vi.mocked(generate).mockReset().mockResolvedValue(mockGeneratedQr)
   })
 
   function buildRequest(overrides: any = {}) {
     return buildMockRequest({
-      user: { _id: cashierId } as any,
+      cashierContext,
       params: { outingId: outingId.toString(), consumptionId: consumptionId.toString() },
       body: {},
       ...overrides,
@@ -323,8 +328,8 @@ describe('ConsumptionController.regenerateConsumption', () => {
   })
 
   describe('authorization', () => {
-    it('returns 403 when the cashier does not belong to the consumption bar', async () => {
-      vi.mocked(verifyBarAccess).mockResolvedValue({ hasAccess: false })
+    it('returns 403 when the consumption belongs to a different bar than the cashier session', async () => {
+      vi.mocked(Consumption.findOne).mockResolvedValue({ ...mockConsumption, bar: new Types.ObjectId() })
 
       const req = buildRequest()
       const res = buildMockResponse()
@@ -366,26 +371,25 @@ describe('ConsumptionController.regenerateConsumption', () => {
 })
 
 describe('ConsumptionController.getPendingConsumptions', () => {
-  let cashierId: Types.ObjectId
-  let outingId: Types.ObjectId
   let barId: Types.ObjectId
+  let outingId: Types.ObjectId
+  let cashierContext: any
   let mockOuting: any
 
   beforeEach(() => {
-    cashierId = new Types.ObjectId()
     outingId = new Types.ObjectId()
     barId = new Types.ObjectId()
+    cashierContext = buildCashierContext({ bar: barId })
 
     mockOuting = { _id: outingId, bar: barId }
 
     vi.mocked(Outing.findById).mockReset().mockReturnValue(buildSelectLeanQuery(mockOuting) as any)
-    vi.mocked(verifyBarAccess).mockReset().mockResolvedValue({ hasAccess: true, role: 'CASHIER' as any })
     vi.mocked(Consumption.find).mockReset().mockReturnValue(buildSelectSortLeanQuery([]) as any)
   })
 
   function buildRequest(overrides: any = {}) {
     return buildMockRequest({
-      user: { _id: cashierId } as any,
+      cashierContext,
       params: { outingId: outingId.toString() },
       ...overrides,
     })
@@ -424,8 +428,8 @@ describe('ConsumptionController.getPendingConsumptions', () => {
   })
 
   describe('authorization', () => {
-    it('returns 403 when the requester is not the bar cashier', async () => {
-      vi.mocked(verifyBarAccess).mockResolvedValue({ hasAccess: true, role: 'MANAGER' as any })
+    it('returns 403 when the outing belongs to a different bar than the cashier session', async () => {
+      vi.mocked(Outing.findById).mockReturnValue(buildSelectLeanQuery({ ...mockOuting, bar: new Types.ObjectId() }) as any)
 
       const req = buildRequest()
       const res = buildMockResponse()
