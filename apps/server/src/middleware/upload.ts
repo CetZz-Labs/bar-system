@@ -31,12 +31,12 @@ export function uploadSingle(maxFileSize: number) {
     const instance = createUploadMiddleware(maxFileSize);
 
     return (req: Request, res: Response, next: NextFunction) => {
-        instance.any()(req, res, (err: any) => {
+        instance.any()(req, res, (err: unknown) => {
             if (err) {
                 return next(err);
             }
 
-            const files = (req as any).files as Express.Multer.File[] | undefined;
+            const files = req.files as Express.Multer.File[] | undefined;
 
             if (!files || files.length === 0) {
                 return next();
@@ -46,7 +46,7 @@ export function uploadSingle(maxFileSize: number) {
                 return next(new Error('Solo se permite un archivo por solicitud'));
             }
 
-            (req as any).file = files[0];
+            req.file = files[0];
             next();
         });
     };

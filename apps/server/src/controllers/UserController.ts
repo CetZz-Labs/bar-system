@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
-import User from "../models/User";
+import { Types } from "mongoose";
+import User, { IMembership } from "../models/User";
 import path from "path";
 import fs from "fs/promises";
 const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
@@ -111,15 +112,18 @@ export class UserController {
 
     static getUserGroups = async (req: Request, res: Response) => {
         try {
+            type PopulatedGroupSummary = { _id: Types.ObjectId; name: string; slug: string; avatarUrl?: string } | null;
+            type PopulatedMembership = Omit<IMembership, 'group'> & { group: PopulatedGroupSummary };
+
             const user = await User.findById(req.user!._id)
-                .populate('memberships.group', 'name slug avatarUrl');
+                .populate<{ memberships: PopulatedMembership[] }>('memberships.group', 'name slug avatarUrl');
 
             if (!user) {
                 res.status(404).json({ message: "Usuario no encontrado" });
                 return;
             }
 
-            const groups = user.memberships.map((membership: any) => ({
+            const groups = user.memberships.map((membership) => ({
                 groupId: membership.group?._id?.toString(),
                 name: membership.group?.name,
                 slug: membership.group?.slug,

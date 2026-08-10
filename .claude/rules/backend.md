@@ -6,9 +6,15 @@
 
 ## 1. Stack tecnológico y restricciones
 
-- **Runtime:** Node.js + TypeScript.
+- **Runtime:** Node.js + TypeScript, modo **strict** (`tsconfig.json`).
 - **Framework HTTP:** Express **5.2.1**. Express 5 soporta promesas nativas en handlers async — úsalas directamente.
 - **Base de datos:** MongoDB, accedida **exclusivamente** vía Mongoose. No se introducen otros ODM/ORM ni acceso directo al driver de Mongo salvo que ya exista un precedente en el código.
+
+### Prohibido el uso de `any`
+
+> **Regla inmutable:** ningún archivo de código de producción (`routes/`, `controllers/`, `models/`, `middleware/`, `utils/`, `migrations/`) usa `any` — ni como anotación explícita (`: any`), ni como cast (`as any`), ni como parámetro implícito sin tipar. Tipar con la interfaz/tipo real, `unknown` + type guard, o genéricos según corresponda. Si un tipo de una librería externa no está disponible, se declara localmente en el mismo archivo o en `utils/` — nunca se resuelve con `any`.
+>
+> **Excepción explícita:** los archivos de test (`__tests__/`, `*.test.ts`) quedan fuera de esta regla — `tsconfig.json` los excluye del build (`exclude`), y castear mocks de Mongoose con `as any`/`as unknown as X` es un patrón aceptado para no tener que implementar la interfaz completa de un `Document` en cada mock.
 
 ### Prohibiciones estrictas
 

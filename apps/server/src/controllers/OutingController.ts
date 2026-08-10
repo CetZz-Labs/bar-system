@@ -1,8 +1,8 @@
 import { Request, Response } from "express";
-import mongoose from "mongoose";
+import mongoose, { Types } from "mongoose";
 import Outing, { OutingStatus } from "../models/Outing";
 import Notification, { NotificationType } from "../models/Notification";
-import Group from "../models/Group";
+import Group, { IGroupMembership } from "../models/Group";
 import Bar, { BarStatus } from "../models/Bar";
 import { MembershipRole } from "../models/User";
 
@@ -10,7 +10,11 @@ const NOTE_MAX_LENGTH = 200;
 const MAX_DAYS_AHEAD = 30;
 const ACTIVE_STATUSES = [OutingStatus.PENDING, OutingStatus.ACTIVE];
 
-function getLeaderOrCoLeaderRole(memberships: { user: any; role: MembershipRole }[], userId: string) {
+function isMongoDuplicateKeyError(error: unknown): error is { code: number } {
+    return typeof error === 'object' && error !== null && 'code' in error;
+}
+
+function getLeaderOrCoLeaderRole(memberships: IGroupMembership[], userId: string) {
     const membership = memberships.find((m) => m.user.toString() === userId);
     if (!membership) return { isMember: false, isLeaderOrCoLeader: false };
     const isLeaderOrCoLeader = membership.role === MembershipRole.LEADER || membership.role === MembershipRole.CO_LEADER;
@@ -52,7 +56,7 @@ function validateNote(note: unknown): { error?: string; note?: string } {
 }
 
 function resolveInvitees(
-    memberships: { user: any; role: MembershipRole }[],
+    memberships: IGroupMembership[],
     leaderId: string,
     creatorId: string,
     inviteeIds: unknown
@@ -66,7 +70,7 @@ function resolveInvitees(
         if (!Array.isArray(inviteeIds)) {
             return { error: 'inviteeIds debe ser un arreglo de IDs de miembros del grupo' };
         }
-        const invalidIds = inviteeIds.filter((id: any) => typeof id !== 'string' || !memberIds.includes(id));
+        const invalidIds = inviteeIds.filter((id: unknown) => typeof id !== 'string' || !memberIds.includes(id));
         if (invalidIds.length > 0) {
             return { error: 'Hay invitados que no son miembros del grupo', invalidIds };
         }
@@ -95,7 +99,7 @@ export class OutingController {
                 return;
             }
 
-            const { isLeaderOrCoLeader } = getLeaderOrCoLeaderRole(group.memberships as any, userId);
+            const { isLeaderOrCoLeader } = getLeaderOrCoLeaderRole(group.memberships, userId);
             if (!isLeaderOrCoLeader) {
                 res.status(403).json({ message: 'Solo el líder o co-líder del grupo puede crear una salida' });
                 return;
@@ -126,7 +130,7 @@ export class OutingController {
 
             const leaderId = group.leader.toString();
             const { error: inviteesError, invalidIds, invitees } = resolveInvitees(
-                group.memberships as any,
+                group.memberships,
                 leaderId,
                 userId,
                 inviteeIds
@@ -184,14 +188,14 @@ export class OutingController {
                 .lean();
 
             res.status(201).json(populated);
-        } catch (error: any) {
+        } catch (error) {
             if (session.inTransaction()) {
                 await session.abortTransaction().catch(() => { });
             }
 
             // Defensa adicional: si dos requests concurrentes pasaron el chequeo de la
             // transacción, el índice único parcial en Mongo rechaza el duplicado acá.
-            if (error?.code === 11000) {
+            if (isMongoDuplicateKeyError(error) && error.code === 11000) {
                 const groupId = req.params.groupId as string;
                 const existing = await Outing.findOne({
                     group: groupId,
@@ -225,7 +229,7 @@ export class OutingController {
                 return;
             }
 
-            const { isLeaderOrCoLeader } = getLeaderOrCoLeaderRole(group.memberships as any, userId);
+            const { isLeaderOrCoLeader } = getLeaderOrCoLeaderRole(group.memberships, userId);
             if (!isLeaderOrCoLeader) {
                 res.status(403).json({ message: 'Solo el líder o co-líder del grupo puede editar la salida' });
                 return;
@@ -277,7 +281,7 @@ export class OutingController {
             if (inviteeIds !== undefined) {
                 const leaderId = group.leader.toString();
                 const { error: inviteesError, invalidIds, invitees: resolvedInvitees } = resolveInvitees(
-                    group.memberships as any,
+                    group.memberships,
                     leaderId,
                     userId,
                     inviteeIds
@@ -294,7 +298,7 @@ export class OutingController {
             if (barId !== undefined) outing.bar = barId;
             if (scheduledForDate) outing.scheduledFor = scheduledForDate;
             if (noteProvided) outing.note = cleanNote;
-            if (invitees) outing.invitees = invitees as any;
+            if (invitees) outing.invitees = invitees.map((id) => new Types.ObjectId(id));
 
             await outing.save({ session });
 
@@ -342,7 +346,7 @@ export class OutingController {
                 return;
             }
 
-            const { isLeaderOrCoLeader } = getLeaderOrCoLeaderRole(group.memberships as any, userId);
+            const { isLeaderOrCoLeader } = getLeaderOrCoLeaderRole(group.memberships, userId);
             if (!isLeaderOrCoLeader) {
                 res.status(403).json({ message: 'Solo el líder o co-líder del grupo puede cancelar la salida' });
                 return;
@@ -374,7 +378,7 @@ export class OutingController {
             session.startTransaction();
 
             outing.status = OutingStatus.CANCELLED;
-            outing.canceledBy = userId as any;
+            outing.canceledBy = new Types.ObjectId(userId);
             outing.canceledAt = new Date();
 
             await outing.save({ session });

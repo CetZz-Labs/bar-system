@@ -1,7 +1,8 @@
 import { Request, Response } from "express";
+import { Types } from "mongoose";
 import Group, { GroupType } from "../models/Group";
 import User, { MembershipRole } from "../models/User";
-import JoinRequest, { JoinRequestStatus } from "../models/JoinRequest";
+import JoinRequest, { JoinRequestStatus, IJoinRequest } from "../models/JoinRequest";
 import GroupBan from "../models/GroupBan";
 import { GroupEmail } from "../emails/GroupEmail";
 import { saveGroupAvatar } from "../utils/storage";
@@ -13,6 +14,19 @@ import QRCode from "qrcode";
 
 const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2 MB
 const NAME_REGEX = /^[a-zA-Z0-9\s-]{3,40}$/;
+
+interface GroupByInviteCodeResponse {
+    id: Types.ObjectId;
+    name: string;
+    slug: string;
+    type: GroupType;
+    description?: string;
+    avatarUrl?: string;
+    memberCount: number;
+    inviteCode: string;
+    userStatus?: 'member' | 'banned' | 'pending' | 'available';
+    message?: string;
+}
 
 async function getUniqueSlug(name: string): Promise<string> {
     const maxRetries = 10;
@@ -251,7 +265,7 @@ export class GroupController {
                 return;
             }
 
-            const response: any = {
+            const response: GroupByInviteCodeResponse = {
                 id: group._id,
                 name: group.name,
                 slug: group.slug,
@@ -458,19 +472,23 @@ export class GroupController {
                 return;
             }
 
+            type PopulatedJoinRequest = Omit<IJoinRequest, 'user'> & {
+                user: { _id: Types.ObjectId; name: string; lastName: string; avatarUrl?: string };
+            };
+
             const requests = await JoinRequest.find({
                 group: group._id,
                 status: JoinRequestStatus.PENDING,
             })
-                .populate('user', 'name lastName avatarUrl')
+                .populate<{ user: PopulatedJoinRequest['user'] }>('user', 'name lastName avatarUrl')
                 .sort({ createdAt: -1 })
                 .lean();
 
             // Mark expired requests as rejected
             const now = new Date();
             const expiredIds = requests
-                .filter((r: any) => new Date(r.expiresAt) < now)
-                .map((r: any) => r._id);
+                .filter((r) => new Date(r.expiresAt) < now)
+                .map((r) => r._id);
 
             if (expiredIds.length > 0) {
                 await JoinRequest.updateMany(
@@ -480,9 +498,9 @@ export class GroupController {
             }
 
             // Filter out expired requests from response
-            const activeRequests = requests.filter((r: any) => new Date(r.expiresAt) >= now);
+            const activeRequests = requests.filter((r) => new Date(r.expiresAt) >= now);
 
-            const formatted = activeRequests.map((r: any) => ({
+            const formatted = activeRequests.map((r) => ({
                 id: r._id,
                 user: {
                     id: r.user._id,

@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
-import Bar, { BarStatus } from "../models/Bar";
+import { Types } from "mongoose";
+import Bar, { BarStatus, IAddress, IBar } from "../models/Bar";
 import BarUser, { BarUserRole } from "../models/BarUser";
 import { generateSlug } from "../utils/slug";
 import { saveBarLogo, saveBarCover } from "../utils/storage";
@@ -140,8 +141,9 @@ export class BarController {
             // Generate unique slug
             const slug = await getUniqueBarSlug(trimmedName);
 
-            // Build address object
-            const addressData: any = {
+            // Build address object. `neighborhood` no es required a nivel de schema
+            // (ver models/Bar.ts) aunque la interfaz IAddress lo declare sin `?`.
+            const addressData: Pick<IAddress, 'street' | 'number' | 'city'> & Partial<Pick<IAddress, 'neighborhood'>> = {
                 street: address.street.trim(),
                 number: address.number.trim(),
                 city: address.city.trim(),
@@ -212,12 +214,17 @@ export class BarController {
         try {
             const userId = req.user!._id;
 
+            type PopulatedBarSummary = Pick<IBar, 'name' | 'slug' | 'address' | 'phone' | 'schedule' | 'description' | 'status'> & {
+                _id: Types.ObjectId;
+                createdAt: Date;
+            };
+
             const barUsers = await BarUser.find({ user: userId })
-                .populate('bar', 'name slug address phone schedule description status createdAt')
+                .populate<{ bar: PopulatedBarSummary }>('bar', 'name slug address phone schedule description status createdAt')
                 .sort({ createdAt: -1 })
                 .lean();
 
-            const bars = barUsers.map((bu: any) => ({
+            const bars = barUsers.map((bu) => ({
                 id: bu.bar._id,
                 name: bu.bar.name,
                 slug: bu.bar.slug,

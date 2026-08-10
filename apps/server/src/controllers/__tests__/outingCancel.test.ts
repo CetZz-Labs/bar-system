@@ -174,7 +174,7 @@ describe('OutingController.cancelOuting', () => {
       expect(res.status).toHaveBeenCalledWith(200)
       expect(mockOuting.save).toHaveBeenCalled()
       expect(mockOuting.status).toBe('CANCELLED')
-      expect(mockOuting.canceledBy).toBe(leaderId.toString())
+      expect(mockOuting.canceledBy.toString()).toBe(leaderId.toString())
       expect(mockOuting.canceledAt).toBeInstanceOf(Date)
       expect(mockSession.commitTransaction).toHaveBeenCalled()
     })
