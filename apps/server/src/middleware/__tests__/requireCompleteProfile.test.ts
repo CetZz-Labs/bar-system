@@ -116,4 +116,41 @@ describe('requireCompleteProfile middleware', () => {
       expect(User.findById).not.toHaveBeenCalled()
     })
   })
+
+  describe('when the database query throws', () => {
+    it('returns 403 with profile incomplete message', async () => {
+      vi.mocked(User.findById).mockImplementation(() => {
+        throw new Error('DB connection lost')
+      })
+
+      const req = buildMockRequest({
+        user: { _id: new Types.ObjectId() } as any,
+      })
+      const res = buildMockResponse()
+      const next = buildMockNext()
+
+      await requireCompleteProfile(req, res, next)
+
+      expect(res.status).toHaveBeenCalledWith(403)
+      expect(res.json).toHaveBeenCalledWith({
+        message: 'Debes completar tu perfil antes de continuar',
+      })
+    })
+
+    it('does not call next()', async () => {
+      vi.mocked(User.findById).mockImplementation(() => {
+        throw new Error('DB connection lost')
+      })
+
+      const req = buildMockRequest({
+        user: { _id: new Types.ObjectId() } as any,
+      })
+      const res = buildMockResponse()
+      const next = buildMockNext()
+
+      await requireCompleteProfile(req, res, next)
+
+      expect(next).not.toHaveBeenCalled()
+    })
+  })
 })

@@ -3,6 +3,7 @@ import Bar, { BarStatus } from "../models/Bar";
 import BarUser, { BarUserRole } from "../models/BarUser";
 import { generateSlug } from "../utils/slug";
 import { saveBarLogo, saveBarCover } from "../utils/storage";
+import { verifyBarAccess } from "../utils/barAccess";
 import path from "path";
 import sharp from "sharp";
 
@@ -33,14 +34,6 @@ async function getUniqueBarSlug(name: string): Promise<string> {
     }
 
     return slug!;
-}
-
-async function verifyBarAccess(userId: string, barId: string): Promise<{ hasAccess: boolean; role?: BarUserRole }> {
-    const barUser = await BarUser.findOne({ bar: barId, user: userId });
-    if (!barUser) {
-        return { hasAccess: false };
-    }
-    return { hasAccess: true, role: barUser.role };
 }
 
 export class BarController {

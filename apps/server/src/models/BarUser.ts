@@ -4,6 +4,7 @@ export enum BarUserRole {
     OWNER = 'OWNER',
     WAITER = 'WAITER',
     MANAGER = 'MANAGER',
+    CASHIER = 'CASHIER',
 }
 
 export interface IBarUser extends Document {
