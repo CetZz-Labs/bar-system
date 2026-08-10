@@ -20,7 +20,6 @@ export default function PendingRequestsList({ slug, onRefetch }: PendingRequests
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
 
     getGroupRequests(slug)
       .then((data) => {

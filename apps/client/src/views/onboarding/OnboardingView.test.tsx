@@ -28,8 +28,8 @@ vi.mock('sonner', () => ({
 // Mock motion
 vi.mock('motion/react', () => ({
   motion: {
-    div: ({ children, ...props }: any) => <div {...props}>{children}</div>,
-    button: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    div: ({ children, ...props }: React.ComponentProps<'div'>) => <div {...props}>{children}</div>,
+    button: ({ children, ...props }: React.ComponentProps<'button'>) => <button {...props}>{children}</button>,
   },
 }));
 
@@ -71,12 +71,12 @@ describe('OnboardingView', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockUseAuth.mockReturnValue({
-      data: { id: '1', email: 'test@example.com', name: '' },
+      data: { _id: '1', email: 'test@example.com', name: '', lastName: '', isActive: true, role: 'user' },
       isLoading: false,
       isError: false,
       logoutUser: vi.fn(),
       isProfileComplete: false,
-    } as any);
+    });
     mockUpdateUserProfile.mockResolvedValue('OK');
     mockUploadAvatar.mockResolvedValue({ avatarUrl: 'https://example.com/avatar.jpg' });
   });

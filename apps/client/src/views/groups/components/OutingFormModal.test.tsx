@@ -100,7 +100,17 @@ describe('OutingFormModal', () => {
 
   it('submits the create mutation with the correct payload', async () => {
     const user = userEvent.setup();
-    vi.mocked(OutingAPI.createOuting).mockResolvedValue({} as any);
+    vi.mocked(OutingAPI.createOuting).mockResolvedValue({
+      _id: 'outing-1',
+      group: 'group-1',
+      bar: { _id: 'bar-1', name: 'Bar Uno', slug: 'bar-uno' },
+      createdBy: { _id: 'u1', name: 'Juan', lastName: 'Pérez' },
+      scheduledFor: new Date().toISOString(),
+      status: 'PENDING',
+      invitees: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
 
     renderModal();
 

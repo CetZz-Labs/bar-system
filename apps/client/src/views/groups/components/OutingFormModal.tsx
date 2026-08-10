@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "motion/react";
@@ -52,7 +52,7 @@ export default function OutingFormModal({
   const [selectedInvitees, setSelectedInvitees] = useState<string[]>([]);
   const [conflictOutingId, setConflictOutingId] = useState<string | null>(null);
 
-  const { min, max } = useMemo(() => getOutingDateTimeBounds(), [isOpen]);
+  const { min, max } = getOutingDateTimeBounds();
 
   const {
     register,

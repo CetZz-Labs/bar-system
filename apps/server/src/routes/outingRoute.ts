@@ -67,6 +67,18 @@ router.patch('/:outingId',
     OutingController.updateOuting
 );
 
+router.patch('/:outingId/cancel',
+    authenticate(),
+    param('groupId')
+        .isMongoId()
+        .withMessage('El ID del grupo es requerido'),
+    param('outingId')
+        .isMongoId()
+        .withMessage('El ID de la salida es requerido'),
+    handleInputErrors,
+    OutingController.cancelOuting
+);
+
 router.get('/active',
     authenticate(),
     param('groupId')

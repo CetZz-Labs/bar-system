@@ -35,3 +35,13 @@ apps/**/yarn.lock
 
 # Graphify AST graphs (regenerable; not SSOT — see ../graphify/README.md)
 graphify-out/
+
+# AI agent harness — per-developer working memory (progress/history.md and
+# progress/current.template.md stay tracked; see progress/current.template.md)
+progress/current.md
+progress/explorers/*
+progress/implementers/*
+progress/reviewers/*
+!progress/explorers/.gitkeep
+!progress/implementers/.gitkeep
+!progress/reviewers/.gitkeep

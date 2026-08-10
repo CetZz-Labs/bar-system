@@ -39,10 +39,13 @@ describe('useAuth', () => {
     vi.clearAllMocks();
     // Default mock implementations
     mockSession.mockResolvedValue({
-      id: '1',
+      _id: '1',
       name: 'Test User',
+      lastName: 'Test',
       email: 'test@example.com',
-    } as any);
+      isActive: true,
+      role: 'user',
+    });
     mockLogout.mockResolvedValue('Logged out');
   });
 
@@ -67,11 +70,14 @@ describe('useAuth', () => {
 
   it('should fetch session data successfully', async () => {
     const mockUser = {
-      id: '1',
+      _id: '1',
       name: 'Test User',
+      lastName: 'Test',
       email: 'test@example.com',
+      isActive: true,
+      role: 'user',
     };
-    mockSession.mockResolvedValue(mockUser as any);
+    mockSession.mockResolvedValue(mockUser);
 
     const { result } = renderHook(() => useAuth(), { wrapper: createWrapper() });
 
@@ -99,11 +105,14 @@ describe('useAuth', () => {
 
   it('should call logout and clear session data', async () => {
     const mockUser = {
-      id: '1',
+      _id: '1',
       name: 'Test User',
+      lastName: 'Test',
       email: 'test@example.com',
+      isActive: true,
+      role: 'user',
     };
-    mockSession.mockResolvedValue(mockUser as any);
+    mockSession.mockResolvedValue(mockUser);
 
     const { result } = renderHook(() => useAuth(), { wrapper: createWrapper() });
 
@@ -124,11 +133,14 @@ describe('useAuth', () => {
 
   it('should navigate to login page after logout', async () => {
     const mockUser = {
-      id: '1',
+      _id: '1',
       name: 'Test User',
+      lastName: 'Test',
       email: 'test@example.com',
+      isActive: true,
+      role: 'user',
     };
-    mockSession.mockResolvedValue(mockUser as any);
+    mockSession.mockResolvedValue(mockUser);
 
     const { result } = renderHook(() => useAuth(), { wrapper: createWrapper() });
 
@@ -147,11 +159,14 @@ describe('useAuth', () => {
 
   it('should handle logout error gracefully', async () => {
     const mockUser = {
-      id: '1',
+      _id: '1',
       name: 'Test User',
+      lastName: 'Test',
       email: 'test@example.com',
+      isActive: true,
+      role: 'user',
     };
-    mockSession.mockResolvedValue(mockUser as any);
+    mockSession.mockResolvedValue(mockUser);
     mockLogout.mockRejectedValue(new Error('Logout failed'));
 
     const { result } = renderHook(() => useAuth(), { wrapper: createWrapper() });
@@ -173,11 +188,14 @@ describe('useAuth', () => {
   describe('isProfileComplete', () => {
     it('should return false when profileComplete is false', async () => {
       mockSession.mockResolvedValue({
-        id: '1',
+        _id: '1',
         name: 'Test',
+        lastName: 'Test',
         email: 'test@example.com',
+        isActive: true,
+        role: 'user',
         profileComplete: false,
-      } as any);
+      });
 
       const { result } = renderHook(() => useAuth(), { wrapper: createWrapper() });
 
@@ -190,10 +208,13 @@ describe('useAuth', () => {
 
     it('should return false when profileComplete is undefined', async () => {
       mockSession.mockResolvedValue({
-        id: '1',
+        _id: '1',
         name: 'Test',
+        lastName: 'Test',
         email: 'test@example.com',
-      } as any);
+        isActive: true,
+        role: 'user',
+      });
 
       const { result } = renderHook(() => useAuth(), { wrapper: createWrapper() });
 
@@ -206,11 +227,14 @@ describe('useAuth', () => {
 
     it('should return true when profileComplete is true', async () => {
       mockSession.mockResolvedValue({
-        id: '1',
+        _id: '1',
         name: 'Test',
+        lastName: 'Test',
         email: 'test@example.com',
+        isActive: true,
+        role: 'user',
         profileComplete: true,
-      } as any);
+      });
 
       const { result } = renderHook(() => useAuth(), { wrapper: createWrapper() });
 

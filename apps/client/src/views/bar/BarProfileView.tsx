@@ -61,18 +61,6 @@ export default function BarProfileView() {
     mode: "onChange",
   });
 
-  useEffect(() => {
-    if (bar) {
-      reset({
-        name: bar.name,
-        description: bar.description ?? "",
-        phone: bar.phone,
-      });
-      setCoverRemoved(false);
-      setLogoRemoved(false);
-    }
-  }, [bar, reset]);
-
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [logoError, setLogoError] = useState<string | null>(null);
@@ -83,6 +71,26 @@ export default function BarProfileView() {
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
   const [coverError, setCoverError] = useState<string | null>(null);
   const [coverRemoved, setCoverRemoved] = useState(false);
+
+  // Reset the local "removed" flags whenever a different bar's data loads
+  // (e.g. navigating between bars). Computed during render, not in an
+  // effect, since it's derived from `bar.id` rather than an external system.
+  const [syncedBarId, setSyncedBarId] = useState<string | undefined>(undefined);
+  if (bar && bar.id !== syncedBarId) {
+    setSyncedBarId(bar.id);
+    setCoverRemoved(false);
+    setLogoRemoved(false);
+  }
+
+  useEffect(() => {
+    if (bar) {
+      reset({
+        name: bar.name,
+        description: bar.description ?? "",
+        phone: bar.phone,
+      });
+    }
+  }, [bar, reset]);
 
   useEffect(() => {
     return () => {

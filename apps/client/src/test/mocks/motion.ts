@@ -4,9 +4,12 @@ import React from 'react';
 // This replaces motion/react components with simple DOM elements
 // that still accept className, children, and other props.
 
+type MockMotionProps = Record<string, unknown>;
+
 const createMockMotionComponent = (tag: string) => {
-  const Component = React.forwardRef<HTMLElement, any>(
-    ({ children, ...props }, ref) => {
+  const Component = React.forwardRef<HTMLElement, MockMotionProps>(
+    (allProps, ref) => {
+      const { children, ...props } = allProps as { children?: React.ReactNode } & Record<string, unknown>;
       // Filter out motion-specific props (whileTap, whileHover, etc.)
       const filteredProps = { ...props };
       delete filteredProps['whileTap'];
@@ -46,7 +49,7 @@ const createMockMotionComponent = (tag: string) => {
 };
 
 export const mockMotion = () => {
-  const motion = new Proxy({} as Record<string, React.ComponentType<any>>, {
+  const motion = new Proxy({} as Record<string, React.ComponentType<MockMotionProps>>, {
     get: (target, prop) => {
       if (typeof prop === 'string') {
         if (!target[prop]) {

@@ -329,6 +329,92 @@ export class OutingController {
         }
     };
 
+    static cancelOuting = async (req: Request, res: Response) => {
+        const session = await mongoose.startSession();
+        try {
+            const userId = req.user!._id.toString();
+            const groupId = req.params.groupId as string;
+            const outingId = req.params.outingId as string;
+
+            const group = await Group.findById(groupId).lean();
+            if (!group) {
+                res.status(404).json({ message: 'Grupo no encontrado' });
+                return;
+            }
+
+            const { isLeaderOrCoLeader } = getLeaderOrCoLeaderRole(group.memberships as any, userId);
+            if (!isLeaderOrCoLeader) {
+                res.status(403).json({ message: 'Solo el líder o co-líder del grupo puede cancelar la salida' });
+                return;
+            }
+
+            const outing = await Outing.findOne({ _id: outingId, group: groupId });
+            if (!outing) {
+                res.status(404).json({ message: 'Salida no encontrada' });
+                return;
+            }
+
+            // Idempotencia: un doble tap sobre "cancelar" no debe re-notificar ni fallar.
+            if (outing.status === OutingStatus.CANCELLED) {
+                const populated = await Outing.findById(outing._id)
+                    .populate('bar', 'name slug logoUrl address')
+                    .populate('createdBy', 'name lastName avatarUrl')
+                    .lean();
+                res.status(200).json(populated);
+                return;
+            }
+
+            if (outing.status !== OutingStatus.PENDING) {
+                res.status(409).json({ message: 'La salida ya no puede cancelarse porque ya hubo check-in u otro cambio de estado' });
+                return;
+            }
+
+            const bar = await Bar.findById(outing.bar).select('name').lean();
+
+            session.startTransaction();
+
+            outing.status = OutingStatus.CANCELLED;
+            outing.canceledBy = userId as any;
+            outing.canceledAt = new Date();
+
+            await outing.save({ session });
+
+            const formattedDate = outing.scheduledFor.toLocaleString('es-AR', {
+                dateStyle: 'medium',
+                timeStyle: 'short',
+            });
+
+            const invitees = outing.invitees.map((inviteeId) => inviteeId.toString());
+            const notifications = invitees.map((inviteeId) => ({
+                user: inviteeId,
+                type: NotificationType.OUTING_CANCELLED,
+                message: `La salida a ${bar?.name ?? 'el bar'} del ${formattedDate} fue cancelada`,
+                relatedOuting: outing._id,
+            }));
+
+            if (notifications.length > 0) {
+                await Notification.insertMany(notifications, { session });
+            }
+
+            await session.commitTransaction();
+
+            const populated = await Outing.findById(outing._id)
+                .populate('bar', 'name slug logoUrl address')
+                .populate('createdBy', 'name lastName avatarUrl')
+                .lean();
+
+            res.status(200).json(populated);
+        } catch (error) {
+            if (session.inTransaction()) {
+                await session.abortTransaction().catch(() => { });
+            }
+            console.error(error);
+            res.status(500).json({ message: 'Hubo un error al cancelar la salida' });
+        } finally {
+            session.endSession();
+        }
+    };
+
     static getActiveOuting = async (req: Request, res: Response) => {
         try {
             const userId = req.user!._id.toString();
