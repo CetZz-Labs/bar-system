@@ -2,7 +2,10 @@ import { Document, model, Schema, Types } from "mongoose";
 
 export enum BarUserRole {
     OWNER = 'OWNER',
+    CASHIER = 'CASHIER',
+    /** @deprecated La Banda MVP usa OWNER + CASHIER (LB-53). Se mantiene por compat. */
     WAITER = 'WAITER',
+    /** @deprecated */
     MANAGER = 'MANAGER',
 }
 

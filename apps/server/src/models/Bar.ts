@@ -25,6 +25,8 @@ export interface IBar extends Document {
     address: IAddress;
     phone: string;
     schedule: IScheduleSlot[];
+    /** Hora de cierre del "día del bar" (HH:MM). Default 06:00 — LB-53 / LB-54 */
+    closingHour: string;
     description?: string;
     status: BarStatus;
     logoUrl?: string;
@@ -94,6 +96,12 @@ const barSchema = new Schema<IBar>({
         }],
         required: true,
         validate: [(val: IScheduleSlot[]) => val.length > 0, 'El horario debe tener al menos un día'],
+    },
+    closingHour: {
+        type: String,
+        trim: true,
+        default: '06:00',
+        match: /^([01]\d|2[0-3]):([0-5]\d)$/,
     },
     description: {
         type: String,
