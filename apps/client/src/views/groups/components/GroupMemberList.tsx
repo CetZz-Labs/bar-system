@@ -142,22 +142,26 @@ export default function GroupMemberList({
               </div>
               {showActions && (
                 <div className="flex items-center gap-1">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleAction(member, "promote")}
-                    aria-label="Promover"
-                  >
-                    <ArrowUpCircle size={16} />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleAction(member, "demote")}
-                    aria-label="Degradar"
-                  >
-                    <ArrowDownCircle size={16} />
-                  </Button>
+                  {member.role === "MEMBER" && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleAction(member, "promote")}
+                      aria-label="Promover"
+                    >
+                      <ArrowUpCircle size={16} />
+                    </Button>
+                  )}
+                  {member.role === "CO_LEADER" && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleAction(member, "demote")}
+                      aria-label="Degradar"
+                    >
+                      <ArrowDownCircle size={16} />
+                    </Button>
+                  )}
                   <Button
                     variant="ghost"
                     size="sm"

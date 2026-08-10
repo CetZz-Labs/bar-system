@@ -114,3 +114,25 @@ export async function leaveGroup(slug: string) {
     throwStandardError(error);
   }
 }
+
+export async function markDeparturesSeen(slug: string) {
+  try {
+    const { data } = await api.post<{ message: string }>(
+      `/groups/${slug}/mark-departures-seen`
+    );
+    return data;
+  } catch (error) {
+    throwStandardError(error);
+  }
+}
+
+export async function markSuccessionsSeen(slug: string) {
+  try {
+    const { data } = await api.post<{ message: string }>(
+      `/groups/${slug}/mark-successions-seen`
+    );
+    return data;
+  } catch (error) {
+    throwStandardError(error);
+  }
+}

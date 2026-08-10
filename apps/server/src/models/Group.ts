@@ -14,6 +14,19 @@ export interface IGroupMembership {
     joinedAt: Date;
 }
 
+export interface IDepartedMember {
+    user: Types.ObjectId;
+    name: string;
+    departedAt: Date;
+}
+
+export interface ISuccessionNotification {
+    newLeader: Types.ObjectId;
+    newLeaderName: string;
+    previousLeaderName: string;
+    createdAt: Date;
+}
+
 export interface IGroup extends Document {
     name: string;
     slug: string;
@@ -23,6 +36,10 @@ export interface IGroup extends Document {
     leader: Types.ObjectId;
     avatarUrl?: string;
     memberships: IGroupMembership[];
+    departedMembers: IDepartedMember[];
+    seenDepartures: Types.ObjectId[];
+    successionNotifications: ISuccessionNotification[];
+    seenSuccessions: Types.ObjectId[];
 }
 
 const groupSchema = new Schema<IGroup>({
@@ -76,6 +93,52 @@ const groupSchema = new Schema<IGroup>({
                 default: Date.now
             }
         }],
+        default: []
+    },
+    departedMembers: {
+        type: [{
+            user: {
+                type: Schema.Types.ObjectId,
+                ref: 'User'
+            },
+            name: {
+                type: String,
+                required: true
+            },
+            departedAt: {
+                type: Date,
+                default: Date.now
+            }
+        }],
+        default: []
+    },
+    seenDepartures: {
+        type: [Schema.Types.ObjectId],
+        default: []
+    },
+    successionNotifications: {
+        type: [{
+            newLeader: {
+                type: Schema.Types.ObjectId,
+                ref: 'User'
+            },
+            newLeaderName: {
+                type: String,
+                required: true
+            },
+            previousLeaderName: {
+                type: String,
+                required: true
+            },
+            createdAt: {
+                type: Date,
+                default: Date.now
+            }
+        }],
+        default: []
+    },
+    seenSuccessions: {
+        type: [Schema.Types.ObjectId],
         default: []
     }
 }, {

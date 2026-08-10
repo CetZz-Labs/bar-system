@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router";
 import { motion } from "motion/react";
-import { ArrowLeft, Users, Settings, AlertCircle, LogOut } from "lucide-react";
+import { ArrowLeft, Users, Settings, AlertCircle, LogOut, UserMinus, Crown } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Avatar } from "@/components/ui/Avatar";
 import { Modal } from "@/components/ui/Modal";
 import { toast } from "sonner";
-import { getGroupBySlug, leaveGroup } from "@/API/GroupAPI";
+import { getGroupBySlug, leaveGroup, markDeparturesSeen, markSuccessionsSeen } from "@/API/GroupAPI";
 import { useAuth } from "@/hooks/useAuth";
 import type { GroupDetail } from "@/types/group";
 import GroupMemberList from "./components/GroupMemberList";
@@ -89,6 +89,52 @@ export default function GroupDetailView() {
       );
     }
   }, [group, slug]);
+
+  useEffect(() => {
+    if (group?.unseenDepartedMembers && group.unseenDepartedMembers.length > 0 && slug) {
+      const names = group.unseenDepartedMembers.map((d) => d.name).join(", ");
+      toast.info(
+        `${names} abandonó el grupo`,
+        {
+          id: `departed-${slug}`,
+          duration: 8000,
+        }
+      );
+    }
+  }, [group, slug]);
+
+  useEffect(() => {
+    if (group?.unseenSuccessions && group.unseenSuccessions.length > 0 && slug) {
+      const succession = group.unseenSuccessions[0];
+      toast.info(
+        `${succession.newLeaderName} es el nuevo líder`,
+        {
+          id: `succession-${slug}`,
+          duration: 8000,
+        }
+      );
+    }
+  }, [group, slug]);
+
+  const handleDismissDepartures = async () => {
+    if (!slug) return;
+    try {
+      await markDeparturesSeen(slug);
+      setRefreshKey((k) => k + 1);
+    } catch {
+      // Silently fail - not critical
+    }
+  };
+
+  const handleDismissSuccessions = async () => {
+    if (!slug) return;
+    try {
+      await markSuccessionsSeen(slug);
+      setRefreshKey((k) => k + 1);
+    } catch {
+      // Silently fail - not critical
+    }
+  };
 
   const handleSettings = () => {
     toast.info("Configuración del grupo disponible próximamente");
@@ -217,6 +263,58 @@ export default function GroupDetailView() {
 
       {!loading && !error && group && (
         <div className="flex flex-col items-center gap-6 max-w-sm mx-auto w-full">
+          {/* Departure notification banner */}
+          {group.unseenDepartedMembers && group.unseenDepartedMembers.length > 0 && (
+            <div className="w-full bg-surface-2 border border-border rounded-xl p-4">
+              <div className="flex items-start gap-3">
+                <UserMinus size={20} className="text-amber-400 mt-0.5" />
+                <div className="flex-1">
+                  <p className="text-text-primary text-sm font-medium">
+                    {group.unseenDepartedMembers.length === 1
+                      ? `${group.unseenDepartedMembers[0].name} abandonó el grupo`
+                      : `${group.unseenDepartedMembers.length} miembros abandonaron el grupo`}
+                  </p>
+                  <p className="text-text-secondary text-xs mt-1">
+                    Los puntos contribuidos permanecen en el grupo.
+                  </p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleDismissDepartures}
+                  aria-label="Entendido"
+                >
+                  Entendido
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Succession notification banner */}
+          {group.unseenSuccessions && group.unseenSuccessions.length > 0 && (
+            <div className="w-full bg-surface-2 border border-border rounded-xl p-4">
+              <div className="flex items-start gap-3">
+                <Crown size={20} className="text-amber-400 mt-0.5" />
+                <div className="flex-1">
+                  <p className="text-text-primary text-sm font-medium">
+                    {group.unseenSuccessions[0].newLeaderName} es el nuevo líder
+                  </p>
+                  <p className="text-text-secondary text-xs mt-1">
+                    {group.unseenSuccessions[0].previousLeaderName} abandonó el grupo.
+                  </p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleDismissSuccessions}
+                  aria-label="Entendido"
+                >
+                  Entendido
+                </Button>
+              </div>
+            </div>
+          )}
+
           {/* Avatar */}
           <Avatar
             src={group.avatarUrl}

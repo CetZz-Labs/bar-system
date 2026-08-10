@@ -43,6 +43,19 @@ export interface GroupMember {
   role: GroupRole;
 }
 
+export interface DepartedMember {
+  user: string;
+  name: string;
+  departedAt: string;
+}
+
+export interface SuccessionNotification {
+  newLeader: string;
+  newLeaderName: string;
+  previousLeaderName: string;
+  createdAt: string;
+}
+
 export interface GroupDetail {
   id: string;
   name: string;
@@ -57,6 +70,8 @@ export interface GroupDetail {
   canManage: boolean;
   currentUserRole: GroupRole;
   pendingRequestsCount?: number;
+  unseenDepartedMembers?: DepartedMember[];
+  unseenSuccessions?: SuccessionNotification[];
 }
 
 export type GroupUserStatus = "member" | "banned" | "pending" | "available";
