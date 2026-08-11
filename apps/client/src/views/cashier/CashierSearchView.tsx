@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router';
 import { motion } from 'motion/react';
 import { Camera, Loader2, QrCode, Search, Users } from 'lucide-react';
-import { searchCashierGroupsRaw } from '@/API/CashierAPI';
+import { confirmCheckIn, searchCashierGroupsRaw } from '@/API/CashierAPI';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import type { CashierSearchExactError, CashierSearchResult } from '@/types/cashier';
+import { toastApiError } from '@/utils/apiError';
 import { toast } from 'sonner';
 
 const DEBOUNCE_MS = 300;
@@ -115,6 +116,15 @@ export default function CashierSearchView() {
       stopScanner();
     }
   };
+
+  const checkInMutation = useMutation({
+    mutationFn: (item: CashierSearchResult) => confirmCheckIn(item.outingId),
+    onSuccess: (_data, item) => {
+      toast.success('Check-in confirmado');
+      navigate(`/bar/${barId}/cajero/salida/${item.outingId}`, { state: { outing: item } });
+    },
+    onError: toastApiError,
+  });
 
   const results = searchQuery.data ?? [];
   // Derivado en vez de sincronizado con un useEffect: el error puntual de
@@ -231,13 +241,25 @@ export default function CashierSearchView() {
               variant="primary"
               fullWidth
               type="button"
+              disabled={
+                checkInMutation.isPending && checkInMutation.variables?.outingId === item.outingId
+              }
               onClick={() =>
                 item.action === 'check_in'
-                  ? toast.message('Check-in: pendiente LB-55')
+                  ? checkInMutation.mutate(item)
                   : navigate(`/bar/${barId}/cajero/salida/${item.outingId}`, { state: { outing: item } })
               }
             >
-              {item.action === 'check_in' ? 'Iniciar check-in' : 'Ver detalle'}
+              {item.action === 'check_in' && checkInMutation.isPending && checkInMutation.variables?.outingId === item.outingId ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" />
+                  Confirmando...
+                </>
+              ) : item.action === 'check_in' ? (
+                'Iniciar check-in'
+              ) : (
+                'Ver detalle'
+              )}
             </Button>
           </li>
         ))}

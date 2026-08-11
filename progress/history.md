@@ -116,3 +116,34 @@ navegador mucho antes de que el token firmado expire realmente.
 - **Veredicto del Reviewer:** `[APPROVED]` (segunda pasada, tras el fixup de
   C4) - Cumplimiento verificado contra `CHECKPOINTS.md` C1-C4, los 5
   comandos de verificación en verde.
+
+### [2026-08-11] - LB-55: Confirmar check-in de un grupo
+- **Dominio afectado:** Monorepo (Backend + Frontend)
+- **Subagentes involucrados:** Explorer (`progress/explorers/exp_LB-55.md`),
+  Implementer (`progress/implementers/impl_LB-55.md`), Reviewer
+  (`progress/reviewers/review_LB-55.md`).
+- **Resumen de Cambios:** Nuevo endpoint `PATCH /api/outings/:outingId/check-in`
+  (`OutingController.confirmCheckIn`), protegido con `authenticateCashier` —
+  403 si la salida no pertenece al bar del cajero, 404 si no existe, 409 si el
+  status no es `PENDING` (CANCELLED/COMPLETED), 409 si está fuera de la
+  ventana horaria (`now < scheduledFor` o `now > scheduledFor +
+  checkInWindowHours`). Nuevo campo `Bar.checkInWindowHours` (default 4,
+  configurable por bar). `Outing` gana `checkedInAt`/`checkedInBy`; al
+  confirmar, `status` pasa a `ACTIVE` dentro de una transacción Mongo que
+  también crea notificaciones `NotificationType.OUTING_CHECKED_IN` (nuevo)
+  para el LEADER y CO_LEADER del grupo (no todos los invitees). Idempotente:
+  doble tap sobre una salida ya `ACTIVE` responde 200 sin re-notificar ni
+  pisar `checkedInAt`/`checkedInBy`. Frontend: reemplazado el placeholder
+  `toast.message('Check-in: pendiente LB-55')` en `CashierSearchView.tsx` por
+  una mutación real (`CashierAPI.confirmCheckIn`) con toast de éxito/error
+  (`sonner`) y navegación a la vista de la salida.
+  **Decisión de alcance:** el criterio de aceptación pedía "notificación
+  push", pero el repo no tiene infraestructura de push real (sin
+  `web-push`/`firebase-admin`/etc. en `apps/server/package.json`) — se
+  implementó como notificación in-app, mismo patrón que
+  `OUTING_CREATED`/`UPDATED`/`CANCELLED`, verificado explícitamente por el
+  Reviewer como la única interpretación consistente con las librerías
+  autorizadas de `.claude/rules/backend.md`.
+- **Veredicto del Reviewer:** `[APPROVED]` (primera pasada) - Cumplimiento
+  verificado contra `CHECKPOINTS.md` C1-C4, los 5 comandos de verificación en
+  verde (293/293 tests server, 154/154 tests client, lint y build limpios).

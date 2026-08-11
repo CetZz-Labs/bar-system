@@ -419,6 +419,105 @@ export class OutingController {
         }
     };
 
+    // Confirmación de check-in por parte del cajero (LB-55). A diferencia del resto
+    // de los métodos de este controller, no usa req.user/req.params.groupId: quien
+    // llama es un cajero autenticado vía authenticateCashier (req.cashierContext),
+    // no un miembro del grupo.
+    static confirmCheckIn = async (req: Request, res: Response) => {
+        const session = await mongoose.startSession();
+        try {
+            const cashierContext = req.cashierContext!;
+            const outingId = req.params.outingId as string;
+
+            const outing = await Outing.findOne({ _id: outingId });
+            if (!outing) {
+                res.status(404).json({ message: 'Salida no encontrada' });
+                return;
+            }
+
+            // Mismo patrón que ConsumptionController.createConsumption: el cajero
+            // solo puede operar sobre salidas de su propio bar.
+            if (outing.bar.toString() !== cashierContext.bar.toString()) {
+                res.status(403).json({ message: 'Esta salida no pertenece a tu bar' });
+                return;
+            }
+
+            // Idempotencia: un doble tap sobre "confirmar check-in" no debe re-notificar
+            // ni pisar checkedInAt/checkedInBy. Mismo criterio que cancelOuting.
+            if (outing.status === OutingStatus.ACTIVE) {
+                const populated = await Outing.findById(outing._id)
+                    .populate('bar', 'name slug logoUrl address')
+                    .populate('createdBy', 'name lastName avatarUrl')
+                    .lean();
+                res.status(200).json(populated);
+                return;
+            }
+
+            if (outing.status !== OutingStatus.PENDING) {
+                res.status(409).json({ message: 'La salida ya no admite check-in' });
+                return;
+            }
+
+            const bar = await Bar.findById(outing.bar).select('checkInWindowHours').lean();
+            const checkInWindowHours = bar?.checkInWindowHours ?? 4;
+
+            const now = new Date();
+            const windowEnd = new Date(outing.scheduledFor.getTime() + checkInWindowHours * 60 * 60 * 1000);
+
+            if (now < outing.scheduledFor) {
+                res.status(409).json({ message: 'Todavía no es la hora pactada de la salida' });
+                return;
+            }
+
+            if (now > windowEnd) {
+                res.status(409).json({ message: 'La ventana de check-in ya expiró' });
+                return;
+            }
+
+            const group = await Group.findById(outing.group).select('memberships').lean();
+
+            session.startTransaction();
+
+            outing.status = OutingStatus.ACTIVE;
+            outing.checkedInAt = now;
+            outing.checkedInBy = cashierContext.user._id;
+
+            await outing.save({ session });
+
+            const leadersAndCoLeaders = (group?.memberships ?? []).filter(
+                (m) => m.role === MembershipRole.LEADER || m.role === MembershipRole.CO_LEADER
+            );
+
+            const notifications = leadersAndCoLeaders.map((membership) => ({
+                user: membership.user,
+                type: NotificationType.OUTING_CHECKED_IN,
+                message: 'Se confirmó el check-in de la salida del grupo',
+                relatedOuting: outing._id,
+            }));
+
+            if (notifications.length > 0) {
+                await Notification.insertMany(notifications, { session });
+            }
+
+            await session.commitTransaction();
+
+            const populated = await Outing.findById(outing._id)
+                .populate('bar', 'name slug logoUrl address')
+                .populate('createdBy', 'name lastName avatarUrl')
+                .lean();
+
+            res.status(200).json(populated);
+        } catch (error) {
+            if (session.inTransaction()) {
+                await session.abortTransaction().catch(() => { });
+            }
+            console.error(error);
+            res.status(500).json({ message: 'Hubo un error al confirmar el check-in' });
+        } finally {
+            session.endSession();
+        }
+    };
+
     static getActiveOuting = async (req: Request, res: Response) => {
         try {
             const userId = req.user!._id.toString();
