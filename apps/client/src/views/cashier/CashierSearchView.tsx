@@ -42,7 +42,7 @@ export default function CashierSearchView() {
 
   const searchQuery = useQuery({
     queryKey: ['cashierSearch', debounced],
-    enabled: debounced.length >= 2,
+    enabled: debounced.length !== 1,
     queryFn: async () => {
       const outcome = await searchCashierGroupsRaw(debounced);
       if (!outcome.ok) {
@@ -198,7 +198,10 @@ export default function CashierSearchView() {
         </div>
       )}
 
-      {!visibleExactError && !searchQuery.isFetching && debounced.length >= 2 && results.length === 0 && (
+      {!visibleExactError &&
+        !searchQuery.isFetching &&
+        (debounced.length === 0 || debounced.length >= 2) &&
+        results.length === 0 && (
         <p className="text-sm text-text-secondary m-0">
           No hay grupos con salida agendada a este bar para hoy.
         </p>

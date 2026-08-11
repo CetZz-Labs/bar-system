@@ -59,6 +59,18 @@ describe('CashierSearchView', () => {
     vi.clearAllMocks();
   });
 
+  it('loads the default listing on mount, without any user interaction', async () => {
+    vi.mocked(CashierAPI.searchCashierGroupsRaw).mockResolvedValue({
+      ok: true,
+      results: [pendingCheckInResult],
+    });
+
+    renderView();
+
+    expect(await screen.findByText('Los Pibes')).toBeInTheDocument();
+    expect(CashierAPI.searchCashierGroupsRaw).toHaveBeenCalledWith('');
+  });
+
   it('confirms check-in and navigates to the outing detail on success', async () => {
     const user = userEvent.setup();
     vi.mocked(CashierAPI.searchCashierGroupsRaw).mockResolvedValue({
