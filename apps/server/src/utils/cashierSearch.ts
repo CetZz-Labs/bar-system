@@ -75,8 +75,40 @@ function mapOutingToResult(outing: PopulatedOuting): CashierSearchResult {
 }
 
 /**
+ * Trae las salidas PENDING/ACTIVE de ESTE bar en el rango [start, end), opcionalmente
+ * acotadas a un set de grupos (búsqueda por nombre), y las mapea a CashierSearchResult.
+ * Sin `groupIds`: no aplica ningún filtro de grupo (listado por defecto, LB-54).
+ */
+async function fetchOutingsForBar(
+    barId: string,
+    start: Date,
+    end: Date,
+    groupIds?: Types.ObjectId[]
+): Promise<CashierSearchResult[]> {
+    const outings = await Outing.find({
+        ...(groupIds ? { group: { $in: groupIds } } : {}),
+        bar: barId,
+        status: { $in: SEARCHABLE_STATUSES },
+        scheduledFor: { $gte: start, $lt: end },
+    })
+        .populate('group', 'name inviteCode')
+        .populate('invitees', 'name lastName')
+        .sort({ scheduledFor: 1 })
+        .lean();
+
+    const results: CashierSearchResult[] = [];
+    for (const outing of outings) {
+        if (outing.group && typeof outing.group === 'object' && 'name' in outing.group) {
+            results.push(mapOutingToResult(outing as unknown as PopulatedOuting));
+        }
+    }
+    return results;
+}
+
+/**
  * Búsqueda cajero (LB-54).
- * - Texto (≥2): solo grupos con salida PENDING/ACTIVE hacia ESTE bar en el día del bar.
+ * - Sin texto: todas las salidas PENDING/ACTIVE hacia ESTE bar en el día del bar (listado por defecto).
+ * - Texto (≥2): solo grupos con salida PENDING/ACTIVE hacia ESTE bar en el día del bar, filtrados por nombre.
  * - Código/QR (6 chars): match directo; mensajes NO_SALIDA / OTHER_BAR si no aplica.
  * Sin logs de búsqueda (privacidad MVP).
  */
@@ -144,6 +176,11 @@ export async function searchGroupsForCashier(
         };
     }
 
+    if (q.length === 0) {
+        const results = await fetchOutingsForBar(barId, start, end);
+        return { results };
+    }
+
     if (q.length < 2) {
         return { results: [] };
     }
@@ -161,23 +198,7 @@ export async function searchGroupsForCashier(
     }
 
     const groupIds = groups.map((g) => g._id);
-    const outings = await Outing.find({
-        group: { $in: groupIds },
-        bar: barId,
-        status: { $in: SEARCHABLE_STATUSES },
-        scheduledFor: { $gte: start, $lt: end },
-    })
-        .populate('group', 'name inviteCode')
-        .populate('invitees', 'name lastName')
-        .sort({ scheduledFor: 1 })
-        .lean();
-
-    const results: CashierSearchResult[] = [];
-    for (const outing of outings) {
-        if (outing.group && typeof outing.group === 'object' && 'name' in outing.group) {
-            results.push(mapOutingToResult(outing as unknown as PopulatedOuting));
-        }
-    }
+    const results = await fetchOutingsForBar(barId, start, end, groupIds);
 
     return { results };
 }

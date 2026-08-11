@@ -4,6 +4,7 @@ import type {
     CashierSearchResult,
     CashierSession,
 } from "@/types/cashier";
+import type { Outing } from "@/types/outing";
 import api from "@/libs/axios";
 import { throwStandardError } from "@/utils/apiError";
 
@@ -34,6 +35,16 @@ export async function cashierLogout() {
         return data
     } catch (error) {
         throwStandardError(error)
+    }
+}
+
+/** Confirma el check-in de una salida (LB-55). El líder/co-líder recibe una notificación in-app. */
+export async function confirmCheckIn(outingId: string) {
+    try {
+        const { data } = await api.patch<Outing>(`/outings/${outingId}/check-in`);
+        return data;
+    } catch (error) {
+        throwStandardError(error);
     }
 }
 

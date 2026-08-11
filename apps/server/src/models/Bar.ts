@@ -30,6 +30,7 @@ export interface IBar extends Document {
     logoUrl?: string;
     coverUrl?: string;
     closingTime: string;
+    checkInWindowHours: number;
 }
 
 const addressSchema = new Schema<IAddress>({
@@ -117,6 +118,10 @@ const barSchema = new Schema<IBar>({
         type: String,
         match: /^([01]\d|2[0-3]):([0-5]\d)$/,
         default: '06:00',
+    },
+    checkInWindowHours: {
+        type: Number,
+        default: 4,
     },
 }, {
     timestamps: true,

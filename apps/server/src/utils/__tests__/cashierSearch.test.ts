@@ -210,6 +210,40 @@ describe('searchGroupsForCashier', () => {
   })
 
   describe('text query', () => {
+    it('returns all PENDING/ACTIVE outings for the bar when the query is empty (default listing)', async () => {
+      const groupIdA = new Types.ObjectId()
+      const groupIdB = new Types.ObjectId()
+      const outingIdA = new Types.ObjectId()
+      const outingIdB = new Types.ObjectId()
+
+      vi.mocked(Outing.find).mockReturnValue(
+        populatePopulateSortLeanQuery([
+          {
+            _id: outingIdA,
+            status: 'PENDING',
+            scheduledFor: new Date('2026-08-10T23:00:00.000Z'),
+            group: { _id: groupIdA, name: 'Los Pibes', inviteCode: 'AB12CD' },
+            invitees: [],
+          },
+          {
+            _id: outingIdB,
+            status: 'ACTIVE',
+            scheduledFor: new Date('2026-08-11T00:00:00.000Z'),
+            group: { _id: groupIdB, name: 'Las Pibas', inviteCode: 'ZZ99AA' },
+            invitees: [],
+          },
+        ]) as any
+      )
+
+      const result = await searchGroupsForCashier(barId, '06:00', '')
+
+      expect('results' in result && result.results).toHaveLength(2)
+      expect('results' in result && result.results.map((r) => r.outingId).sort()).toEqual(
+        [outingIdA.toString(), outingIdB.toString()].sort()
+      )
+      expect(Group.find).not.toHaveBeenCalled()
+    })
+
     it('returns empty results for queries shorter than 2 characters', async () => {
       const result = await searchGroupsForCashier(barId, '06:00', 'a')
 

@@ -116,3 +116,87 @@ navegador mucho antes de que el token firmado expire realmente.
 - **Veredicto del Reviewer:** `[APPROVED]` (segunda pasada, tras el fixup de
   C4) - Cumplimiento verificado contra `CHECKPOINTS.md` C1-C4, los 5
   comandos de verificación en verde.
+
+### [2026-08-11] - LB-55: Confirmar check-in de un grupo
+- **Dominio afectado:** Monorepo (Backend + Frontend)
+- **Subagentes involucrados:** Explorer (`progress/explorers/exp_LB-55.md`),
+  Implementer (`progress/implementers/impl_LB-55.md`), Reviewer
+  (`progress/reviewers/review_LB-55.md`).
+- **Resumen de Cambios:** Nuevo endpoint `PATCH /api/outings/:outingId/check-in`
+  (`OutingController.confirmCheckIn`), protegido con `authenticateCashier` —
+  403 si la salida no pertenece al bar del cajero, 404 si no existe, 409 si el
+  status no es `PENDING` (CANCELLED/COMPLETED), 409 si está fuera de la
+  ventana horaria (`now < scheduledFor` o `now > scheduledFor +
+  checkInWindowHours`). Nuevo campo `Bar.checkInWindowHours` (default 4,
+  configurable por bar). `Outing` gana `checkedInAt`/`checkedInBy`; al
+  confirmar, `status` pasa a `ACTIVE` dentro de una transacción Mongo que
+  también crea notificaciones `NotificationType.OUTING_CHECKED_IN` (nuevo)
+  para el LEADER y CO_LEADER del grupo (no todos los invitees). Idempotente:
+  doble tap sobre una salida ya `ACTIVE` responde 200 sin re-notificar ni
+  pisar `checkedInAt`/`checkedInBy`. Frontend: reemplazado el placeholder
+  `toast.message('Check-in: pendiente LB-55')` en `CashierSearchView.tsx` por
+  una mutación real (`CashierAPI.confirmCheckIn`) con toast de éxito/error
+  (`sonner`) y navegación a la vista de la salida.
+  **Decisión de alcance:** el criterio de aceptación pedía "notificación
+  push", pero el repo no tiene infraestructura de push real (sin
+  `web-push`/`firebase-admin`/etc. en `apps/server/package.json`) — se
+  implementó como notificación in-app, mismo patrón que
+  `OUTING_CREATED`/`UPDATED`/`CANCELLED`, verificado explícitamente por el
+  Reviewer como la única interpretación consistente con las librerías
+  autorizadas de `.claude/rules/backend.md`.
+- **Veredicto del Reviewer:** `[APPROVED]` (primera pasada) - Cumplimiento
+  verificado contra `CHECKPOINTS.md` C1-C4, los 5 comandos de verificación en
+  verde (293/293 tests server, 154/154 tests client, lint y build limpios).
+
+### [2026-08-11] - LB-60 (fixup): Auditoría completa + isUnusualAmount
+- **Dominio afectado:** Backend
+- **Subagentes involucrados:** Explorer (`progress/explorers/exp_LB-60-verify.md`),
+  Implementer (`progress/implementers/impl_LB-60-fixups.md`), Reviewer
+  (`progress/reviewers/review_LB-60-fixups.md`).
+- **Contexto:** LB-60 ("Registrar consumo y generar QR de confirmación",
+  Lautaro Zuleta) ya estaba `Finalizada` en Jira. Una auditoría de código
+  independiente, pedida por el usuario tras cerrar LB-55, encontró gaps reales
+  contra los criterios de aceptación literales del ticket (no solo falta de
+  tests). El usuario autorizó explícitamente resolverlos en este repo aunque
+  el ticket no está asignado a este agente.
+- **Resumen de Cambios:** `AuditLog` gana `amount?`/`outing?`/`group?` y la
+  acción `CONSUMPTION_REGENERATED`. `ConsumptionController.createConsumption`
+  ahora audita monto/salida/grupo (antes solo cajero/hora/bar).
+  `ConsumptionController.regenerateConsumption` antes no auditaba nada — ahora
+  también deja registro completo. `Consumption` gana `isUnusualAmount:
+  boolean` (default `false`), calculado en `createConsumption` contra un
+  umbral de $500.000 duplicado a mano en el backend (mismo valor que
+  `apps/client/src/types/consumption.ts`, por aislamiento de monorepo) — no
+  bloqueante, no expuesto en ninguna respuesta HTTP, solo trazabilidad.
+  Explícitamente fuera de alcance: desglose por catálogo (bloqueado por
+  LB-58, inexistente) y todo lo de LB-61.
+- **Veredicto del Reviewer:** `[APPROVED]` (primera pasada) - C1-C4
+  verificados, 297/297 tests (suite completa server), lint limpio. Nota: este
+  fixup no se reflejó en Jira (ticket ya cerrado, no asignado a este agente) —
+  pendiente de decisión del usuario sobre comentar/notificar en LB-60.
+
+### [2026-08-11] - Bug ad-hoc: listado por defecto en búsqueda de cajero (LB-54)
+- **Dominio afectado:** Monorepo (Backend + Frontend)
+- **Subagentes involucrados:** Explorer
+  (`progress/explorers/exp_cashier-search-default-load.md`), Implementer
+  (`progress/implementers/impl_cashier-search-default-load.md`), Reviewer
+  (`progress/reviewers/review_cashier-search-default-load.md`).
+- **Contexto:** Reportado directo por el usuario (sin ticket de Jira):
+  `/bar/:barId/cajero/buscar` no listaba los grupos con salida `PENDING`/`ACTIVE`
+  del bar al entrar a la vista — solo tras escribir 2+ caracteres. Causa raíz
+  en dos puntos independientes: frontend (`enabled: debounced.length >= 2`
+  nunca dispara con query vacía al montar) y backend
+  (`searchGroupsForCashier` cortaba con `{results: []}` para cualquier
+  `q.length < 2`, sin rama de "listado por defecto").
+- **Resumen de Cambios:** `apps/server/src/utils/cashierSearch.ts` gana una
+  rama nueva para `q.length === 0` que devuelve todas las salidas
+  `PENDING`/`ACTIVE` del bar en el rango del día sin filtro de nombre;
+  extraído un helper privado `fetchOutingsForBar` reusado también por la rama
+  de texto ≥2 chars (sin cambio de comportamiento ahí). `q.length === 1` sigue
+  devolviendo `{results: []}` sin cambios. Frontend:
+  `CashierSearchView.tsx` cambia `enabled: debounced.length >= 2` a
+  `debounced.length !== 1` para que la query dispare también al montar, y el
+  mensaje de "sin resultados" ahora contempla el listado por defecto vacío.
+- **Veredicto del Reviewer:** `[APPROVED]` (primera pasada) - C1-C4
+  verificados, los 5 comandos de verificación en verde (298/298 tests server,
+  155/155 tests client, lint y build limpios).

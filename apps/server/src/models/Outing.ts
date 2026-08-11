@@ -17,6 +17,8 @@ export interface IOuting extends Document {
     invitees: Types.ObjectId[];
     canceledBy?: Types.ObjectId;
     canceledAt?: Date;
+    checkedInAt?: Date;
+    checkedInBy?: Types.ObjectId;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -64,6 +66,13 @@ const outingSchema = new Schema<IOuting>({
     },
     canceledAt: {
         type: Date,
+    },
+    checkedInAt: {
+        type: Date,
+    },
+    checkedInBy: {
+        type: Schema.Types.ObjectId,
+        ref: 'User',
     },
 }, {
     timestamps: true,

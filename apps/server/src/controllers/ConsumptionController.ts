@@ -12,6 +12,13 @@ function getOutingStatusError(status: OutingStatus): string | null {
     return 'La salida todavía no está en curso (falta el check-in), no admite nuevos consumos';
 }
 
+// Misma regla de negocio que apps/client/src/types/consumption.ts
+// (UNUSUAL_AMOUNT_THRESHOLD). Duplicada a mano porque apps/client y
+// apps/server no comparten código (regla de aislamiento del monorepo,
+// backend.md §C1 / frontend.md §3). No bloqueante, sin tope duro: solo
+// deja rastro auditable en el documento, nunca rechaza el request.
+const UNUSUAL_AMOUNT_THRESHOLD = 500_000;
+
 export class ConsumptionController {
     static createConsumption = async (req: Request, res: Response) => {
         try {
@@ -44,6 +51,7 @@ export class ConsumptionController {
             // en un único create().
             const consumptionId = new Types.ObjectId();
             const { qrData, qrToken, manualCode, expiresAt } = await generate(consumptionId.toString());
+            const isUnusualAmount = amount > UNUSUAL_AMOUNT_THRESHOLD;
 
             const consumption = await Consumption.create({
                 _id: consumptionId,
@@ -51,6 +59,7 @@ export class ConsumptionController {
                 bar: outing.bar,
                 cashier: cashierContext.user._id,
                 amount,
+                isUnusualAmount,
                 breakdown,
                 status: ConsumptionStatus.PENDING_LEADER_CONFIRMATION,
                 qrToken,
@@ -58,15 +67,17 @@ export class ConsumptionController {
                 expiresAt,
             });
 
-            // Auditoría (cajero, hora, bar) en la colección real de LB-53, no un
-            // console.log ad hoc. El detalle de negocio (monto, grupo, salida)
-            // ya queda persistido en el propio documento Consumption.
+            // Auditoría (cajero, hora, monto, grupo, salida) en la colección
+            // real de LB-53, no un console.log ad hoc.
             await AuditLog.create({
                 bar: cashierContext.bar,
                 user: cashierContext.user._id,
                 action: AuditAction.CONSUMPTION_CREATED,
                 deviceInfo: cashierContext.shift.deviceInfo,
                 ip: req.ip,
+                amount,
+                outing: outingId,
+                group: outing.group,
             });
 
             res.status(201).json({
@@ -120,6 +131,19 @@ export class ConsumptionController {
             consumption.invalidatedAt = null;
 
             await consumption.save();
+
+            const relatedOuting = await Outing.findById(consumption.outing).select('group').lean();
+
+            await AuditLog.create({
+                bar: cashierContext.bar,
+                user: cashierContext.user._id,
+                action: AuditAction.CONSUMPTION_REGENERATED,
+                deviceInfo: cashierContext.shift.deviceInfo,
+                ip: req.ip,
+                amount: consumption.amount,
+                outing: consumption.outing,
+                group: relatedOuting?.group,
+            });
 
             res.status(200).json({
                 consumptionId: consumption._id,

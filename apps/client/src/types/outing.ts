@@ -39,6 +39,8 @@ export interface Outing {
   invitees: string[];
   canceledBy?: string;
   canceledAt?: string;
+  checkedInAt?: string;
+  checkedInBy?: string;
   createdAt: string;
   updatedAt: string;
 }
