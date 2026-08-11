@@ -39,6 +39,7 @@ vi.mock('../../models/AuditLog', () => ({
   },
   AuditAction: {
     CONSUMPTION_CREATED: 'CONSUMPTION_CREATED',
+    CONSUMPTION_REGENERATED: 'CONSUMPTION_REGENERATED',
   },
 }))
 
@@ -165,6 +166,69 @@ describe('ConsumptionController.createConsumption', () => {
         })
       )
     })
+
+    it('audits the consumption with amount, outing and group', async () => {
+      const createdId = new Types.ObjectId()
+      vi.mocked(Consumption.create).mockResolvedValue({
+        _id: createdId,
+        amount: 12000,
+        breakdown: undefined,
+        status: 'PENDING_LEADER_CONFIRMATION',
+      } as any)
+
+      const req = buildRequest()
+      const res = buildMockResponse()
+
+      await ConsumptionController.createConsumption(req, res)
+
+      expect(AuditLog.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          amount: 12000,
+          outing: outingId.toString(),
+          group: groupId,
+        })
+      )
+    })
+  })
+
+  describe('isUnusualAmount', () => {
+    it('sets isUnusualAmount to true when amount is greater than 500000', async () => {
+      const createdId = new Types.ObjectId()
+      vi.mocked(Consumption.create).mockResolvedValue({
+        _id: createdId,
+        amount: 600000,
+        breakdown: undefined,
+        status: 'PENDING_LEADER_CONFIRMATION',
+      } as any)
+
+      const req = buildRequest({ body: { amount: 600000 } })
+      const res = buildMockResponse()
+
+      await ConsumptionController.createConsumption(req, res)
+
+      expect(Consumption.create).toHaveBeenCalledWith(
+        expect.objectContaining({ amount: 600000, isUnusualAmount: true })
+      )
+    })
+
+    it('sets isUnusualAmount to false when amount is less than or equal to 500000', async () => {
+      const createdId = new Types.ObjectId()
+      vi.mocked(Consumption.create).mockResolvedValue({
+        _id: createdId,
+        amount: 500000,
+        breakdown: undefined,
+        status: 'PENDING_LEADER_CONFIRMATION',
+      } as any)
+
+      const req = buildRequest({ body: { amount: 500000 } })
+      const res = buildMockResponse()
+
+      await ConsumptionController.createConsumption(req, res)
+
+      expect(Consumption.create).toHaveBeenCalledWith(
+        expect.objectContaining({ amount: 500000, isUnusualAmount: false })
+      )
+    })
   })
 
   describe('outing not found', () => {
@@ -253,6 +317,7 @@ describe('ConsumptionController.regenerateConsumption', () => {
   let barId: Types.ObjectId
   let outingId: Types.ObjectId
   let consumptionId: Types.ObjectId
+  let groupId: Types.ObjectId
   let cashierContext: any
   let mockConsumption: any
   let mockGeneratedQr: any
@@ -261,6 +326,7 @@ describe('ConsumptionController.regenerateConsumption', () => {
     outingId = new Types.ObjectId()
     barId = new Types.ObjectId()
     consumptionId = new Types.ObjectId()
+    groupId = new Types.ObjectId()
     cashierContext = buildCashierContext({ bar: barId })
 
     mockConsumption = {
@@ -285,6 +351,8 @@ describe('ConsumptionController.regenerateConsumption', () => {
 
     vi.mocked(Consumption.findOne).mockReset().mockResolvedValue(mockConsumption)
     vi.mocked(generate).mockReset().mockResolvedValue(mockGeneratedQr)
+    vi.mocked(Outing.findById).mockReset().mockReturnValue(buildSelectLeanQuery({ group: groupId }) as any)
+    vi.mocked(AuditLog.create).mockReset().mockResolvedValue({} as any)
   })
 
   function buildRequest(overrides: any = {}) {
@@ -310,6 +378,25 @@ describe('ConsumptionController.regenerateConsumption', () => {
       expect(res.status).toHaveBeenCalledWith(200)
       expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({ qrData: mockGeneratedQr.qrData, manualCode: '222222' })
+      )
+    })
+
+    it('audits the regeneration with amount, outing and group', async () => {
+      const req = buildRequest()
+      const res = buildMockResponse()
+
+      await ConsumptionController.regenerateConsumption(req, res)
+
+      expect(AuditLog.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          bar: barId,
+          user: cashierContext.user._id,
+          action: 'CONSUMPTION_REGENERATED',
+          deviceInfo: 'test-device',
+          amount: mockConsumption.amount,
+          outing: outingId,
+          group: groupId,
+        })
       )
     })
   })

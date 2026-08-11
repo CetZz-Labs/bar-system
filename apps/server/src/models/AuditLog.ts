@@ -6,6 +6,7 @@ export enum AuditAction {
     CASHIER_KICKED_OUT = 'CASHIER_KICKED_OUT',
     SHIFT_AUTO_CLOSED = 'SHIFT_AUTO_CLOSED',
     CONSUMPTION_CREATED = 'CONSUMPTION_CREATED',
+    CONSUMPTION_REGENERATED = 'CONSUMPTION_REGENERATED',
 }
 
 export interface IAuditLog extends Document {
@@ -14,6 +15,9 @@ export interface IAuditLog extends Document {
     action: AuditAction;
     deviceInfo?: string;
     ip?: string;
+    amount?: number;
+    outing?: Types.ObjectId;
+    group?: Types.ObjectId;
     createdAt: Date;
 }
 
@@ -42,6 +46,17 @@ const auditLogSchema = new Schema<IAuditLog>({
     ip: {
         type: String,
         trim: true,
+    },
+    amount: {
+        type: Number,
+    },
+    outing: {
+        type: Schema.Types.ObjectId,
+        ref: 'Outing',
+    },
+    group: {
+        type: Schema.Types.ObjectId,
+        ref: 'Group',
     },
 }, {
     timestamps: true,

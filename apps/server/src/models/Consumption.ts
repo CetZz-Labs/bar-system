@@ -22,6 +22,7 @@ export interface IConsumption extends Document {
     bar: Types.ObjectId;
     cashier: Types.ObjectId;
     amount: number;
+    isUnusualAmount: boolean;
     breakdown?: IConsumptionBreakdownItem[];
     status: ConsumptionStatus;
     qrToken: string;
@@ -75,6 +76,14 @@ const consumptionSchema = new Schema<IConsumption>({
             validator: Number.isInteger,
             message: 'El monto debe ser un número entero',
         },
+    },
+    // Rastro persistente/auditable de que el monto superó el umbral de
+    // advertencia (no bloqueante, sin tope duro). El warning en sí es
+    // responsabilidad del frontend (apps/client/src/types/consumption.ts);
+    // este campo solo deja registro server-side por si el cliente se omite.
+    isUnusualAmount: {
+        type: Boolean,
+        default: false,
     },
     // Informativo (LB-58 no existe todavía): el monto total es la fuente de
     // verdad para los puntos, aunque el desglose no coincida con él.

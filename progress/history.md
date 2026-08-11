@@ -147,3 +147,30 @@ navegador mucho antes de que el token firmado expire realmente.
 - **Veredicto del Reviewer:** `[APPROVED]` (primera pasada) - Cumplimiento
   verificado contra `CHECKPOINTS.md` C1-C4, los 5 comandos de verificación en
   verde (293/293 tests server, 154/154 tests client, lint y build limpios).
+
+### [2026-08-11] - LB-60 (fixup): Auditoría completa + isUnusualAmount
+- **Dominio afectado:** Backend
+- **Subagentes involucrados:** Explorer (`progress/explorers/exp_LB-60-verify.md`),
+  Implementer (`progress/implementers/impl_LB-60-fixups.md`), Reviewer
+  (`progress/reviewers/review_LB-60-fixups.md`).
+- **Contexto:** LB-60 ("Registrar consumo y generar QR de confirmación",
+  Lautaro Zuleta) ya estaba `Finalizada` en Jira. Una auditoría de código
+  independiente, pedida por el usuario tras cerrar LB-55, encontró gaps reales
+  contra los criterios de aceptación literales del ticket (no solo falta de
+  tests). El usuario autorizó explícitamente resolverlos en este repo aunque
+  el ticket no está asignado a este agente.
+- **Resumen de Cambios:** `AuditLog` gana `amount?`/`outing?`/`group?` y la
+  acción `CONSUMPTION_REGENERATED`. `ConsumptionController.createConsumption`
+  ahora audita monto/salida/grupo (antes solo cajero/hora/bar).
+  `ConsumptionController.regenerateConsumption` antes no auditaba nada — ahora
+  también deja registro completo. `Consumption` gana `isUnusualAmount:
+  boolean` (default `false`), calculado en `createConsumption` contra un
+  umbral de $500.000 duplicado a mano en el backend (mismo valor que
+  `apps/client/src/types/consumption.ts`, por aislamiento de monorepo) — no
+  bloqueante, no expuesto en ninguna respuesta HTTP, solo trazabilidad.
+  Explícitamente fuera de alcance: desglose por catálogo (bloqueado por
+  LB-58, inexistente) y todo lo de LB-61.
+- **Veredicto del Reviewer:** `[APPROVED]` (primera pasada) - C1-C4
+  verificados, 297/297 tests (suite completa server), lint limpio. Nota: este
+  fixup no se reflejó en Jira (ticket ya cerrado, no asignado a este agente) —
+  pendiente de decisión del usuario sobre comentar/notificar en LB-60.
