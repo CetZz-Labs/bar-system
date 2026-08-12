@@ -23,6 +23,7 @@ import CashierPanelView from './views/cashier/CashierPanelView'
 import CashierSearchView from './views/cashier/CashierSearchView'
 import CashierOutingView from './views/cashier/CashierOutingView'
 import CashierLayout from './layouts/CashierLayout'
+import NotFound from './views/NotFound'
 
 export default function Router() {
     return (
@@ -61,6 +62,8 @@ export default function Router() {
                     <Route path="/bar/:barId/cajero/buscar" element={<CashierSearchView />} />
                     <Route path="/bar/:barId/cajero/salida/:outingId" element={<CashierOutingView />} />
                 </Route>
+
+                <Route path="*" element={<NotFound />} />
             </Routes>
         </BrowserRouter>
     )

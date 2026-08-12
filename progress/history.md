@@ -152,3 +152,93 @@ navegador mucho antes de que el token firmado expire realmente.
   disco y los 6 comandos de verificación corridos en vivo por el propio
   Reviewer. 5 hallazgos no bloqueantes documentados para LB-61/LB-58 y
   para higiene de código.
+
+### [2026-08-12] - LB-59: Puntos por asistencia — config del bar por día de semana + acreditación al 1er consumo
+- **Dominio afectado:** Monorepo (Backend + Frontend)
+- **Subagentes involucrados:** Explorer (`progress/explorers/exp_LB-59.md` —
+  escrito por el Leader ante la falta puntual de herramienta `Write` del
+  subagente `explorer` en esa corrida; corregido después en
+  `.claude/agents/explorer.md` para que el rol pueda escribir su propio
+  reporte de ahí en más), Implementer (`progress/implementers/impl_LB-59.md`),
+  Reviewer (`progress/reviewers/review_LB-59.md`).
+- **Resumen de Cambios:** Campo `Bar.attendancePointsByDay` (7 enteros
+  lunes-domingo, 0-1000, default 0), expuesto vía `GET/PATCH
+  /bar/:id/perfil` con validación `express-validator` + Mongoose en ambas
+  capas. Snapshot no-retroactivo en `Outing` (`attendancePointsSnapshot`,
+  `attendancePointsAwarded: boolean`), calculado en `createOuting` sobre el
+  día de bar (respetando `closingTime` de LB-53) de `scheduledFor` — no del
+  momento de creación del POST. Nueva colección `PointsTransaction`
+  (autorizada explícitamente por este ticket, mismo mecanismo que
+  `Consumption` en LB-60) + campo `Group.pointsBalance`. Util idempotente
+  `awardAttendancePointsIfFirst(outingId)` en
+  `apps/server/src/utils/attendancePoints.ts` (NO en `services/`, carpeta
+  inexistente en esta arquitectura) — transaccional, chequea el flag antes
+  de escribir, valor 0 marca el flag sin generar historial ("silencio
+  total"), con índice único adicional en `PointsTransaction.outing` como
+  defensa en profundidad. Contrato publicado para que LB-61 (Franco
+  Espinoza) lo invoque al confirmar el primer consumo — este ticket NO
+  implementó ese endpoint de confirmación. Frontend: 7 inputs numéricos
+  nuevos en `BarProfileView.tsx`, integrados al mismo form/mutation
+  existente (no uno nuevo), sin `zodResolver` conectado (consistente con el
+  resto del repo). 2 observaciones no bloqueantes documentadas: `Outing`
+  legado sin migración de bares preexistentes sin el campo (se comportan
+  como 0 en todos los días), y `updateOuting` no recalcula el snapshot si
+  se cambia el `barId` de una salida `PENDING` (deuda angosta, ticket de
+  seguimiento sugerido, no abierto todavía).
+- **Veredicto del Reviewer:** `[APPROVED]` - C1-C4 de `CHECKPOINTS.md`
+  verificados contra el código real y los 6 comandos de verificación
+  corridos en vivo por el propio Reviewer (incluye coverage 96%+ en
+  `utils/`+`middleware/`, por encima del umbral 80%).
+
+### [2026-08-12] - LB-63: Recalcular attendancePointsSnapshot al cambiar el bar de una salida PENDING
+- **Dominio afectado:** Backend
+- **Subagentes involucrados:** (sin Explorer — bug ya diagnosticado con
+  precisión por el Reviewer de LB-59, sin ambigüedad arquitectónica),
+  Implementer (`progress/implementers/impl_LB-63.md`), Reviewer
+  (`progress/reviewers/review_LB-63.md`).
+- **Resumen de Cambios:** Ticket de seguimiento creado a partir de un
+  hallazgo no bloqueante del Reviewer al cerrar LB-59.
+  `OutingController.updateOuting` recalcula ahora `attendancePointsSnapshot`
+  contra el bar nuevo cuando el `barId` cambia en el PATCH de una salida
+  `PENDING` (mismo cálculo que `createOuting`: `getBarDayOfWeek` +
+  `ATTENDANCE_POINTS_DAY_KEYS`), usando la `scheduledFor` efectiva
+  post-edición si el mismo PATCH también la cambia. Si `barId` no cambia (o
+  no viene), el snapshot queda intacto. El guard de estado existente
+  (`OutingStatus !== PENDING` → 409) ya cortaba la ejecución antes del
+  bloque nuevo, confirmado con test en runtime. No se tocó
+  `attendancePointsAwarded`. 5 tests nuevos en
+  `outingUpdate.test.ts`, 308/308 tests en verde.
+- **Veredicto del Reviewer:** `[APPROVED]` - C1-C4 verificados contra el
+  código real (`git diff --stat`, comparación línea por línea contra
+  `createOuting`), comandos corridos en vivo, exención de
+  `test:coverage` verificada de forma independiente (el ticket no tocó
+  `utils/`/`middleware/`).
+
+### [2026-08-12] - LB-64: Página 404 con botón para volver a la ruta anterior
+- **Dominio afectado:** Frontend
+- **Subagentes involucrados:** Explorer (`progress/explorers/exp_LB-64.md`),
+  Implementer (`progress/implementers/impl_LB-64.md`), Reviewer
+  (`progress/reviewers/review_LB-64.md`).
+- **Resumen de Cambios:** Ticket pedido directamente por el usuario (no
+  viene de spec de PM), con decisiones de UX confirmadas vía
+  `AskUserQuestion` antes de crearlo: 404 visible (no redirect automático
+  invisible) + botón "Volver" basado en `navigate(-1)` de react-router v7
+  (sin sessionStorage/Context/Redux). Nueva vista
+  `apps/client/src/views/NotFound.tsx` (mismo nivel que `views/Home.tsx`,
+  patrón visual replicado de `GroupDetailView.tsx`/`JoinGroupView.tsx`).
+  `<Route path="*">` agregado en `router.tsx` como hijo suelto de
+  `<Routes>`, deliberadamente **fuera** de `AuthLayout`/`MainLayout` — el
+  Explorer detectó que ambos layouts tienen guards de sesión que
+  interceptarían la ruta 404 si quedara anidada dentro (`MainLayout`
+  fuerza `/login` sin sesión, `AuthLayout` redirige si hay sesión activa).
+  El botón "Volver" chequea `window.history.state?.idx` (sin precedente
+  previo en el repo) para decidir entre `navigate(-1)` real o fallback a
+  `/` cuando el usuario llegó directo a una URL rota sin navegación previa
+  en la SPA. 2 tests nuevos (cubren mensaje 404 y camino de fallback; el
+  camino de `navigate(-1)` con historial real queda sin cobertura por
+  falta de infraestructura de test para simular profundidad de historial
+  — limitación documentada, no bloqueante).
+- **Veredicto del Reviewer:** `[APPROVED]` - C1/C3/C4 verificados contra
+  el código real y los 3 comandos de verificación corridos en vivo por el
+  propio Reviewer (157 tests en verde, sin regresiones). C2 no aplica
+  (ticket 100% frontend).
