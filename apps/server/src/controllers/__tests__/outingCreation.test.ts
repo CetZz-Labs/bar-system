@@ -47,6 +47,9 @@ vi.mock('../../models/Bar', () => ({
     ACTIVE: 'active',
     REJECTED: 'rejected',
   },
+  ATTENDANCE_POINTS_DAY_KEYS: [
+    'sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday',
+  ],
 }))
 
 vi.mock('../../models/User', () => ({
@@ -131,6 +134,16 @@ describe('OutingController.createOuting', () => {
       _id: barId,
       name: 'Bar de Prueba',
       status: 'active',
+      closingTime: '06:00',
+      attendancePointsByDay: {
+        sunday: 10,
+        monday: 20,
+        tuesday: 30,
+        wednesday: 40,
+        thursday: 50,
+        friday: 60,
+        saturday: 70,
+      },
     }
 
     mockSession = buildMockSession()
@@ -403,6 +416,92 @@ describe('OutingController.createOuting', () => {
       )
       expect(Outing.create).not.toHaveBeenCalled()
       expect(mockSession.abortTransaction).toHaveBeenCalled()
+    })
+  })
+
+  describe('attendance points snapshot (LB-59, shape reworked by LB-65)', () => {
+    it('snapshots the full bar.attendancePointsByDay map at creation time (day resolution is deferred to LB-61 accrual)', async () => {
+      mockCreatedOuting()
+
+      const req = buildMockRequest({
+        user: { _id: leaderId } as any,
+        params: { groupId: groupId.toString() },
+        body: {
+          barId: barId.toString(),
+          scheduledFor: validScheduledFor(),
+        },
+      })
+      const res = buildMockResponse()
+
+      await OutingController.createOuting(req, res)
+
+      const createCallArgs = vi.mocked(Outing.create).mock.calls[0][0] as any[]
+      expect(createCallArgs[0].attendancePointsSnapshot).toEqual(mockBar.attendancePointsByDay)
+    })
+
+    it('falls back to an all-zero map when the bar has no attendancePointsByDay configured (legacy bar)', async () => {
+      mockCreatedOuting()
+      vi.mocked(Bar.findById).mockReturnValue(buildLeanQuery({ ...mockBar, attendancePointsByDay: undefined }) as any)
+
+      const req = buildMockRequest({
+        user: { _id: leaderId } as any,
+        params: { groupId: groupId.toString() },
+        body: {
+          barId: barId.toString(),
+          scheduledFor: validScheduledFor(),
+        },
+      })
+      const res = buildMockResponse()
+
+      await OutingController.createOuting(req, res)
+
+      const createCallArgs = vi.mocked(Outing.create).mock.calls[0][0] as any[]
+      expect(createCallArgs[0].attendancePointsSnapshot).toEqual({
+        monday: 0,
+        tuesday: 0,
+        wednesday: 0,
+        thursday: 0,
+        friday: 0,
+        saturday: 0,
+        sunday: 0,
+      })
+    })
+
+    it('each outing snapshots the bar config in effect at its own creation time (later edits do not retroactively change a past snapshot)', async () => {
+      const scheduledFor = validScheduledFor()
+
+      // First outing: created while the config is its original value.
+      mockCreatedOuting()
+      const req1 = buildMockRequest({
+        user: { _id: leaderId } as any,
+        params: { groupId: groupId.toString() },
+        body: { barId: barId.toString(), scheduledFor },
+      })
+      await OutingController.createOuting(req1, buildMockResponse())
+      const firstSnapshot = (vi.mocked(Outing.create).mock.calls[0][0] as any[])[0].attendancePointsSnapshot
+
+      // The OWNER edits the bar's config (simulates a PATCH to /bar/:id/perfil
+      // between the two outings).
+      mockBar.attendancePointsByDay.monday = mockBar.attendancePointsByDay.monday + 999
+      vi.mocked(Outing.create).mockClear()
+
+      // Second outing: created after the edit.
+      mockCreatedOuting()
+      const req2 = buildMockRequest({
+        user: { _id: leaderId } as any,
+        params: { groupId: groupId.toString() },
+        body: { barId: barId.toString(), scheduledFor },
+      })
+      await OutingController.createOuting(req2, buildMockResponse())
+      const secondSnapshot = (vi.mocked(Outing.create).mock.calls[0][0] as any[])[0].attendancePointsSnapshot
+
+      // The first outing's already-captured snapshot is a value-copy (spread)
+      // of the map at its own creation time, immune to the later config edit
+      // on the shared mock bar object; the second reflects the new live
+      // value at its own creation time.
+      expect(firstSnapshot).not.toEqual(secondSnapshot)
+      expect(firstSnapshot.monday).not.toBe(secondSnapshot.monday)
+      expect(secondSnapshot.monday).toBe(firstSnapshot.monday + 999)
     })
   })
 })

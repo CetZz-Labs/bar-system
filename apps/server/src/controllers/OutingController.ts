@@ -3,8 +3,23 @@ import mongoose, { Types } from "mongoose";
 import Outing, { OutingStatus } from "../models/Outing";
 import Notification, { NotificationType } from "../models/Notification";
 import Group, { IGroupMembership } from "../models/Group";
-import Bar, { BarStatus } from "../models/Bar";
+import Bar, { BarStatus, IAttendancePointsByDay, IBar } from "../models/Bar";
 import { MembershipRole } from "../models/User";
+
+// Bares registrados antes de LB-59 no tienen `attendancePointsByDay`
+// persistido en Mongo (ver comentario en models/Bar.ts). Al congelar el
+// snapshot (createOuting/updateOuting) se usa este mapa de ceros como
+// fallback, mismo criterio que ya existía para la lectura por-día previa a
+// LB-65.
+const ZERO_ATTENDANCE_POINTS_BY_DAY: IAttendancePointsByDay = {
+    monday: 0,
+    tuesday: 0,
+    wednesday: 0,
+    thursday: 0,
+    friday: 0,
+    saturday: 0,
+    sunday: 0,
+};
 
 const NOTE_MAX_LENGTH = 200;
 const MAX_DAYS_AHEAD = 30;
@@ -122,6 +137,21 @@ export class OutingController {
                 return;
             }
 
+            // Snapshot no-retroactivo de puntos por asistencia (LB-59, rework LB-65).
+            // Acá solo se congela el mapa COMPLETO `bar.attendancePointsByDay`
+            // vigente al crear la salida — no se resuelve todavía qué día de ese
+            // mapa corresponde usar. Esa decisión se toma recién en el momento
+            // real de la acreditación (LB-61, vía awardAttendancePointsIfFirst en
+            // utils/attendancePoints.ts), porque `scheduledFor` puede caer cerca
+            // del `closingTime` del bar y el día de bar real de la acreditación
+            // puede diferir del que se calcularía acá en la creación. Ver
+            // progress/explorers/exp_snapshot-vs-checkin.md. Se copian los valores
+            // (spread) en vez de reasignar la referencia del objeto leído del bar,
+            // para que el snapshot quede realmente congelado por valor.
+            const attendancePointsSnapshot: IAttendancePointsByDay = bar.attendancePointsByDay
+                ? { ...bar.attendancePointsByDay }
+                : { ...ZERO_ATTENDANCE_POINTS_BY_DAY };
+
             const { error: noteError, note: cleanNote } = validateNote(note);
             if (noteError) {
                 res.status(400).json({ message: noteError });
@@ -165,6 +195,7 @@ export class OutingController {
                 note: cleanNote,
                 status: OutingStatus.PENDING,
                 invitees,
+                attendancePointsSnapshot,
             }], { session });
 
             const outing = created[0];
@@ -246,7 +277,7 @@ export class OutingController {
                 return;
             }
 
-            let bar: { name: string; status: BarStatus } | null = null;
+            let bar: Pick<IBar, 'name' | 'status' | 'closingTime' | 'attendancePointsByDay'> | null = null;
             if (barId !== undefined) {
                 bar = await Bar.findById(barId).lean();
                 if (!bar || bar.status !== BarStatus.ACTIVE) {
@@ -263,6 +294,22 @@ export class OutingController {
                     return;
                 }
                 scheduledForDate = date;
+            }
+
+            // Recálculo no-retroactivo del snapshot de puntos por asistencia (LB-63,
+            // fix de seguimiento de LB-59; shape actualizado por LB-65). Al llegar
+            // acá la salida ya está garantizada PENDING por el guard de arriba
+            // (línea ~257), así que si el PATCH cambia el `barId` a uno distinto del
+            // actual, el snapshot debe recalcularse contra el bar nuevo — si no,
+            // queda "pegado" a la config del bar original. Igual que en createOuting
+            // (LB-65), acá solo se copia el mapa completo `bar.attendancePointsByDay`
+            // del bar nuevo; qué día de ese mapa corresponde usar se resuelve recién
+            // en el momento real de la acreditación (LB-61).
+            let attendancePointsSnapshot: IAttendancePointsByDay | undefined;
+            if (barId !== undefined && bar && barId !== outing.bar.toString()) {
+                attendancePointsSnapshot = bar.attendancePointsByDay
+                    ? { ...bar.attendancePointsByDay }
+                    : { ...ZERO_ATTENDANCE_POINTS_BY_DAY };
             }
 
             let cleanNote: string | undefined;
@@ -296,6 +343,7 @@ export class OutingController {
             session.startTransaction();
 
             if (barId !== undefined) outing.bar = barId;
+            if (attendancePointsSnapshot !== undefined) outing.attendancePointsSnapshot = attendancePointsSnapshot;
             if (scheduledForDate) outing.scheduledFor = scheduledForDate;
             if (noteProvided) outing.note = cleanNote;
             if (invitees) outing.invitees = invitees.map((id) => new Types.ObjectId(id));

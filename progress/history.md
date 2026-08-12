@@ -236,3 +236,170 @@ navegador mucho antes de que el token firmado expire realmente.
 - **Veredicto del Reviewer:** `[APPROVED]` (primera pasada) - C1-C4
   verificados, los 5 comandos de verificación en verde (298/298 tests server,
   155/155 tests client, lint y build limpios).
+
+### [2026-08-12] - LB-59: Puntos por asistencia — config del bar por día de semana + acreditación al 1er consumo
+- **Dominio afectado:** Monorepo (Backend + Frontend)
+- **Subagentes involucrados:** Explorer (`progress/explorers/exp_LB-59.md` —
+  escrito por el Leader ante la falta puntual de herramienta `Write` del
+  subagente `explorer` en esa corrida; corregido después en
+  `.claude/agents/explorer.md` para que el rol pueda escribir su propio
+  reporte de ahí en más), Implementer (`progress/implementers/impl_LB-59.md`),
+  Reviewer (`progress/reviewers/review_LB-59.md`).
+- **Resumen de Cambios:** Campo `Bar.attendancePointsByDay` (7 enteros
+  lunes-domingo, 0-1000, default 0), expuesto vía `GET/PATCH
+  /bar/:id/perfil` con validación `express-validator` + Mongoose en ambas
+  capas. Snapshot no-retroactivo en `Outing` (`attendancePointsSnapshot`,
+  `attendancePointsAwarded: boolean`), calculado en `createOuting` sobre el
+  día de bar (respetando `closingTime` de LB-53) de `scheduledFor` — no del
+  momento de creación del POST. Nueva colección `PointsTransaction`
+  (autorizada explícitamente por este ticket, mismo mecanismo que
+  `Consumption` en LB-60) + campo `Group.pointsBalance`. Util idempotente
+  `awardAttendancePointsIfFirst(outingId)` en
+  `apps/server/src/utils/attendancePoints.ts` (NO en `services/`, carpeta
+  inexistente en esta arquitectura) — transaccional, chequea el flag antes
+  de escribir, valor 0 marca el flag sin generar historial ("silencio
+  total"), con índice único adicional en `PointsTransaction.outing` como
+  defensa en profundidad. Contrato publicado para que LB-61 (Franco
+  Espinoza) lo invoque al confirmar el primer consumo — este ticket NO
+  implementó ese endpoint de confirmación. Frontend: 7 inputs numéricos
+  nuevos en `BarProfileView.tsx`, integrados al mismo form/mutation
+  existente (no uno nuevo), sin `zodResolver` conectado (consistente con el
+  resto del repo). 2 observaciones no bloqueantes documentadas: `Outing`
+  legado sin migración de bares preexistentes sin el campo (se comportan
+  como 0 en todos los días), y `updateOuting` no recalcula el snapshot si
+  se cambia el `barId` de una salida `PENDING` (deuda angosta, ticket de
+  seguimiento sugerido, no abierto todavía).
+- **Veredicto del Reviewer:** `[APPROVED]` - C1-C4 de `CHECKPOINTS.md`
+  verificados contra el código real y los 6 comandos de verificación
+  corridos en vivo por el propio Reviewer (incluye coverage 96%+ en
+  `utils/`+`middleware/`, por encima del umbral 80%).
+
+### [2026-08-12] - LB-63: Recalcular attendancePointsSnapshot al cambiar el bar de una salida PENDING
+- **Dominio afectado:** Backend
+- **Subagentes involucrados:** (sin Explorer — bug ya diagnosticado con
+  precisión por el Reviewer de LB-59, sin ambigüedad arquitectónica),
+  Implementer (`progress/implementers/impl_LB-63.md`), Reviewer
+  (`progress/reviewers/review_LB-63.md`).
+- **Resumen de Cambios:** Ticket de seguimiento creado a partir de un
+  hallazgo no bloqueante del Reviewer al cerrar LB-59.
+  `OutingController.updateOuting` recalcula ahora `attendancePointsSnapshot`
+  contra el bar nuevo cuando el `barId` cambia en el PATCH de una salida
+  `PENDING` (mismo cálculo que `createOuting`: `getBarDayOfWeek` +
+  `ATTENDANCE_POINTS_DAY_KEYS`), usando la `scheduledFor` efectiva
+  post-edición si el mismo PATCH también la cambia. Si `barId` no cambia (o
+  no viene), el snapshot queda intacto. El guard de estado existente
+  (`OutingStatus !== PENDING` → 409) ya cortaba la ejecución antes del
+  bloque nuevo, confirmado con test en runtime. No se tocó
+  `attendancePointsAwarded`. 5 tests nuevos en
+  `outingUpdate.test.ts`, 308/308 tests en verde.
+- **Veredicto del Reviewer:** `[APPROVED]` - C1-C4 verificados contra el
+  código real (`git diff --stat`, comparación línea por línea contra
+  `createOuting`), comandos corridos en vivo, exención de
+  `test:coverage` verificada de forma independiente (el ticket no tocó
+  `utils/`/`middleware/`).
+
+### [2026-08-12] - LB-64: Página 404 con botón para volver a la ruta anterior
+- **Dominio afectado:** Frontend
+- **Subagentes involucrados:** Explorer (`progress/explorers/exp_LB-64.md`),
+  Implementer (`progress/implementers/impl_LB-64.md`), Reviewer
+  (`progress/reviewers/review_LB-64.md`).
+- **Resumen de Cambios:** Ticket pedido directamente por el usuario (no
+  viene de spec de PM), con decisiones de UX confirmadas vía
+  `AskUserQuestion` antes de crearlo: 404 visible (no redirect automático
+  invisible) + botón "Volver" basado en `navigate(-1)` de react-router v7
+  (sin sessionStorage/Context/Redux). Nueva vista
+  `apps/client/src/views/NotFound.tsx` (mismo nivel que `views/Home.tsx`,
+  patrón visual replicado de `GroupDetailView.tsx`/`JoinGroupView.tsx`).
+  `<Route path="*">` agregado en `router.tsx` como hijo suelto de
+  `<Routes>`, deliberadamente **fuera** de `AuthLayout`/`MainLayout` — el
+  Explorer detectó que ambos layouts tienen guards de sesión que
+  interceptarían la ruta 404 si quedara anidada dentro (`MainLayout`
+  fuerza `/login` sin sesión, `AuthLayout` redirige si hay sesión activa).
+  El botón "Volver" chequea `window.history.state?.idx` (sin precedente
+  previo en el repo) para decidir entre `navigate(-1)` real o fallback a
+  `/` cuando el usuario llegó directo a una URL rota sin navegación previa
+  en la SPA. 2 tests nuevos (cubren mensaje 404 y camino de fallback; el
+  camino de `navigate(-1)` con historial real queda sin cobertura por
+  falta de infraestructura de test para simular profundidad de historial
+  — limitación documentada, no bloqueante).
+- **Veredicto del Reviewer:** `[APPROVED]` - C1/C3/C4 verificados contra
+  el código real y los 3 comandos de verificación corridos en vivo por el
+  propio Reviewer (157 tests en verde, sin regresiones). C2 no aplica
+  (ticket 100% frontend).
+
+### [2026-08-12] - Ad-hoc: resolución de conflictos de merge `feat/puntos` → `development`
+- **Dominio afectado:** Backend (conflictos de código) + documentación
+  (`progress/history.md`, resuelto directamente por el Leader)
+- **Subagentes involucrados:** (sin Explorer — conflictos ya relevados
+  directamente por el Leader al leerlos, sin ambigüedad arquitectónica),
+  Implementer (`progress/implementers/impl_merge-conflict-bar-outing.md`),
+  Reviewer (`progress/reviewers/review_merge-conflict-bar-outing.md`).
+- **Contexto:** el usuario ejecutó `git merge feat/puntos` parado en
+  `development` (sin ticket de Jira). Conflictos reales en
+  `apps/server/src/models/Bar.ts` y `apps/server/src/models/Outing.ts`
+  porque `development` ya traía mergeado **LB-55** ("Confirmar check-in de
+  un grupo" — `checkInWindowHours`, `checkedInAt`/`checkedInBy`,
+  `OutingController.confirmCheckIn`) mientras `feat/puntos` traía
+  LB-59/LB-63 (puntos por asistencia).
+- **Resumen de Cambios:** fusión aditiva de ambas features en los 2
+  archivos — se mantuvieron ambos lados de cada bloque de conflicto sin
+  descartar ni modificar ningún campo (`IBar`/`barSchema` con
+  `checkInWindowHours` + `attendancePointsByDay`; `IOuting`/`outingSchema`
+  con `checkedInAt`/`checkedInBy` + `attendancePointsSnapshot`/
+  `attendancePointsAwarded`, todos como campos hermanos). Verificado que
+  ninguna interacción entre ambas features rompe nada: 323 tests de server
+  y 160 de client en verde, lint y build limpios en ambos lados. El
+  implementer no ejecutó `git add`/`git commit` a propósito; el Leader
+  marcó los 3 archivos resueltos (`Bar.ts`, `Outing.ts`, `history.md`) como
+  resueltos vía `git add` recién después del veredicto del Reviewer, dejando
+  el `git commit` final del merge en manos del usuario.
+- **Nota abierta para el usuario (no resuelta acá, fuera de alcance):** con
+  LB-55 ya mergeado, existe check-in real. El diseño de LB-59 toma el
+  snapshot de puntos en `createOuting` porque en su momento el check-in no
+  existía en el repo — cabe evaluar si `attendancePointsSnapshot` debería
+  recalcularse en `confirmCheckIn` en su lugar. Queda pendiente de decisión
+  de producto, no de esta resolución de conflictos.
+- **Veredicto del Reviewer:** `[APPROVED]` - C1-C4 verificados contra el
+  código real (sin marcadores de conflicto remanentes, ambos campos de
+  cada feature presentes y sintácticamente válidos) y los 6 comandos de
+  verificación corridos en vivo por el propio Reviewer (server + client).
+
+### [2026-08-12] - LB-65: Congelar el mapa de puntos por día en el snapshot, no el día resuelto (rework de LB-59)
+- **Dominio afectado:** Backend
+- **Subagentes involucrados:** Explorer (`progress/explorers/exp_snapshot-vs-checkin.md`
+  — investigación pedida por el usuario, sin ticket todavía en ese momento),
+  Implementer (`progress/implementers/impl_LB-65.md`), Reviewer
+  (`progress/reviewers/review_LB-65.md`).
+- **Contexto:** con LB-55 ("Confirmar check-in") ya mergeado en `development`,
+  el usuario pidió revisar si el diseño de LB-59 (snapshot de puntos tomado
+  en `createOuting` porque el check-in real no existía en ese momento)
+  seguía siendo correcto. La investigación encontró, con cálculo real, que
+  el "día de bar" de `scheduledFor` puede diferir del día real de
+  acreditación cuando `scheduledFor` cae cerca de la hora de cierre del
+  bar — y que, según los propios escenarios de la spec de LB-59, el día
+  correcto a usar es el del momento en que se confirma el primer consumo
+  (LB-61), no el de la creación de la salida.
+- **Resumen de Cambios:** `Outing.attendancePointsSnapshot` cambia de
+  `number` a `IAttendancePointsByDay` (mapa completo, reutiliza
+  `attendancePointsByDaySchema` ahora exportado desde `Bar.ts`).
+  `createOuting`/`updateOuting` (LB-63) ya no resuelven qué día usar —
+  solo copian el mapa completo vigente del bar (por valor, no por
+  referencia), preservando la regla "no retroactivo". `awardAttendancePointsIfFirst`
+  (`utils/attendancePoints.ts`) calcula el día de bar sobre el momento
+  REAL de su propia invocación (`new Date()`), no sobre `scheduledFor`, y
+  lee el monto del mapa congelado — misma firma de función, mismo
+  comportamiento de idempotencia/transacción, contrato para LB-61
+  actualizado y documentado explícitamente. Tests actualizados con
+  `vi.useFakeTimers()` para demostrar de forma discriminante que el monto
+  sale de la clave de "now", no de `scheduledFor`. 326/326 tests en verde,
+  coverage 96.81%.
+- **Nota abierta para el usuario, ya resuelta:** el reviewer encontró que
+  sí existe precedente real de `apps/server/src/migrations/` para este
+  tipo de caso (`add-profile-complete.ts` migra un cambio de forma de
+  campo análogo). Consultado, el usuario confirmó que no hay datos reales
+  de `Outing` en ningún entorno persistente todavía (proyecto pre-launch)
+  — no se abre script de migración, tema cerrado sin acción de código.
+- **Veredicto del Reviewer:** `[APPROVED]` - C1-C4 verificados contra el
+  código real y los 3 comandos de verificación corridos en vivo por el
+  propio Reviewer (incluye coverage). Observación no bloqueante sobre
+  migración señalada con fuerza (ver nota arriba).

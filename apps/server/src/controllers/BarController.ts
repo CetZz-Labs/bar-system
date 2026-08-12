@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { Types } from "mongoose";
-import Bar, { BarStatus, IAddress, IBar } from "../models/Bar";
+import Bar, { BarStatus, IAddress, IAttendancePointsByDay, IBar } from "../models/Bar";
 import BarUser, { BarUserRole } from "../models/BarUser";
 import { generateSlug } from "../utils/slug";
 import { saveBarLogo, saveBarCover } from "../utils/storage";
@@ -16,6 +16,23 @@ const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const LOGO_MIN_DIMENSION = 200;
 const LOGO_MAX_SIZE = 2 * 1024 * 1024; // 2 MB
 const COVER_MAX_SIZE = 3 * 1024 * 1024; // 3 MB
+const ATTENDANCE_POINTS_MIN = 0;
+const ATTENDANCE_POINTS_MAX = 1000;
+const ATTENDANCE_POINTS_DAYS: (keyof IAttendancePointsByDay)[] = [
+    'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
+];
+
+function isValidAttendancePointsByDay(value: unknown): value is IAttendancePointsByDay {
+    if (typeof value !== 'object' || value === null) return false;
+    const record = value as Record<string, unknown>;
+    return ATTENDANCE_POINTS_DAYS.every((day) => {
+        const points = record[day];
+        return typeof points === 'number'
+            && Number.isInteger(points)
+            && points >= ATTENDANCE_POINTS_MIN
+            && points <= ATTENDANCE_POINTS_MAX;
+    });
+}
 
 async function getUniqueBarSlug(name: string): Promise<string> {
     const maxRetries = 10;
@@ -307,6 +324,7 @@ export class BarController {
                 logoUrl: bar.logoUrl,
                 coverUrl: bar.coverUrl,
                 closingTime: bar.closingTime,
+                attendancePointsByDay: bar.attendancePointsByDay,
             });
         } catch (error) {
             console.error(error);
@@ -318,7 +336,7 @@ export class BarController {
         try {
             const userId = req.user!._id.toString();
             const { id } = req.params;
-            const { name, description, phone, closingTime } = req.body;
+            const { name, description, phone, closingTime, attendancePointsByDay } = req.body;
 
             const { hasAccess } = await verifyBarAccess(userId, id as string);
             if (!hasAccess) {
@@ -368,6 +386,16 @@ export class BarController {
                 bar.closingTime = closingTime;
             }
 
+            if (attendancePointsByDay !== undefined) {
+                if (!isValidAttendancePointsByDay(attendancePointsByDay)) {
+                    res.status(400).json({
+                        message: 'attendancePointsByDay debe incluir los 7 días de la semana con enteros entre 0 y 1000',
+                    });
+                    return;
+                }
+                bar.attendancePointsByDay = attendancePointsByDay;
+            }
+
             await bar.save();
 
             res.status(200).json({
@@ -381,6 +409,7 @@ export class BarController {
                     logoUrl: bar.logoUrl,
                     coverUrl: bar.coverUrl,
                     closingTime: bar.closingTime,
+                    attendancePointsByDay: bar.attendancePointsByDay,
                 },
             });
         } catch (error) {
