@@ -74,6 +74,30 @@ router.patch('/:id/perfil',
     body('closingTime')
         .optional()
         .matches(/^([01]\d|2[0-3]):([0-5]\d)$/).withMessage('La hora de cierre debe tener formato HH:MM'),
+    body('attendancePointsByDay')
+        .optional()
+        .isObject().withMessage('attendancePointsByDay debe ser un objeto con los 7 días de la semana'),
+    body('attendancePointsByDay.monday')
+        .optional()
+        .isInt({ min: 0, max: 1000 }).withMessage('Los puntos de lunes deben ser un entero entre 0 y 1000'),
+    body('attendancePointsByDay.tuesday')
+        .optional()
+        .isInt({ min: 0, max: 1000 }).withMessage('Los puntos de martes deben ser un entero entre 0 y 1000'),
+    body('attendancePointsByDay.wednesday')
+        .optional()
+        .isInt({ min: 0, max: 1000 }).withMessage('Los puntos de miércoles deben ser un entero entre 0 y 1000'),
+    body('attendancePointsByDay.thursday')
+        .optional()
+        .isInt({ min: 0, max: 1000 }).withMessage('Los puntos de jueves deben ser un entero entre 0 y 1000'),
+    body('attendancePointsByDay.friday')
+        .optional()
+        .isInt({ min: 0, max: 1000 }).withMessage('Los puntos de viernes deben ser un entero entre 0 y 1000'),
+    body('attendancePointsByDay.saturday')
+        .optional()
+        .isInt({ min: 0, max: 1000 }).withMessage('Los puntos de sábado deben ser un entero entre 0 y 1000'),
+    body('attendancePointsByDay.sunday')
+        .optional()
+        .isInt({ min: 0, max: 1000 }).withMessage('Los puntos de domingo deben ser un entero entre 0 y 1000'),
     handleInputErrors,
     BarController.updateBarProfile
 );

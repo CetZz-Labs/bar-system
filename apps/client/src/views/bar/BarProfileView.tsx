@@ -13,12 +13,13 @@ import {
   Phone,
   FileText,
   X,
+  Trophy,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { FileUpload } from "@/components/ui/FileUpload";
 import { getBarProfile, updateBarProfile, uploadBarLogo, uploadBarCover } from "@/API/BarAPI";
-import { type EditBarProfileFormData } from "@/types/bar";
+import { ATTENDANCE_POINTS_DAYS, type EditBarProfileFormData } from "@/types/bar";
 import { toastApiError } from "@/utils/apiError";
 import { cropImageToSquare } from "@/utils/cropImageToSquare";
 import { resolveImageUrl } from "@/utils/resolveImageUrl";
@@ -88,6 +89,7 @@ export default function BarProfileView() {
         name: bar.name,
         description: bar.description ?? "",
         phone: bar.phone,
+        attendancePointsByDay: bar.attendancePointsByDay,
       });
     }
   }, [bar, reset]);
@@ -404,6 +406,43 @@ export default function BarProfileView() {
             error={errors.description?.message}
             disabled={isSaving}
           />
+        </div>
+
+        {/* Attendance Points Section (LB-59) */}
+        <div className="flex flex-col gap-4">
+          <h2 className="text-lg font-display font-bold tracking-tight flex items-center gap-2">
+            <Trophy size={20} className="text-lime" />
+            Puntos por asistencia
+          </h2>
+          <p className="text-text-muted text-xs -mt-2">
+            Definí cuántos puntos gana un grupo por asistir cada día de la semana.
+            Un valor de 0 significa que ese día no acredita puntos. Los cambios no
+            afectan salidas ya creadas.
+          </p>
+
+          <div className="grid grid-cols-2 gap-3">
+            {ATTENDANCE_POINTS_DAYS.map(({ key, label }) => (
+              <Input
+                key={key}
+                label={label.toUpperCase()}
+                aria-label={label.toUpperCase()}
+                type="number"
+                inputMode="numeric"
+                min={0}
+                max={1000}
+                step={1}
+                placeholder="0"
+                {...register(`attendancePointsByDay.${key}`, {
+                  required: "Requerido",
+                  valueAsNumber: true,
+                  min: { value: 0, message: "No puede ser negativo" },
+                  max: { value: 1000, message: "Máximo 1000" },
+                })}
+                error={errors.attendancePointsByDay?.[key]?.message}
+                disabled={isSaving}
+              />
+            ))}
+          </div>
         </div>
 
         {/* Save Button */}

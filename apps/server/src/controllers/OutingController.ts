@@ -3,8 +3,9 @@ import mongoose, { Types } from "mongoose";
 import Outing, { OutingStatus } from "../models/Outing";
 import Notification, { NotificationType } from "../models/Notification";
 import Group, { IGroupMembership } from "../models/Group";
-import Bar, { BarStatus } from "../models/Bar";
+import Bar, { ATTENDANCE_POINTS_DAY_KEYS, BarStatus, IBar } from "../models/Bar";
 import { MembershipRole } from "../models/User";
+import { getBarDayOfWeek } from "../utils/barDay";
 
 const NOTE_MAX_LENGTH = 200;
 const MAX_DAYS_AHEAD = 30;
@@ -122,6 +123,17 @@ export class OutingController {
                 return;
             }
 
+            // Snapshot no-retroactivo de puntos por asistencia (LB-59). El endpoint
+            // real de check-in (transición a OutingStatus.ACTIVE) todavía no existe
+            // en el repo, así que el momento más razonable disponible hoy para
+            // "congelar" el valor vigente es la creación de la salida. Se usa el
+            // día de bar de `scheduledFor` (no el de "ahora"), porque los puntos
+            // configurados corresponden al día en que la salida efectivamente va a
+            // ocurrir. Ver decisión de diseño completa en
+            // progress/implementers/impl_LB-59.md.
+            const barDayIndex = getBarDayOfWeek(scheduledForDate!, bar.closingTime);
+            const attendancePointsSnapshot = bar.attendancePointsByDay?.[ATTENDANCE_POINTS_DAY_KEYS[barDayIndex]] ?? 0;
+
             const { error: noteError, note: cleanNote } = validateNote(note);
             if (noteError) {
                 res.status(400).json({ message: noteError });
@@ -165,6 +177,7 @@ export class OutingController {
                 note: cleanNote,
                 status: OutingStatus.PENDING,
                 invitees,
+                attendancePointsSnapshot,
             }], { session });
 
             const outing = created[0];
@@ -246,7 +259,7 @@ export class OutingController {
                 return;
             }
 
-            let bar: { name: string; status: BarStatus } | null = null;
+            let bar: Pick<IBar, 'name' | 'status' | 'closingTime' | 'attendancePointsByDay'> | null = null;
             if (barId !== undefined) {
                 bar = await Bar.findById(barId).lean();
                 if (!bar || bar.status !== BarStatus.ACTIVE) {
@@ -263,6 +276,21 @@ export class OutingController {
                     return;
                 }
                 scheduledForDate = date;
+            }
+
+            // Recálculo no-retroactivo del snapshot de puntos por asistencia (LB-63,
+            // fix de seguimiento de LB-59). Al llegar acá la salida ya está garantizada
+            // PENDING por el guard de arriba (línea ~257), así que si el PATCH cambia
+            // el `barId` a uno distinto del actual, el snapshot debe recalcularse
+            // contra el bar nuevo — si no, queda "pegado" a la config del bar original.
+            // Misma fórmula que createOuting, tomando la scheduledFor vigente
+            // post-actualización (si el mismo PATCH también la cambia, se usa el
+            // nuevo valor, no el viejo).
+            let attendancePointsSnapshot: number | undefined;
+            if (barId !== undefined && bar && barId !== outing.bar.toString()) {
+                const effectiveScheduledFor = scheduledForDate ?? outing.scheduledFor;
+                const barDayIndex = getBarDayOfWeek(effectiveScheduledFor, bar.closingTime);
+                attendancePointsSnapshot = bar.attendancePointsByDay?.[ATTENDANCE_POINTS_DAY_KEYS[barDayIndex]] ?? 0;
             }
 
             let cleanNote: string | undefined;
@@ -296,6 +324,7 @@ export class OutingController {
             session.startTransaction();
 
             if (barId !== undefined) outing.bar = barId;
+            if (attendancePointsSnapshot !== undefined) outing.attendancePointsSnapshot = attendancePointsSnapshot;
             if (scheduledForDate) outing.scheduledFor = scheduledForDate;
             if (noteProvided) outing.note = cleanNote;
             if (invitees) outing.invitees = invitees.map((id) => new Types.ObjectId(id));

@@ -53,6 +53,16 @@ vi.mock('sharp', () => ({
   })),
 }))
 
+const zeroAttendancePoints = {
+  monday: 0,
+  tuesday: 0,
+  wednesday: 0,
+  thursday: 0,
+  friday: 0,
+  saturday: 0,
+  sunday: 0,
+}
+
 function buildMockBar(overrides: any = {}) {
   return {
     _id: new Types.ObjectId(),
@@ -70,6 +80,8 @@ function buildMockBar(overrides: any = {}) {
     status: BarStatus.ACTIVE,
     logoUrl: undefined,
     coverUrl: undefined,
+    closingTime: '06:00',
+    attendancePointsByDay: { ...zeroAttendancePoints },
     save: vi.fn().mockResolvedValue(true),
     ...overrides,
   }
@@ -140,6 +152,32 @@ describe('BarController.getBarProfile', () => {
     await BarController.getBarProfile(req, res)
 
     expect(res.status).toHaveBeenCalledWith(404)
+  })
+
+  it('includes attendancePointsByDay in the response (LB-59)', async () => {
+    const userId = new Types.ObjectId()
+    const barId = new Types.ObjectId()
+    const mockBar = buildMockBar({
+      _id: barId,
+      attendancePointsByDay: { ...zeroAttendancePoints, friday: 100, saturday: 150 },
+    })
+
+    vi.mocked(BarUser.findOne).mockResolvedValue({ role: BarUserRole.OWNER } as any)
+    vi.mocked(Bar.findById).mockResolvedValue(mockBar as any)
+
+    const req = buildMockRequest({
+      user: { _id: userId } as any,
+      params: { id: barId.toString() },
+    })
+    const res = buildMockResponse()
+
+    await BarController.getBarProfile(req, res)
+
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attendancePointsByDay: expect.objectContaining({ friday: 100, saturday: 150 }),
+      })
+    )
   })
 })
 
@@ -278,6 +316,143 @@ describe('BarController.updateBarProfile', () => {
     await BarController.updateBarProfile(req, res)
 
     expect(res.status).toHaveBeenCalledWith(404)
+  })
+
+  describe('attendancePointsByDay (LB-59)', () => {
+    it('updates all 7 days and returns them in the response', async () => {
+      const userId = new Types.ObjectId()
+      const barId = new Types.ObjectId()
+      const mockBar = buildMockBar({ _id: barId })
+
+      vi.mocked(BarUser.findOne).mockResolvedValue({ role: BarUserRole.OWNER } as any)
+      vi.mocked(Bar.findById).mockResolvedValue(mockBar as any)
+
+      const newPoints = { ...zeroAttendancePoints, friday: 200, saturday: 300, sunday: 50 }
+      const req = buildMockRequest({
+        user: { _id: userId } as any,
+        params: { id: barId.toString() },
+        body: { attendancePointsByDay: newPoints },
+      })
+      const res = buildMockResponse()
+
+      await BarController.updateBarProfile(req, res)
+
+      expect(mockBar.attendancePointsByDay).toEqual(newPoints)
+      expect(mockBar.save).toHaveBeenCalled()
+      expect(res.status).toHaveBeenCalledWith(200)
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          bar: expect.objectContaining({ attendancePointsByDay: newPoints }),
+        })
+      )
+    })
+
+    it('returns 400 when a day is missing from the payload', async () => {
+      const userId = new Types.ObjectId()
+      const barId = new Types.ObjectId()
+      const mockBar = buildMockBar({ _id: barId })
+
+      vi.mocked(BarUser.findOne).mockResolvedValue({ role: BarUserRole.OWNER } as any)
+      vi.mocked(Bar.findById).mockResolvedValue(mockBar as any)
+
+      const { monday: _monday, ...incompletePoints } = zeroAttendancePoints
+      const req = buildMockRequest({
+        user: { _id: userId } as any,
+        params: { id: barId.toString() },
+        body: { attendancePointsByDay: incompletePoints },
+      })
+      const res = buildMockResponse()
+
+      await BarController.updateBarProfile(req, res)
+
+      expect(res.status).toHaveBeenCalledWith(400)
+      expect(mockBar.save).not.toHaveBeenCalled()
+    })
+
+    it('returns 400 when a day value exceeds 1000', async () => {
+      const userId = new Types.ObjectId()
+      const barId = new Types.ObjectId()
+      const mockBar = buildMockBar({ _id: barId })
+
+      vi.mocked(BarUser.findOne).mockResolvedValue({ role: BarUserRole.OWNER } as any)
+      vi.mocked(Bar.findById).mockResolvedValue(mockBar as any)
+
+      const req = buildMockRequest({
+        user: { _id: userId } as any,
+        params: { id: barId.toString() },
+        body: { attendancePointsByDay: { ...zeroAttendancePoints, friday: 1001 } },
+      })
+      const res = buildMockResponse()
+
+      await BarController.updateBarProfile(req, res)
+
+      expect(res.status).toHaveBeenCalledWith(400)
+      expect(mockBar.save).not.toHaveBeenCalled()
+    })
+
+    it('returns 400 when a day value is negative', async () => {
+      const userId = new Types.ObjectId()
+      const barId = new Types.ObjectId()
+      const mockBar = buildMockBar({ _id: barId })
+
+      vi.mocked(BarUser.findOne).mockResolvedValue({ role: BarUserRole.OWNER } as any)
+      vi.mocked(Bar.findById).mockResolvedValue(mockBar as any)
+
+      const req = buildMockRequest({
+        user: { _id: userId } as any,
+        params: { id: barId.toString() },
+        body: { attendancePointsByDay: { ...zeroAttendancePoints, friday: -1 } },
+      })
+      const res = buildMockResponse()
+
+      await BarController.updateBarProfile(req, res)
+
+      expect(res.status).toHaveBeenCalledWith(400)
+      expect(mockBar.save).not.toHaveBeenCalled()
+    })
+
+    it('returns 400 when a day value is not an integer', async () => {
+      const userId = new Types.ObjectId()
+      const barId = new Types.ObjectId()
+      const mockBar = buildMockBar({ _id: barId })
+
+      vi.mocked(BarUser.findOne).mockResolvedValue({ role: BarUserRole.OWNER } as any)
+      vi.mocked(Bar.findById).mockResolvedValue(mockBar as any)
+
+      const req = buildMockRequest({
+        user: { _id: userId } as any,
+        params: { id: barId.toString() },
+        body: { attendancePointsByDay: { ...zeroAttendancePoints, friday: 12.5 } },
+      })
+      const res = buildMockResponse()
+
+      await BarController.updateBarProfile(req, res)
+
+      expect(res.status).toHaveBeenCalledWith(400)
+      expect(mockBar.save).not.toHaveBeenCalled()
+    })
+
+    it('leaves attendancePointsByDay untouched when not present in the body', async () => {
+      const userId = new Types.ObjectId()
+      const barId = new Types.ObjectId()
+      const existingPoints = { ...zeroAttendancePoints, monday: 10 }
+      const mockBar = buildMockBar({ _id: barId, attendancePointsByDay: existingPoints })
+
+      vi.mocked(BarUser.findOne).mockResolvedValue({ role: BarUserRole.OWNER } as any)
+      vi.mocked(Bar.findById).mockResolvedValue(mockBar as any)
+
+      const req = buildMockRequest({
+        user: { _id: userId } as any,
+        params: { id: barId.toString() },
+        body: { name: 'Otro nombre' },
+      })
+      const res = buildMockResponse()
+
+      await BarController.updateBarProfile(req, res)
+
+      expect(mockBar.attendancePointsByDay).toEqual(existingPoints)
+      expect(res.status).toHaveBeenCalledWith(200)
+    })
   })
 })
 

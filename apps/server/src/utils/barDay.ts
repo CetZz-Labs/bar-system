@@ -40,3 +40,14 @@ export function isShiftPastBarClose(shiftStartedAt: Date, now: Date, closingHour
     const dayWhenStarted = getBarDayRange(shiftStartedAt, closingHour);
     return now.getTime() >= dayWhenStarted.end.getTime();
 }
+
+/**
+ * Día de la semana del "día del bar" al que pertenece `date`, con el mismo
+ * criterio de índice que `IScheduleSlot.day`/`Date.getDay()`: 0=Sunday...
+ * 6=Saturday. Ej: un consumo a las 03:00 del martes en un bar que cierra a
+ * las 06:00 devuelve 1 (lunes), porque ese horario todavía pertenece al
+ * "lunes de bar" (LB-59).
+ */
+export function getBarDayOfWeek(date: Date, closingHour = '06:00'): number {
+    return getBarDayRange(date, closingHour).start.getDay();
+}

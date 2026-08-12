@@ -3,7 +3,8 @@ import { OutingController } from '../../controllers/OutingController'
 import Outing from '../../models/Outing'
 import Notification from '../../models/Notification'
 import Group from '../../models/Group'
-import Bar from '../../models/Bar'
+import Bar, { ATTENDANCE_POINTS_DAY_KEYS } from '../../models/Bar'
+import { getBarDayOfWeek } from '../../utils/barDay'
 import { buildMockRequest, buildMockResponse } from '../../__tests__/helpers/mockHelpers'
 import { Types } from 'mongoose'
 import mongoose from 'mongoose'
@@ -46,6 +47,9 @@ vi.mock('../../models/Bar', () => ({
     ACTIVE: 'active',
     REJECTED: 'rejected',
   },
+  ATTENDANCE_POINTS_DAY_KEYS: [
+    'sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday',
+  ],
 }))
 
 vi.mock('../../models/User', () => ({
@@ -123,7 +127,21 @@ describe('OutingController.updateOuting', () => {
       ],
     }
 
-    mockBar = { _id: barId, name: 'Bar de Prueba', status: 'active' }
+    mockBar = {
+      _id: barId,
+      name: 'Bar de Prueba',
+      status: 'active',
+      closingTime: '06:00',
+      attendancePointsByDay: {
+        sunday: 10,
+        monday: 20,
+        tuesday: 30,
+        wednesday: 40,
+        thursday: 50,
+        friday: 60,
+        saturday: 70,
+      },
+    }
 
     mockOuting = {
       _id: outingId,
@@ -134,6 +152,7 @@ describe('OutingController.updateOuting', () => {
       note: undefined,
       invitees: [leaderId, memberId1],
       scheduledFor: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      attendancePointsSnapshot: 20,
       save: vi.fn().mockResolvedValue(true),
     }
 
@@ -215,6 +234,136 @@ describe('OutingController.updateOuting', () => {
 
       expect(res.status).toHaveBeenCalledWith(409)
       expect(mockOuting.save).not.toHaveBeenCalled()
+    })
+
+    it('returns 409 without touching the snapshot when the outing is no longer PENDING, even if barId is sent', async () => {
+      const newBarId = new Types.ObjectId()
+      const notPendingOuting = { ...mockOuting, status: 'ACTIVE' }
+      vi.mocked(Outing.findOne).mockResolvedValue(notPendingOuting)
+
+      const req = buildMockRequest({
+        user: { _id: leaderId } as any,
+        params: { groupId: groupId.toString(), outingId: outingId.toString() },
+        body: { barId: newBarId.toString() },
+      })
+      const res = buildMockResponse()
+
+      await OutingController.updateOuting(req, res)
+
+      expect(res.status).toHaveBeenCalledWith(409)
+      // El guard de status corta antes de llegar a buscar el bar nuevo.
+      expect(Bar.findById).not.toHaveBeenCalled()
+      expect(notPendingOuting.attendancePointsSnapshot).toBe(20)
+      expect(mockOuting.save).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('attendance points snapshot recalculation on bar change (LB-63)', () => {
+    it('recalculates attendancePointsSnapshot against the new bar when barId changes on a PENDING outing', async () => {
+      const newBarId = new Types.ObjectId()
+      const newBar = {
+        _id: newBarId,
+        name: 'Bar Nuevo',
+        status: 'active',
+        closingTime: '06:00',
+        attendancePointsByDay: {
+          sunday: 100,
+          monday: 200,
+          tuesday: 300,
+          wednesday: 400,
+          thursday: 500,
+          friday: 600,
+          saturday: 700,
+        },
+      }
+      vi.mocked(Bar.findById).mockReturnValue(buildLeanQuery(newBar) as any)
+
+      const req = buildMockRequest({
+        user: { _id: leaderId } as any,
+        params: { groupId: groupId.toString(), outingId: outingId.toString() },
+        body: { barId: newBarId.toString() },
+      })
+      const res = buildMockResponse()
+
+      await OutingController.updateOuting(req, res)
+
+      const expectedDayIndex = getBarDayOfWeek(mockOuting.scheduledFor, newBar.closingTime)
+      const expectedKey = ATTENDANCE_POINTS_DAY_KEYS[expectedDayIndex] as keyof typeof newBar.attendancePointsByDay
+      const expectedSnapshot = newBar.attendancePointsByDay[expectedKey]
+
+      expect(res.status).toHaveBeenCalledWith(200)
+      expect(mockOuting.bar).toBe(newBarId.toString())
+      expect(mockOuting.attendancePointsSnapshot).toBe(expectedSnapshot)
+      expect(mockOuting.save).toHaveBeenCalled()
+    })
+
+    it('recalculates against the new scheduledFor when the same PATCH also changes it', async () => {
+      const newBarId = new Types.ObjectId()
+      const newBar = {
+        _id: newBarId,
+        name: 'Bar Nuevo',
+        status: 'active',
+        closingTime: '06:00',
+        attendancePointsByDay: {
+          sunday: 100,
+          monday: 200,
+          tuesday: 300,
+          wednesday: 400,
+          thursday: 500,
+          friday: 600,
+          saturday: 700,
+        },
+      }
+      vi.mocked(Bar.findById).mockReturnValue(buildLeanQuery(newBar) as any)
+
+      const newScheduledFor = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000)
+
+      const req = buildMockRequest({
+        user: { _id: leaderId } as any,
+        params: { groupId: groupId.toString(), outingId: outingId.toString() },
+        body: { barId: newBarId.toString(), scheduledFor: newScheduledFor.toISOString() },
+      })
+      const res = buildMockResponse()
+
+      await OutingController.updateOuting(req, res)
+
+      const expectedDayIndex = getBarDayOfWeek(newScheduledFor, newBar.closingTime)
+      const expectedKey = ATTENDANCE_POINTS_DAY_KEYS[expectedDayIndex] as keyof typeof newBar.attendancePointsByDay
+      const expectedSnapshot = newBar.attendancePointsByDay[expectedKey]
+
+      expect(res.status).toHaveBeenCalledWith(200)
+      expect(mockOuting.attendancePointsSnapshot).toBe(expectedSnapshot)
+    })
+
+    it('leaves attendancePointsSnapshot untouched when the PATCH does not include barId', async () => {
+      const req = buildMockRequest({
+        user: { _id: leaderId } as any,
+        params: { groupId: groupId.toString(), outingId: outingId.toString() },
+        body: { note: 'Solo cambio la nota' },
+      })
+      const res = buildMockResponse()
+
+      await OutingController.updateOuting(req, res)
+
+      expect(res.status).toHaveBeenCalledWith(200)
+      expect(Bar.findById).not.toHaveBeenCalled()
+      expect(mockOuting.attendancePointsSnapshot).toBe(20)
+      expect(mockOuting.save).toHaveBeenCalled()
+    })
+
+    it('leaves attendancePointsSnapshot untouched when the PATCH sends the same current barId', async () => {
+      const req = buildMockRequest({
+        user: { _id: leaderId } as any,
+        params: { groupId: groupId.toString(), outingId: outingId.toString() },
+        body: { barId: barId.toString() },
+      })
+      const res = buildMockResponse()
+
+      await OutingController.updateOuting(req, res)
+
+      expect(res.status).toHaveBeenCalledWith(200)
+      expect(mockOuting.attendancePointsSnapshot).toBe(20)
+      expect(mockOuting.save).toHaveBeenCalled()
     })
   })
 })

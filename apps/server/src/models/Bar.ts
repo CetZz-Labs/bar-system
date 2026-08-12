@@ -19,6 +19,28 @@ export interface IScheduleSlot {
     close: string; // HH:MM
 }
 
+// Puntos por asistencia otorgados por día de la semana (LB-59). 0 = no
+// acredita nada ese día. Editable en cualquier momento por el OWNER, pero
+// NO retroactivo: ver el snapshot `attendancePointsSnapshot` en Outing.ts
+// y la decisión de diseño documentada en progress/implementers/impl_LB-59.md.
+export interface IAttendancePointsByDay {
+    monday: number;
+    tuesday: number;
+    wednesday: number;
+    thursday: number;
+    friday: number;
+    saturday: number;
+    sunday: number;
+}
+
+// Mapea el índice de "día de bar" (mismo criterio que IScheduleSlot.day y
+// Date.getDay(): 0=Sunday...6=Saturday) a la clave correspondiente de
+// IAttendancePointsByDay. Usado por OutingController.createOuting para
+// tomar el snapshot de puntos vigente el día que corre la salida.
+export const ATTENDANCE_POINTS_DAY_KEYS: (keyof IAttendancePointsByDay)[] = [
+    'sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday',
+];
+
 export interface IBar extends Document {
     name: string;
     slug: string;
@@ -30,7 +52,18 @@ export interface IBar extends Document {
     logoUrl?: string;
     coverUrl?: string;
     closingTime: string;
+    attendancePointsByDay: IAttendancePointsByDay;
 }
+
+const attendancePointsByDaySchema = new Schema<IAttendancePointsByDay>({
+    monday: { type: Number, required: true, min: 0, max: 1000, default: 0 },
+    tuesday: { type: Number, required: true, min: 0, max: 1000, default: 0 },
+    wednesday: { type: Number, required: true, min: 0, max: 1000, default: 0 },
+    thursday: { type: Number, required: true, min: 0, max: 1000, default: 0 },
+    friday: { type: Number, required: true, min: 0, max: 1000, default: 0 },
+    saturday: { type: Number, required: true, min: 0, max: 1000, default: 0 },
+    sunday: { type: Number, required: true, min: 0, max: 1000, default: 0 },
+}, { _id: false });
 
 const addressSchema = new Schema<IAddress>({
     street: {
@@ -117,6 +150,14 @@ const barSchema = new Schema<IBar>({
         type: String,
         match: /^([01]\d|2[0-3]):([0-5]\d)$/,
         default: '06:00',
+    },
+    // Bares registrados antes de LB-59 no tienen este campo persistido en Mongo
+    // (Mongoose no lo retropuebla): `default: () => ({})` solo aplica a
+    // documentos nuevos. Los controllers/utils que lo leen deben tolerar
+    // `undefined` y tratarlo como "0 puntos todos los días".
+    attendancePointsByDay: {
+        type: attendancePointsByDaySchema,
+        default: () => ({}),
     },
 }, {
     timestamps: true,

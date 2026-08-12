@@ -7,6 +7,8 @@ import Bar from '../../models/Bar'
 import { buildMockRequest, buildMockResponse } from '../../__tests__/helpers/mockHelpers'
 import { Types } from 'mongoose'
 import mongoose from 'mongoose'
+import { ATTENDANCE_POINTS_DAY_KEYS } from '../../models/Bar'
+import { getBarDayOfWeek } from '../../utils/barDay'
 
 vi.mock('../../models/Outing', () => ({
   default: {
@@ -47,6 +49,9 @@ vi.mock('../../models/Bar', () => ({
     ACTIVE: 'active',
     REJECTED: 'rejected',
   },
+  ATTENDANCE_POINTS_DAY_KEYS: [
+    'sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday',
+  ],
 }))
 
 vi.mock('../../models/User', () => ({
@@ -131,6 +136,16 @@ describe('OutingController.createOuting', () => {
       _id: barId,
       name: 'Bar de Prueba',
       status: 'active',
+      closingTime: '06:00',
+      attendancePointsByDay: {
+        sunday: 10,
+        monday: 20,
+        tuesday: 30,
+        wednesday: 40,
+        thursday: 50,
+        friday: 60,
+        saturday: 70,
+      },
     }
 
     mockSession = buildMockSession()
@@ -403,6 +418,89 @@ describe('OutingController.createOuting', () => {
       )
       expect(Outing.create).not.toHaveBeenCalled()
       expect(mockSession.abortTransaction).toHaveBeenCalled()
+    })
+  })
+
+  describe('attendance points snapshot (LB-59)', () => {
+    it('snapshots bar.attendancePointsByDay for the bar-day of scheduledFor at creation time', async () => {
+      mockCreatedOuting()
+
+      const scheduledFor = validScheduledFor()
+      const req = buildMockRequest({
+        user: { _id: leaderId } as any,
+        params: { groupId: groupId.toString() },
+        body: {
+          barId: barId.toString(),
+          scheduledFor,
+        },
+      })
+      const res = buildMockResponse()
+
+      await OutingController.createOuting(req, res)
+
+      const expectedDayIndex = getBarDayOfWeek(new Date(scheduledFor), mockBar.closingTime)
+      const expectedKey = ATTENDANCE_POINTS_DAY_KEYS[expectedDayIndex] as keyof typeof mockBar.attendancePointsByDay
+      const expectedSnapshot = mockBar.attendancePointsByDay[expectedKey]
+
+      const createCallArgs = vi.mocked(Outing.create).mock.calls[0][0] as any[]
+      expect(createCallArgs[0].attendancePointsSnapshot).toBe(expectedSnapshot)
+    })
+
+    it('falls back to 0 when the bar has no attendancePointsByDay configured (legacy bar)', async () => {
+      mockCreatedOuting()
+      vi.mocked(Bar.findById).mockReturnValue(buildLeanQuery({ ...mockBar, attendancePointsByDay: undefined }) as any)
+
+      const req = buildMockRequest({
+        user: { _id: leaderId } as any,
+        params: { groupId: groupId.toString() },
+        body: {
+          barId: barId.toString(),
+          scheduledFor: validScheduledFor(),
+        },
+      })
+      const res = buildMockResponse()
+
+      await OutingController.createOuting(req, res)
+
+      const createCallArgs = vi.mocked(Outing.create).mock.calls[0][0] as any[]
+      expect(createCallArgs[0].attendancePointsSnapshot).toBe(0)
+    })
+
+    it('each outing snapshots the bar config in effect at its own creation time (later edits do not retroactively change a past snapshot)', async () => {
+      const scheduledFor = validScheduledFor()
+      const expectedDayIndex = getBarDayOfWeek(new Date(scheduledFor), mockBar.closingTime)
+      const expectedKey = ATTENDANCE_POINTS_DAY_KEYS[expectedDayIndex] as keyof typeof mockBar.attendancePointsByDay
+
+      // First outing: created while the config for that day is its original value.
+      mockCreatedOuting()
+      const req1 = buildMockRequest({
+        user: { _id: leaderId } as any,
+        params: { groupId: groupId.toString() },
+        body: { barId: barId.toString(), scheduledFor },
+      })
+      await OutingController.createOuting(req1, buildMockResponse())
+      const firstSnapshot = (vi.mocked(Outing.create).mock.calls[0][0] as any[])[0].attendancePointsSnapshot
+
+      // The OWNER edits the bar's config for that same day (simulates a PATCH
+      // to /bar/:id/perfil between the two outings).
+      mockBar.attendancePointsByDay[expectedKey] = firstSnapshot + 999
+      vi.mocked(Outing.create).mockClear()
+
+      // Second outing: created after the edit, for the same weekday.
+      mockCreatedOuting()
+      const req2 = buildMockRequest({
+        user: { _id: leaderId } as any,
+        params: { groupId: groupId.toString() },
+        body: { barId: barId.toString(), scheduledFor },
+      })
+      await OutingController.createOuting(req2, buildMockResponse())
+      const secondSnapshot = (vi.mocked(Outing.create).mock.calls[0][0] as any[])[0].attendancePointsSnapshot
+
+      // The first outing's already-persisted snapshot is a plain number
+      // written to Mongo, immune to the later config edit; the second
+      // reflects the new live value at its own creation time.
+      expect(firstSnapshot).not.toBe(secondSnapshot)
+      expect(secondSnapshot).toBe(firstSnapshot + 999)
     })
   })
 })

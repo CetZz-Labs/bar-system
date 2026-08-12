@@ -17,6 +17,14 @@ export interface IOuting extends Document {
     invitees: Types.ObjectId[];
     canceledBy?: Types.ObjectId;
     canceledAt?: Date;
+    // Snapshot no-retroactivo (LB-59) de `Bar.attendancePointsByDay` para el
+    // día de bar de `scheduledFor`, tomado en OutingController.createOuting.
+    // Un cambio posterior en la config del bar no afecta salidas ya creadas.
+    attendancePointsSnapshot: number;
+    // Idempotencia (LB-59/LB-61): true una vez que awardAttendancePointsIfFirst
+    // (utils/attendancePoints.ts) ya evaluó/acreditó esta salida, sin importar
+    // si el snapshot era 0 o no.
+    attendancePointsAwarded: boolean;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -64,6 +72,16 @@ const outingSchema = new Schema<IOuting>({
     },
     canceledAt: {
         type: Date,
+    },
+    attendancePointsSnapshot: {
+        type: Number,
+        min: 0,
+        max: 1000,
+        default: 0,
+    },
+    attendancePointsAwarded: {
+        type: Boolean,
+        default: false,
     },
 }, {
     timestamps: true,

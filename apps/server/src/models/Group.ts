@@ -40,6 +40,10 @@ export interface IGroup extends Document {
     seenDepartures: Types.ObjectId[];
     successionNotifications: ISuccessionNotification[];
     seenSuccessions: Types.ObjectId[];
+    // Saldo de puntos acumulado (LB-59). Acreditado por
+    // utils/attendancePoints.ts; historial detallado en la colección
+    // PointsTransaction.
+    pointsBalance: number;
 }
 
 const groupSchema = new Schema<IGroup>({
@@ -140,6 +144,11 @@ const groupSchema = new Schema<IGroup>({
     seenSuccessions: {
         type: [Schema.Types.ObjectId],
         default: []
+    },
+    pointsBalance: {
+        type: Number,
+        default: 0,
+        min: 0,
     }
 }, {
     timestamps: true
