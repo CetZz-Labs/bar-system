@@ -117,6 +117,42 @@ navegador mucho antes de que el token firmado expire realmente.
   C4) - Cumplimiento verificado contra `CHECKPOINTS.md` C1-C4, los 5
   comandos de verificación en verde.
 
+### [2026-08-10] - LB-60: Registrar consumo y generar QR de confirmación (cajero)
+- **Dominio afectado:** Monorepo (Backend + Frontend)
+- **Subagentes involucrados:** Explorer (`progress/explorers/exp_LB-60.md`),
+  Implementer (`progress/implementers/impl_LB-60.md`,
+  `impl_LB-60-fixups.md`, `impl_LB-60-cashier-rework.md` — esta última
+  hecha directamente por el Leader ante la indisponibilidad temporal del
+  subagente `implementer`), Reviewer (`progress/reviewers/review_LB-60.md`,
+  `review_LB-60-round2.md` y `review_LB-60-final.md`, esta última la
+  auditoría de cierre real).
+- **Resumen de Cambios:** Rol `CASHIER` en `BarUserRole`, modelo
+  `Consumption` (colección nueva, autorizada explícitamente por este
+  ticket), componente reutilizable de QR + código manual de 6 dígitos
+  (`generate/validate/invalidate`, con rate limiting en memoria para LB-61)
+  en `utils/consumptionQr.ts`, endpoints `POST/PATCH/GET
+  /api/outings/:outingId/consumptions[...]`. **Rework de auth:** se
+  descubrió que LB-53 (ya en `development`) construyó un sistema completo
+  de sesión de cajero (`Shift`, `AuditLog`, `authenticateCashier` +
+  `req.cashierContext`, `BarUserRole` reducido a `OWNER | CASHIER`) —
+  `ConsumptionController` se reescribió para usar ese flujo real en vez de
+  `authenticate()` genérico, y la auditoría de creación pasa a `AuditLog`
+  real. Frontend: `CashierOutingView.tsx` (registrar consumo, warning de
+  monto > $500.000, mostrar/regenerar QR y código, listar pendientes),
+  enganchada desde `CashierSearchView.tsx` para salidas ya `ACTIVE`.
+  Sin desglose por catálogo (LB-58 no existe todavía) ni endpoint de
+  confirmación (LB-61, fuera de alcance). De paso se agregó a
+  `backend.md` la prohibición de `any` en producción y se retipó todo el
+  backend existente que la violaba, y se corrigieron varios gates
+  preexistentes ajenos al ticket (coverage de `middleware/`/`cashierSearch.ts`
+  en el backend, mocks/bugs en `CashierAPI.ts`/tests de cajero en el
+  frontend) para poder dejar los 6 comandos de `CHECKPOINTS.md` C4 en verde.
+- **Veredicto del Reviewer:** `[APPROVED]` (auditoría de cierre,
+  `review_LB-60-final.md`) - C1-C4 verificados contra el código real en
+  disco y los 6 comandos de verificación corridos en vivo por el propio
+  Reviewer. 5 hallazgos no bloqueantes documentados para LB-61/LB-58 y
+  para higiene de código.
+
 ### [2026-08-11] - LB-55: Confirmar check-in de un grupo
 - **Dominio afectado:** Monorepo (Backend + Frontend)
 - **Subagentes involucrados:** Explorer (`progress/explorers/exp_LB-55.md`),
