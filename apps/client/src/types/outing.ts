@@ -1,7 +1,19 @@
 import { z } from "zod";
 
-export const OUTING_STATUSES = ["PENDING", "ACTIVE", "CANCELLED", "COMPLETED"] as const;
+export const OUTING_STATUSES = ["PENDING", "ACTIVE", "CANCELLED", "COMPLETED", "NO_SHOW"] as const;
 export type OutingStatus = typeof OUTING_STATUSES[number];
+
+export interface OutingSummary {
+  checkInCount: number;
+  confirmedCount: number;
+  totalAmount: number;
+  pointsAwarded: number;
+  redemptionCount: number;
+  abandonedCount: number;
+  disputedCount: number;
+  checkedInAt?: string;
+  closedAt: string;
+}
 
 export const OUTING_NOTE_MAX_LENGTH = 200;
 export const OUTING_MAX_DAYS_AHEAD = 30;
@@ -41,6 +53,11 @@ export interface Outing {
   canceledAt?: string;
   checkedInAt?: string;
   checkedInBy?: string;
+  closedAt?: string;
+  closedBy?: string;
+  closureReason?: "MANUAL" | "BAR_CLOSED";
+  summary?: OutingSummary;
+  alreadyClosed?: boolean;
   createdAt: string;
   updatedAt: string;
 }

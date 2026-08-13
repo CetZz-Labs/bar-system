@@ -9,6 +9,7 @@ export enum ConsumptionStatus {
     CONFIRMED = 'CONFIRMED',   // seteado por LB-61
     REJECTED = 'REJECTED',     // seteado por LB-61
     DISPUTED = 'DISPUTED',     // seteado por LB-61
+    ABANDONED = 'ABANDONED',   // seteado por LB-62 al cerrar la salida
 }
 
 export interface IConsumptionBreakdownItem {
@@ -25,6 +26,9 @@ export interface IConsumption extends Document {
     isUnusualAmount: boolean;
     breakdown?: IConsumptionBreakdownItem[];
     status: ConsumptionStatus;
+    /** Rechazos del líder (LB-61). Al 4to → DISPUTED. */
+    rejectCount: number;
+    pointsAwarded?: number;
     qrToken: string;
     manualCode: string;
     expiresAt: Date;
@@ -95,6 +99,15 @@ const consumptionSchema = new Schema<IConsumption>({
         type: String,
         enum: Object.values(ConsumptionStatus),
         default: ConsumptionStatus.PENDING_LEADER_CONFIRMATION,
+    },
+    rejectCount: {
+        type: Number,
+        default: 0,
+        min: 0,
+    },
+    pointsAwarded: {
+        type: Number,
+        min: 0,
     },
     qrToken: {
         type: String,

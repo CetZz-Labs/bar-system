@@ -494,7 +494,7 @@ describe('ConsumptionController.getPendingConsumptions', () => {
 
       expect(Consumption.find).toHaveBeenCalledWith({
         outing: outingId.toString(),
-        status: 'PENDING_LEADER_CONFIRMATION',
+        status: { $in: ['PENDING_LEADER_CONFIRMATION', 'REJECTED'] },
       })
       expect(res.status).toHaveBeenCalledWith(200)
       expect(res.json).toHaveBeenCalledWith(pending)

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router";
 import { motion } from "motion/react";
-import { ArrowLeft, Users, Settings, AlertCircle, LogOut, UserMinus, Crown } from "lucide-react";
+import { ArrowLeft, Users, Settings, AlertCircle, LogOut, UserMinus, Crown, Receipt } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Avatar } from "@/components/ui/Avatar";
 import { Modal } from "@/components/ui/Modal";
@@ -358,6 +358,19 @@ export default function GroupDetailView() {
             members={group.members}
             currentUserRole={group.currentUserRole}
           />
+
+          {/* LB-61 — confirmar consumo (líder / co-líder) */}
+          {(group.currentUserRole === "LEADER" || group.currentUserRole === "CO_LEADER") && (
+            <Button
+              variant="primary"
+              size="md"
+              className="w-full"
+              onClick={() => navigate(`/groups/${group.slug}/confirmar-consumo`)}
+            >
+              <Receipt size={18} className="mr-2" />
+              Confirmar consumo
+            </Button>
+          )}
 
           {/* Members List */}
           <GroupMemberList

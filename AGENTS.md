@@ -124,7 +124,7 @@ Reviewer, en disco, dejó constancia de que `CHECKPOINTS.md` está satisfecho.
 | `.claude/agents/` | Definiciones de los subagentes (Leader, Implementer, Reviewer, Explorer) | Si estás orquestando o delegando trabajo |
 | `apps/server/` | Código del backend (Express + Mongoose) | Solo el Implementer, para implementar |
 | `apps/client/` | Código del frontend (React + Vite) | Solo el Implementer, para implementar |
-| `C:\Users\lauta\Documents\Proyectos\Cetzz Labs\Obsidian\Cetzz Labs` (externo, fuera de este repo) | Vault de Obsidian del equipo: contexto de producto, decisiones técnicas y las referencias/notas vinculadas a los tickets de Jira viven en la subcarpeta `12-Jira/` | El Leader, al leer un ticket de Jira, para ampliar contexto que no esté en la descripción del propio ticket |
+| `G:\_dev\cetzzOrganization\obsidian\projects` (externo, fuera de este repo — vault CetZz local) | Vault de Obsidian del equipo: contexto de producto, decisiones técnicas y tickets Jira en `12-Jira/`. Specs de bar en `02-Proyectos/bar-system/` | El Leader, al leer un ticket de Jira, para ampliar contexto que no esté en la descripción del propio ticket |
 
 ---
 

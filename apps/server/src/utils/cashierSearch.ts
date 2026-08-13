@@ -4,8 +4,25 @@ import Bar from '../models/Bar';
 import { getBarDayRange } from './barDay';
 import { Types } from 'mongoose';
 
-/** PENDING = activa (sin check-in); ACTIVE = en curso (LB-49) */
-const SEARCHABLE_STATUSES = [OutingStatus.PENDING, OutingStatus.ACTIVE];
+/**
+ * Criterio de listado cajero:
+ * - ACTIVE (en curso): siempre visible en este bar hasta que se cierre la salida
+ *   (si no, al cruzar el cierre del bar desaparecen y no se pueden cargar consumos).
+ * - PENDING: del día del bar actual o vencidas (`scheduledFor < end`), para no
+ *   ocultar reservas abiertas que siguen bloqueando al grupo. Excluye PENDING
+ *   futuras de días siguientes.
+ */
+function searchableOutingFilter(_start: Date, end: Date) {
+    return {
+        $or: [
+            { status: OutingStatus.ACTIVE },
+            {
+                status: OutingStatus.PENDING,
+                scheduledFor: { $lt: end },
+            },
+        ],
+    };
+}
 
 export type CashierSearchResult = {
     outingId: string;
@@ -75,9 +92,9 @@ function mapOutingToResult(outing: PopulatedOuting): CashierSearchResult {
 }
 
 /**
- * Trae las salidas PENDING/ACTIVE de ESTE bar en el rango [start, end), opcionalmente
- * acotadas a un set de grupos (búsqueda por nombre), y las mapea a CashierSearchResult.
- * Sin `groupIds`: no aplica ningún filtro de grupo (listado por defecto, LB-54).
+ * Trae las salidas PENDING/ACTIVE de ESTE bar (día del bar + ACTIVE/PENDING vencidas),
+ * opcionalmente acotadas a un set de grupos (búsqueda por nombre).
+ * Sin `groupIds`: listado por defecto (LB-54).
  */
 async function fetchOutingsForBar(
     barId: string,
@@ -88,8 +105,7 @@ async function fetchOutingsForBar(
     const outings = await Outing.find({
         ...(groupIds ? { group: { $in: groupIds } } : {}),
         bar: barId,
-        status: { $in: SEARCHABLE_STATUSES },
-        scheduledFor: { $gte: start, $lt: end },
+        ...searchableOutingFilter(start, end),
     })
         .populate('group', 'name inviteCode')
         .populate('invitees', 'name lastName')
@@ -126,54 +142,58 @@ export async function searchGroupsForCashier(
             .select('_id name inviteCode')
             .lean();
 
-        if (!group) {
+        if (group) {
+            const outingHere = await Outing.findOne({
+                group: group._id,
+                bar: barId,
+                ...searchableOutingFilter(start, end),
+            })
+                .populate('group', 'name inviteCode')
+                .populate('invitees', 'name lastName')
+                .lean();
+
+            if (outingHere && outingHere.group && typeof outingHere.group === 'object' && 'name' in outingHere.group) {
+                return {
+                    results: [mapOutingToResult(outingHere as unknown as PopulatedOuting)],
+                };
+            }
+
+            const outingElsewhere = await Outing.findOne({
+                group: group._id,
+                bar: { $ne: barId },
+                ...searchableOutingFilter(start, end),
+            })
+                .populate('bar', 'name')
+                .lean();
+
+            if (outingElsewhere) {
+                const otherBar =
+                    outingElsewhere.bar &&
+                    typeof outingElsewhere.bar === 'object' &&
+                    'name' in outingElsewhere.bar
+                        ? (outingElsewhere.bar as { name: string }).name
+                        : 'otro bar';
+                return {
+                    code: 'OTHER_BAR',
+                    otherBarName: otherBar,
+                    message: `Este grupo tiene salida a ${otherBar}, no a este. Debe cancelar esa salida y crear una nueva a este bar.`,
+                };
+            }
+
+            return {
+                code: 'NO_SALIDA',
+                message:
+                    'Este grupo no tiene salida agendada a este bar. Pedíle al líder que cree una desde su app; después vuelve a buscar.',
+            };
+        }
+
+        // "Prueba"/"Manzan" matchean el patrón de código (6 alfanum) pero no son
+        // invite codes reales → caer a búsqueda por nombre. Los QR/URLs /unirse/
+        // sin grupo sí terminan vacíos.
+        const isJoinUrl = /\/unirse\/[A-Za-z0-9]{6}\b/i.test(q);
+        if (isJoinUrl) {
             return { results: [] };
         }
-
-        const outingHere = await Outing.findOne({
-            group: group._id,
-            bar: barId,
-            status: { $in: SEARCHABLE_STATUSES },
-            scheduledFor: { $gte: start, $lt: end },
-        })
-            .populate('group', 'name inviteCode')
-            .populate('invitees', 'name lastName')
-            .lean();
-
-        if (outingHere && outingHere.group && typeof outingHere.group === 'object' && 'name' in outingHere.group) {
-            return {
-                results: [mapOutingToResult(outingHere as unknown as PopulatedOuting)],
-            };
-        }
-
-        const outingElsewhere = await Outing.findOne({
-            group: group._id,
-            bar: { $ne: barId },
-            status: { $in: SEARCHABLE_STATUSES },
-            scheduledFor: { $gte: start, $lt: end },
-        })
-            .populate('bar', 'name')
-            .lean();
-
-        if (outingElsewhere) {
-            const otherBar =
-                outingElsewhere.bar &&
-                typeof outingElsewhere.bar === 'object' &&
-                'name' in outingElsewhere.bar
-                    ? (outingElsewhere.bar as { name: string }).name
-                    : 'otro bar';
-            return {
-                code: 'OTHER_BAR',
-                otherBarName: otherBar,
-                message: `Este grupo tiene salida a ${otherBar}, no a este. Debe cancelar esa salida y crear una nueva a este bar.`,
-            };
-        }
-
-        return {
-            code: 'NO_SALIDA',
-            message:
-                'Este grupo no tiene salida agendada a este bar. Pedíle al líder que cree una desde su app; después vuelve a buscar.',
-        };
     }
 
     if (q.length === 0) {

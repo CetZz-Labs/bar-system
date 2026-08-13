@@ -1,10 +1,11 @@
 import { Request, Response } from "express";
 import mongoose, { Types } from "mongoose";
-import Outing, { OutingStatus } from "../models/Outing";
+import Outing, { ClosureReason, OutingStatus } from "../models/Outing";
 import Notification, { NotificationType } from "../models/Notification";
 import Group, { IGroupMembership } from "../models/Group";
 import Bar, { BarStatus, IAttendancePointsByDay, IBar } from "../models/Bar";
 import { MembershipRole } from "../models/User";
+import { closeOuting as closeOutingUtil } from "../utils/closeOuting";
 
 // Bares registrados antes de LB-59 no tienen `attendancePointsByDay`
 // persistido en Mongo (ver comentario en models/Bar.ts). Al congelar el
@@ -597,6 +598,67 @@ export class OutingController {
         } catch (error) {
             console.error(error);
             res.status(500).json({ message: 'Hubo un error al obtener la salida activa' });
+        }
+    };
+
+    /**
+     * Cierre manual de salida por cajero (LB-62).
+     * PATCH /api/outings/:outingId/close
+     */
+    static closeOuting = async (req: Request, res: Response) => {
+        try {
+            const cashierContext = req.cashierContext!;
+            const outingId = req.params.outingId as string;
+
+            const outing = await Outing.findById(outingId).lean();
+            if (!outing) {
+                res.status(404).json({ message: 'Salida no encontrada' });
+                return;
+            }
+
+            if (outing.bar.toString() !== cashierContext.bar.toString()) {
+                res.status(403).json({ message: 'Esta salida no pertenece a tu bar' });
+                return;
+            }
+
+            const result = await closeOutingUtil(outingId, {
+                reason: ClosureReason.MANUAL,
+                closedBy: cashierContext.user._id,
+                actorUserId: cashierContext.user._id,
+                deviceInfo: cashierContext.shift.deviceInfo,
+                ip: req.ip,
+            });
+
+            if (!result) {
+                res.status(404).json({ message: 'Salida no encontrada' });
+                return;
+            }
+
+            const populated = await Outing.findById(result.outing._id)
+                .populate('bar', 'name slug logoUrl address')
+                .populate('createdBy', 'name lastName avatarUrl')
+                .lean();
+
+            res.status(200).json({
+                ...populated,
+                alreadyClosed: result.alreadyClosed,
+                summary: result.summary,
+            });
+        } catch (error) {
+            const code =
+                typeof error === 'object' && error !== null && 'code' in error
+                    ? (error as { code?: string }).code
+                    : undefined;
+            if (code === 'CANCELLED') {
+                res.status(409).json({ message: 'La salida está cancelada y no se puede cerrar' });
+                return;
+            }
+            if (code === 'NOT_CLOSABLE') {
+                res.status(409).json({ message: 'La salida no admite cierre en su estado actual' });
+                return;
+            }
+            console.error(error);
+            res.status(500).json({ message: 'Hubo un error al cerrar la salida' });
         }
     };
 }

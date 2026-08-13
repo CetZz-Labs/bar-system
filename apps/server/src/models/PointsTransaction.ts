@@ -1,12 +1,9 @@
 import { Document, model, Schema, Types } from "mongoose";
 
-// Colección nueva, autorizada explícitamente por LB-59 (amplía la lista cerrada
-// de colecciones de backend.md §3), mismo mecanismo de excepción documentada
-// que usó Consumption.ts en LB-60. Historial append-only de acreditaciones de
-// puntos sobre `Group.pointsBalance`. Por ahora solo existe el tipo ATTENDANCE
-// (LB-59); tipos futuros (ej. canje/consumo) se agregarán ampliando el enum.
+// Colección autorizada por LB-59 / ampliada por LB-61 (consumo).
 export enum PointsTransactionType {
     ATTENDANCE = 'ATTENDANCE',
+    CONSUMPTION = 'CONSUMPTION',
 }
 
 export interface IPointsTransaction extends Document {
@@ -16,6 +13,8 @@ export interface IPointsTransaction extends Document {
     type: PointsTransactionType;
     amount: number;
     label: string;
+    /** Solo para type=CONSUMPTION (idempotencia por consumo). */
+    consumption?: Types.ObjectId;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -57,18 +56,32 @@ const pointsTransactionSchema = new Schema<IPointsTransaction>({
         required: true,
         trim: true,
     },
+    consumption: {
+        type: Schema.Types.ObjectId,
+        ref: 'Consumption',
+    },
 }, {
     timestamps: true,
 });
 
-// Defensa en profundidad adicional al flag `Outing.attendancePointsAwarded`
-// (chequeado y seteado dentro de la misma transacción por
-// utils/attendancePoints.ts): un único índice único sobre `outing` impide que
-// dos acreditaciones concurrentes dupliquen el registro de asistencia de una
-// misma salida. Si en el futuro esta colección suma otros `type` referidos a
-// la misma salida (ej. LB-78 canje), este índice deberá volverse compuesto
-// `{ outing: 1, type: 1 }`.
-pointsTransactionSchema.index({ outing: 1 }, { unique: true });
+// ATTENDANCE: una sola acreditación por salida.
+pointsTransactionSchema.index(
+    { outing: 1, type: 1 },
+    {
+        unique: true,
+        partialFilterExpression: { type: PointsTransactionType.ATTENDANCE },
+    }
+);
+
+// CONSUMPTION: una acreditación por consumo.
+pointsTransactionSchema.index(
+    { consumption: 1 },
+    {
+        unique: true,
+        partialFilterExpression: { type: PointsTransactionType.CONSUMPTION },
+    }
+);
+
 pointsTransactionSchema.index({ group: 1, createdAt: -1 });
 
 const PointsTransaction = model<IPointsTransaction>('PointsTransaction', pointsTransactionSchema);

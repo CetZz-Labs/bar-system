@@ -8,6 +8,7 @@ import Bar from '../../models/Bar'
 import Shift, { ShiftEndReason } from '../../models/Shift'
 import AuditLog, { AuditAction } from '../../models/AuditLog'
 import { getLastClosingBoundary } from '../../utils/shift'
+import { closeOutingsForBar, ClosureReason } from '../../utils/closeOuting'
 import { buildMockRequest, buildMockResponse, buildMockNext } from '../../__tests__/helpers/mockHelpers'
 
 vi.mock('jsonwebtoken', () => ({
@@ -44,6 +45,11 @@ vi.mock('../../models/AuditLog', () => ({
 
 vi.mock('../../utils/shift', () => ({
   getLastClosingBoundary: vi.fn(),
+}))
+
+vi.mock('../../utils/closeOuting', () => ({
+  closeOutingsForBar: vi.fn().mockResolvedValue(0),
+  ClosureReason: { MANUAL: 'MANUAL', BAR_CLOSED: 'BAR_CLOSED' },
 }))
 
 function buildDecodedToken(overrides: any = {}) {
@@ -170,6 +176,13 @@ describe('authenticateCashier middleware', () => {
 
     await authenticateCashier(req, res, next)
 
+    expect(closeOutingsForBar).toHaveBeenCalledWith(
+      decoded.barId,
+      expect.objectContaining({
+        reason: ClosureReason.BAR_CLOSED,
+        actorUserId: decoded.id,
+      })
+    )
     expect(shift.endReason).toBe(ShiftEndReason.BAR_CLOSED)
     expect(shift.endedAt).toBe(boundary)
     expect(shift.save).toHaveBeenCalled()

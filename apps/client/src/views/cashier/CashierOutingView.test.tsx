@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Routes, Route } from 'react-router';
 import CashierOutingView from './CashierOutingView';
 import * as ConsumptionAPI from '@/API/ConsumptionAPI';
+import * as CashierAPI from '@/API/CashierAPI';
 import { toast } from 'sonner';
 import type { CashierSearchResult } from '@/types/cashier';
 import type { ConsumptionQrResult, PendingConsumption } from '@/types/consumption';
@@ -19,6 +20,9 @@ vi.mock('sonner', () => ({
 }));
 
 vi.mock('@/API/ConsumptionAPI');
+vi.mock('@/API/CashierAPI', () => ({
+  closeOuting: vi.fn(),
+}));
 
 const outingState: CashierSearchResult = {
   outingId: 'outing-1',
@@ -40,6 +44,7 @@ function renderView(state: { outing?: CashierSearchResult } | undefined = { outi
       <MemoryRouter initialEntries={[{ pathname: '/bar/bar-1/cajero/salida/outing-1', state }]}>
         <Routes>
           <Route path="/bar/:barId/cajero/salida/:outingId" element={<CashierOutingView />} />
+          <Route path="/bar/:barId/cajero/buscar" element={<div>Buscar</div>} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>
@@ -159,5 +164,32 @@ describe('CashierOutingView', () => {
   it('shows a fallback title when no outing info was passed via navigation state', () => {
     renderView({});
     expect(screen.getByText('Salida en curso')).toBeInTheDocument();
+  });
+
+  it('asks for confirmation and closes the outing (LB-62)', async () => {
+    const user = userEvent.setup();
+    vi.mocked(CashierAPI.closeOuting).mockResolvedValue({
+      _id: 'outing-1',
+      status: 'COMPLETED',
+      alreadyClosed: false,
+    } as never);
+
+    renderView();
+
+    await user.click(screen.getByRole('button', { name: 'Cerrar salida' }));
+    expect(
+      screen.getByText(
+        /Los consumos pendientes de confirmar se perderán y el líder deberá crear una nueva salida/
+      )
+    ).toBeInTheDocument();
+
+    // Modal confirm button also says "Cerrar salida"
+    const confirms = screen.getAllByRole('button', { name: 'Cerrar salida' });
+    await user.click(confirms[confirms.length - 1]);
+
+    await waitFor(() => {
+      expect(CashierAPI.closeOuting).toHaveBeenCalledWith('outing-1');
+    });
+    expect(toast.success).toHaveBeenCalledWith('Salida cerrada');
   });
 });

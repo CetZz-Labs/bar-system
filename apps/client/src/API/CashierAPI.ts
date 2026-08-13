@@ -48,6 +48,16 @@ export async function confirmCheckIn(outingId: string) {
     }
 }
 
+/** Cierre manual de salida (LB-62). Idempotente si ya estaba cerrada. */
+export async function closeOuting(outingId: string) {
+    try {
+        const { data } = await api.patch<Outing>(`/outings/${outingId}/close`);
+        return data;
+    } catch (error) {
+        throwStandardError(error);
+    }
+}
+
 /** Preserva códigos de negocio NO_SALIDA / OTHER_BAR (LB-54) */
 export async function searchCashierGroupsRaw(q: string): Promise<
     | { ok: true; results: CashierSearchResult[] }

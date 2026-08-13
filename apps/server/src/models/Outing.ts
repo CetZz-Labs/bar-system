@@ -5,7 +5,25 @@ export enum OutingStatus {
     PENDING = 'PENDING',     // "activa": creada, sin check-in
     ACTIVE = 'ACTIVE',       // "en curso": check-in confirmado
     CANCELLED = 'CANCELLED',
-    COMPLETED = 'COMPLETED',
+    COMPLETED = 'COMPLETED', // "finalizada" (LB-62, tuvo check-in)
+    NO_SHOW = 'NO_SHOW',     // "no-realizada" (LB-62, sin check-in)
+}
+
+export enum ClosureReason {
+    MANUAL = 'MANUAL',
+    BAR_CLOSED = 'BAR_CLOSED',
+}
+
+export interface IOutingSummary {
+    checkInCount: number;
+    confirmedCount: number;
+    totalAmount: number;
+    pointsAwarded: number;
+    redemptionCount: number;
+    abandonedCount: number;
+    disputedCount: number;
+    checkedInAt?: Date;
+    closedAt: Date;
 }
 
 export interface IOuting extends Document {
@@ -20,6 +38,10 @@ export interface IOuting extends Document {
     canceledAt?: Date;
     checkedInAt?: Date;
     checkedInBy?: Types.ObjectId;
+    closedAt?: Date;
+    closedBy?: Types.ObjectId;
+    closureReason?: ClosureReason;
+    summary?: IOutingSummary;
     // Snapshot no-retroactivo (LB-59, rework LB-65) del mapa COMPLETO
     // `Bar.attendancePointsByDay` vigente al crear (o al cambiar de bar en
     // updateOuting) la salida. Antes de LB-65 acá se guardaba un `number` ya
@@ -89,6 +111,28 @@ const outingSchema = new Schema<IOuting>({
     checkedInBy: {
         type: Schema.Types.ObjectId,
         ref: 'User',
+    },
+    closedAt: {
+        type: Date,
+    },
+    closedBy: {
+        type: Schema.Types.ObjectId,
+        ref: 'User',
+    },
+    closureReason: {
+        type: String,
+        enum: Object.values(ClosureReason),
+    },
+    summary: {
+        checkInCount: { type: Number },
+        confirmedCount: { type: Number },
+        totalAmount: { type: Number },
+        pointsAwarded: { type: Number },
+        redemptionCount: { type: Number },
+        abandonedCount: { type: Number },
+        disputedCount: { type: Number },
+        checkedInAt: { type: Date },
+        closedAt: { type: Date },
     },
     attendancePointsSnapshot: {
         type: attendancePointsByDaySchema,

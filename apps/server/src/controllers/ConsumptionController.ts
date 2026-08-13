@@ -7,7 +7,9 @@ import { generate } from "../utils/consumptionQr";
 
 function getOutingStatusError(status: OutingStatus): string | null {
     if (status === OutingStatus.ACTIVE) return null;
-    if (status === OutingStatus.COMPLETED) return 'La salida ya finalizó, no admite nuevos consumos';
+    if (status === OutingStatus.COMPLETED || status === OutingStatus.NO_SHOW) {
+        return 'La salida ya finalizó, no admite nuevos consumos';
+    }
     if (status === OutingStatus.CANCELLED) return 'La salida fue cancelada, no admite nuevos consumos';
     return 'La salida todavía no está en curso (falta el check-in), no admite nuevos consumos';
 }
@@ -113,8 +115,15 @@ export class ConsumptionController {
                 return;
             }
 
-            if (consumption.status !== ConsumptionStatus.PENDING_LEADER_CONFIRMATION) {
-                res.status(409).json({ message: 'Este consumo ya fue confirmado, rechazado o está en disputa y no puede regenerarse' });
+            // LB-61: el cajero puede regenerar tras un REJECTED (corregir monto).
+            // CONFIRMED / DISPUTED quedan bloqueados.
+            if (
+                consumption.status !== ConsumptionStatus.PENDING_LEADER_CONFIRMATION &&
+                consumption.status !== ConsumptionStatus.REJECTED
+            ) {
+                res.status(409).json({
+                    message: 'Este consumo ya fue confirmado o está en disputa y no puede regenerarse',
+                });
                 return;
             }
 
@@ -129,6 +138,8 @@ export class ConsumptionController {
             consumption.manualCode = manualCode;
             consumption.expiresAt = expiresAt;
             consumption.invalidatedAt = null;
+            // Tras regenerar, vuelve a pendiente de confirmación del líder.
+            consumption.status = ConsumptionStatus.PENDING_LEADER_CONFIRMATION;
 
             await consumption.save();
 
@@ -176,11 +187,17 @@ export class ConsumptionController {
                 return;
             }
 
+            // Incluye REJECTED para que el cajero pueda regenerar (LB-61).
             const consumptions = await Consumption.find({
                 outing: outingId,
-                status: ConsumptionStatus.PENDING_LEADER_CONFIRMATION,
+                status: {
+                    $in: [
+                        ConsumptionStatus.PENDING_LEADER_CONFIRMATION,
+                        ConsumptionStatus.REJECTED,
+                    ],
+                },
             })
-                .select('amount breakdown status expiresAt createdAt')
+                .select('amount breakdown status expiresAt createdAt rejectCount')
                 .sort({ createdAt: -1 })
                 .lean();
 

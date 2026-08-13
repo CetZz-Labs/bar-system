@@ -206,6 +206,17 @@ export const authenticateCashier = async (req: Request, res: Response, next: Nex
         if (bar) {
             const boundary = getLastClosingBoundary(bar.closingTime);
             if (shift.startedAt < boundary) {
+                // LB-62: mismo trigger que el auto-cierre de turno — cierra
+                // PENDING/ACTIVE del bar antes de cortar la sesión.
+                // Import dinámico para no acoplar auth ↔ Group/Outing en tests
+                // de middleware que mockean User de forma parcial.
+                const { closeOutingsForBar, ClosureReason } = await import('../utils/closeOuting.js');
+                await closeOutingsForBar(decoded.barId, {
+                    reason: ClosureReason.BAR_CLOSED,
+                    actorUserId: decoded.id,
+                    deviceInfo: shift.deviceInfo,
+                });
+
                 shift.endedAt = boundary;
                 shift.endReason = ShiftEndReason.BAR_CLOSED;
                 await shift.save();

@@ -11,7 +11,9 @@ import groupRouter from './routes/groupRoute'
 import barRouter from './routes/barRoute'
 import outingRouter from './routes/outingRoute'
 import consumptionRouter from './routes/consumptionRoute'
+import leaderConsumptionRouter from './routes/leaderConsumptionRoute'
 import outingCheckInRouter from './routes/outingCheckInRoute'
+import outingCloseRouter from './routes/outingCloseRoute'
 import cashierRouter from './routes/cashierRoute'
 
 if (process.env.NODE_ENV !== 'production') {
@@ -39,7 +41,9 @@ app.use('/api/groups/:groupId/outings', outingRouter)
 app.use('/api/groups', groupRouter)
 app.use('/api/bar', barRouter)
 app.use('/api/outings/:outingId/consumptions', consumptionRouter)
+app.use('/api/consumptions', leaderConsumptionRouter)
 app.use('/api/outings/:outingId/check-in', outingCheckInRouter)
+app.use('/api/outings/:outingId/close', outingCloseRouter)
 app.use('/api/cashier', cashierRouter)
 app.get('/api', (req, res) => {
     res.send('Hello World!')

@@ -31,6 +31,34 @@ export interface PendingConsumption {
   status: ConsumptionStatus;
   expiresAt: string;
   createdAt: string;
+  rejectCount?: number;
+}
+
+/** Preview del consumo para el líder (LB-61 lookup) */
+export interface ConsumptionLookupResult {
+  consumptionId: string;
+  amount: number;
+  breakdown?: ConsumptionBreakdownItem[];
+  status: ConsumptionStatus;
+  createdAt: string;
+  bar: { id: string; name: string };
+  outingId: string;
+  groupId: string;
+  rejectCount: number;
+}
+
+export interface ConsumptionConfirmResult {
+  consumptionId: string;
+  status: ConsumptionStatus;
+  pointsAwarded: number;
+  pointsBalance: number;
+  alreadyConfirmed?: boolean;
+}
+
+export interface ConsumptionRejectResult {
+  consumptionId: string;
+  status: ConsumptionStatus;
+  rejectCount: number;
 }
 
 // Umbral no bloqueante de la spec LB-60 (v2): monto > $500.000 dispara un

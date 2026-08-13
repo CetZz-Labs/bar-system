@@ -89,8 +89,49 @@ describe('searchGroupsForCashier', () => {
   })
 
   describe('direct code query', () => {
-    it('returns empty results when no group matches the invite code', async () => {
+    it('falls back to name search when 6-char text is not a real invite code', async () => {
+      const groupId = new Types.ObjectId()
+      const outingId = new Types.ObjectId()
+
       vi.mocked(Group.findOne).mockReturnValue(selectLeanQuery(null) as any)
+      vi.mocked(Group.find).mockReturnValue(selectLimitLeanQuery([{ _id: groupId }]) as any)
+      vi.mocked(Outing.find).mockReturnValue(
+        populatePopulateSortLeanQuery([
+          {
+            _id: outingId,
+            status: 'ACTIVE',
+            scheduledFor: new Date('2026-08-10T23:00:00.000Z'),
+            group: { _id: groupId, name: 'Prueba', inviteCode: 'ZZ99AA' },
+            invitees: [],
+          },
+        ]) as any
+      )
+
+      const result = await searchGroupsForCashier(barId, '06:00', 'Prueba')
+
+      expect(Group.find).toHaveBeenCalledWith({
+        name: { $regex: 'Prueba', $options: 'i' },
+      })
+      expect('results' in result && result.results).toHaveLength(1)
+      expect('results' in result && result.results[0].name).toBe('Prueba')
+    })
+
+    it('returns empty results when a join URL code matches no group', async () => {
+      vi.mocked(Group.findOne).mockReturnValue(selectLeanQuery(null) as any)
+
+      const result = await searchGroupsForCashier(
+        barId,
+        '06:00',
+        'http://localhost:5173/unirse/AB12CD'
+      )
+
+      expect(result).toEqual({ results: [] })
+      expect(Group.find).not.toHaveBeenCalled()
+    })
+
+    it('returns empty results when unknown 6-char code also matches no group name', async () => {
+      vi.mocked(Group.findOne).mockReturnValue(selectLeanQuery(null) as any)
+      vi.mocked(Group.find).mockReturnValue(selectLimitLeanQuery([]) as any)
 
       const result = await searchGroupsForCashier(barId, '06:00', 'AB12CD')
 
@@ -237,6 +278,13 @@ describe('searchGroupsForCashier', () => {
 
       const result = await searchGroupsForCashier(barId, '06:00', '')
 
+      expect(Outing.find).toHaveBeenCalledWith({
+        bar: barId,
+        $or: [
+          { status: 'ACTIVE' },
+          { status: 'PENDING', scheduledFor: { $lt: end } },
+        ],
+      })
       expect('results' in result && result.results).toHaveLength(2)
       expect('results' in result && result.results.map((r) => r.outingId).sort()).toEqual(
         [outingIdA.toString(), outingIdB.toString()].sort()

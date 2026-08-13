@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useLocation, useParams } from "react-router";
+import { Link, useLocation, useNavigate, useParams } from "react-router";
 import { motion } from "motion/react";
 import { ArrowLeft, Loader2, QrCode, RefreshCw, Users } from "lucide-react";
 import { toast } from "sonner";
@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { createConsumption, getPendingConsumptions, regenerateConsumption } from "@/API/ConsumptionAPI";
+import { closeOuting } from "@/API/CashierAPI";
 import { toastApiError } from "@/utils/apiError";
 import { UNUSUAL_AMOUNT_THRESHOLD } from "@/types/consumption";
 import type { ConsumptionQrResult, PendingConsumption } from "@/types/consumption";
@@ -63,12 +64,14 @@ function QrResultCard({
 export default function CashierOutingView() {
   const { barId, outingId } = useParams<{ barId: string; outingId: string }>();
   const location = useLocation();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const outingInfo = (location.state as { outing?: CashierSearchResult } | null)?.outing;
 
   const [activeResult, setActiveResult] = useState<ConsumptionQrResult | null>(null);
   const [pendingAmount, setPendingAmount] = useState<number | null>(null);
   const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
+  const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
 
   const {
     register,
@@ -106,6 +109,21 @@ export default function CashierOutingView() {
     },
     onError: toastApiError,
     onSettled: () => setRegeneratingId(null),
+  });
+
+  const closeMutation = useMutation({
+    mutationFn: () => closeOuting(outingId!),
+    onSuccess: (data) => {
+      setConfirmCloseOpen(false);
+      if (data?.alreadyClosed) {
+        toast.message("Esta salida ya estaba cerrada");
+      } else {
+        toast.success("Salida cerrada");
+      }
+      queryClient.invalidateQueries({ queryKey: ["cashierSearch"] });
+      navigate(`/bar/${barId}/cajero/buscar`);
+    },
+    onError: toastApiError,
   });
 
   const submitAmount = (amount: number) => {
@@ -224,7 +242,10 @@ export default function CashierOutingView() {
             >
               <div>
                 <p className="text-text-primary font-medium m-0">{currencyFormatter.format(consumption.amount)}</p>
-                <p className="text-text-secondary text-xs m-0">Vence {formatTime(consumption.expiresAt)}</p>
+                <p className="text-text-secondary text-xs m-0">
+                  {consumption.status === "REJECTED" ? "Rechazado · " : ""}
+                  Vence {formatTime(consumption.expiresAt)}
+                </p>
               </div>
               <Button
                 type="button"
@@ -235,6 +256,8 @@ export default function CashierOutingView() {
               >
                 {regenerateMutation.isPending && regeneratingId === consumption._id ? (
                   <Loader2 size={14} className="animate-spin" />
+                ) : consumption.status === "REJECTED" ? (
+                  "Regenerar código"
                 ) : (
                   "Ver código"
                 )}
@@ -243,6 +266,17 @@ export default function CashierOutingView() {
           ))}
         </ul>
       </div>
+
+      <Button
+        type="button"
+        variant="outline"
+        size="lg"
+        fullWidth
+        onClick={() => setConfirmCloseOpen(true)}
+        disabled={closeMutation.isPending}
+      >
+        Cerrar salida
+      </Button>
 
       <Modal
         isOpen={pendingAmount !== null}
@@ -255,6 +289,17 @@ export default function CashierOutingView() {
         confirmText="Confirmar"
         cancelText="Revisar"
         isPending={createMutation.isPending}
+      />
+
+      <Modal
+        isOpen={confirmCloseOpen}
+        onClose={() => setConfirmCloseOpen(false)}
+        onConfirm={() => closeMutation.mutate()}
+        title="Cerrar salida"
+        description="¿Cerrar la salida? Los consumos pendientes de confirmar se perderán y el líder deberá crear una nueva salida para volver a consumir."
+        confirmText="Cerrar salida"
+        cancelText="Cancelar"
+        isPending={closeMutation.isPending}
       />
     </motion.div>
   );
