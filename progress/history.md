@@ -298,6 +298,55 @@ navegador mucho antes de que el token firmado expire realmente.
   `test:coverage` verificada de forma independiente (el ticket no tocó
   `utils/`/`middleware/`).
 
+### [2026-08-15] - Auditoría retroactiva: LB-61 y LB-62 (código ya mergeado sin pasar por el harness)
+- **Dominio afectado:** Monorepo (Backend + Frontend)
+- **Contexto:** ambos tickets llegaron a `development` vía el commit
+  `2d678cf` ("feat: confirm consumption points (LB-61) and close outings
+  (LB-62)"), mergeado a través de `feat/puntos` sin pasar por el ciclo
+  Explorer/Implementer/Reviewer de este harness — Jira los seguía mostrando
+  "Tareas por hacer". El usuario pidió auditar el código real contra los
+  criterios de aceptación literales de cada ticket antes de decidir si
+  correspondía cerrarlos.
+- **Subagentes involucrados:** Explorer
+  (`progress/explorers/exp_LB-61-LB-62-audit.md` — gap analysis estático,
+  sin `Bash`), Reviewer (`progress/reviewers/review_LB-61.md` y
+  `progress/reviewers/review_LB-62.md` — verificación en vivo de los
+  hallazgos del Explorer, corriendo los 6 comandos de verificación).
+- **LB-61 ("Confirmar QR de consumo y acreditar puntos (líder)", assignee
+  Jira: Franco Espinoza, no el usuario de esta sesión — auditado y movido
+  a Done igual por decisión explícita del usuario):** los 13 criterios de
+  aceptación v2 cumplen contra el código real
+  (`LeaderConsumptionController`, `pointsHub.ts` para el saldo en tiempo
+  real vía WebSocket, `consumptionQr.ts` para rate-limiting/idempotencia,
+  `consumptionPoints.ts` para el redondeo `Math.floor($1.000=1pt)`,
+  `attendancePoints.ts` para el trigger de LB-59 en el primer consumo).
+  Gaps de cobertura de test no bloqueantes anotados (idempotencia HTTP de
+  doble `accept`, rate-limit 429, casos `DISPUTED` en
+  lookup/accept/reject, `pointsHub.ts` sin test unitario).
+- **LB-62 ("Cierre administrativo de salida", assignee: el usuario de esta
+  sesión):** 7 de 8 criterios v3 cumplen sin observaciones (`closeOuting.ts`,
+  modal de cierre manual con texto exacto, abandono e invalidación de QR de
+  consumos pendientes/rechazados/en disputa, idempotencia, notificación
+  condicional, exclusión de `CANCELLED`). Un hallazgo real: el
+  "auto-cierre al llegar la hora de cierre del bar" no es un job/cron
+  proactivo — es "cierre perezoso" (`closeBar.ts`), disparado recién en el
+  próximo login de cajero/dueño a ese bar después del horario, documentado
+  así explícitamente en el propio código. **Decisión de negocio del
+  usuario (vía `AskUserQuestion`): se acepta el lazy-close como diseño
+  válido, no como deuda bloqueante.** Detalles estructurales no
+  bloqueantes: `closedBy`/`closureReason` viven en `Outing`, no dentro de
+  `IOutingSummary` (el contrato HTTP igual los expone), `redemptionCount`
+  hardcodeado a `0` (no hay sistema de canjes en el repo todavía, coherente
+  con `backend.md`), y falta de test HTTP para `OutingController.closeOuting`
+  y para los paths `CANCELLED`/`NOT_CLOSABLE`/`REJECTED` de `closeOuting.test.ts`.
+- **Veredicto del Reviewer:** `[APPROVED]` para ambos tickets, por
+  separado. 343/343 tests server (coverage agregado sobre `utils/`+
+  `middleware/` 93.57%/88.25%/92.53%/94.08%, sobre el umbral 80% aunque
+  `closeOuting.ts` individualmente da 75% stmts — el gate configurado en
+  `vitest.config.ts` es agregado, no por archivo), 168/168 tests client,
+  lint y build limpios en ambos. Todos los gaps encontrados son deuda de
+  testing (edge cases sin cobertura), ninguno es funcionalidad faltante.
+
 ### [2026-08-12] - LB-64: Página 404 con botón para volver a la ruta anterior
 - **Dominio afectado:** Frontend
 - **Subagentes involucrados:** Explorer (`progress/explorers/exp_LB-64.md`),
