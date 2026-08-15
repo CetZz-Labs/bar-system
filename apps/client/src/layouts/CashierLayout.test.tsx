@@ -39,7 +39,7 @@ describe('CashierLayout', () => {
     expect(screen.getByText('Loading...')).toBeInTheDocument();
   });
 
-  it('should redirect to the bar-specific login route when there is no cashier session', () => {
+  it('should redirect to /login when there is no cashier session (LB-66: no more per-bar login route)', () => {
     mockUseCashierAuth.mockReturnValue({
       data: null,
       isLoading: false,
@@ -50,7 +50,7 @@ describe('CashierLayout', () => {
     render(
       <MemoryRouter initialEntries={['/bar/bar-1/cajero']}>
         <Routes>
-          <Route path="/bar/:barId/cajero/login" element={<div>Cashier Login Page</div>} />
+          <Route path="/login" element={<div>Login Page</div>} />
           <Route element={<CashierLayout />}>
             <Route path="/bar/:barId/cajero" element={<div>Panel Content</div>} />
           </Route>
@@ -58,7 +58,7 @@ describe('CashierLayout', () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByText('Cashier Login Page')).toBeInTheDocument();
+    expect(screen.getByText('Login Page')).toBeInTheDocument();
   });
 
   it('should render the Outlet content when there is a valid cashier session', () => {
@@ -77,7 +77,7 @@ describe('CashierLayout', () => {
     render(
       <MemoryRouter initialEntries={['/bar/bar-1/cajero']}>
         <Routes>
-          <Route path="/bar/:barId/cajero/login" element={<div>Cashier Login Page</div>} />
+          <Route path="/login" element={<div>Login Page</div>} />
           <Route element={<CashierLayout />}>
             <Route path="/bar/:barId/cajero" element={<div>Panel Content</div>} />
           </Route>

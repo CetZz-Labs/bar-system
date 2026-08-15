@@ -4,8 +4,7 @@ import { Types } from "mongoose";
 import User, { IUser, Role } from "../models/User";
 import BarUser, { IBarUser } from "../models/BarUser";
 import Bar from "../models/Bar";
-import Shift, { IShift, ShiftEndReason } from "../models/Shift";
-import AuditLog, { AuditAction } from "../models/AuditLog";
+import Shift, { IShift } from "../models/Shift";
 import { getLastClosingBoundary } from "../utils/shift";
 
 interface IDecodedToken {
@@ -145,12 +144,14 @@ export const authenticate = (allowedRoles: Role[] = [Role.USER]) => {
 
 /**
  * Middleware de autenticación para el panel de cajero.
- * Verifica la cookie `cashier_access_token`, el vínculo del usuario con el
- * bar (BarUser), el estado del cajero y la vigencia del turno (Shift),
- * cerrándolo automáticamente si ya pasó el horario de cierre del bar.
+ * Verifica la cookie única `access_token` (LB-66 — unificada con la de
+ * usuario normal, ver `ContextController.select`), el vínculo del usuario
+ * con el bar (BarUser), el estado del cajero y la vigencia del turno
+ * (Shift), cerrándolo automáticamente si ya pasó el horario de cierre del
+ * bar.
  */
 export const authenticateCashier = async (req: Request, res: Response, next: NextFunction) => {
-    const token = req.cookies.cashier_access_token;
+    const token = req.cookies.access_token;
 
     // 1. Verificamos si hay token
     if (!token) {
@@ -206,26 +207,16 @@ export const authenticateCashier = async (req: Request, res: Response, next: Nex
         if (bar) {
             const boundary = getLastClosingBoundary(bar.closingTime);
             if (shift.startedAt < boundary) {
-                // LB-62: mismo trigger que el auto-cierre de turno — cierra
-                // PENDING/ACTIVE del bar antes de cortar la sesión.
-                // Import dinámico para no acoplar auth ↔ Group/Outing en tests
-                // de middleware que mockean User de forma parcial.
-                const { closeOutingsForBar, ClosureReason } = await import('../utils/closeOuting.js');
-                await closeOutingsForBar(decoded.barId, {
-                    reason: ClosureReason.BAR_CLOSED,
+                // LB-66: lógica de cierre extraída a `closeBar` (cierra este y
+                // cualquier otro turno vencido del bar + las salidas
+                // PENDING/ACTIVE, LB-62). Import dinámico para no acoplar
+                // auth ↔ Group/Outing en tests de middleware que mockean
+                // User de forma parcial (mismo motivo que antes de LB-66).
+                const { closeBar } = await import('../utils/closeBar.js');
+                await closeBar(decoded.barId, {
                     actorUserId: decoded.id,
                     deviceInfo: shift.deviceInfo,
-                });
-
-                shift.endedAt = boundary;
-                shift.endReason = ShiftEndReason.BAR_CLOSED;
-                await shift.save();
-
-                await AuditLog.create({
-                    bar: decoded.barId,
-                    user: decoded.id,
-                    action: AuditAction.SHIFT_AUTO_CLOSED,
-                    deviceInfo: shift.deviceInfo,
+                    boundary,
                 });
 
                 res.status(401).json({ message: 'El turno se cerró automáticamente al horario de cierre del bar' });

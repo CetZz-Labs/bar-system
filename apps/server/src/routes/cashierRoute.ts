@@ -1,19 +1,13 @@
 import { Router } from "express";
-import { body, query } from "express-validator";
+import { query } from "express-validator";
 import { CashierController } from "../controllers/CashierController";
 import { authenticateCashier } from "../middleware/auth";
 import { handleInputErrors } from "../middleware/validation";
 
 const router: Router = Router();
 
-router.post('/login',
-    body('email').isEmail().withMessage('E-mail no válido'),
-    body('password').notEmpty().withMessage('La contraseña es requerida'),
-    body('barId').isMongoId().withMessage('barId inválido'),
-    body('deviceInfo').notEmpty().withMessage('deviceInfo es requerido').isString(),
-    handleInputErrors,
-    CashierController.login
-);
+// LB-66: el login separado de cajero (POST /login) fue eliminado. El flujo
+// unificado vive en POST /api/context/select (ver ContextController.select).
 
 router.get('/session',
     authenticateCashier,

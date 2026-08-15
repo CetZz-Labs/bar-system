@@ -403,3 +403,58 @@ navegador mucho antes de que el token firmado expire realmente.
   código real y los 3 comandos de verificación corridos en vivo por el
   propio Reviewer (incluye coverage). Observación no bloqueante sobre
   migración señalada con fuerza (ver nota arriba).
+
+### [2026-08-15] - LB-66: Login unificado + contexto de cajero + apertura de turno (rescope de LB-53)
+- **Dominio afectado:** Monorepo (Backend + Frontend)
+- **Subagentes involucrados:** Explorer (`progress/explorers/exp_LB-66.md`),
+  Implementer (`progress/implementers/impl_LB-66.md`), Reviewer
+  (`progress/reviewers/review_LB-66.md`).
+- **Contexto:** rescope acordado en el kickoff de Sprint 2 (2026-08-10) de
+  LB-53 (login de cajero separado, ya cerrado con JWT/cookie propios). El
+  Explorer encontró que **LB-24 (selector de contexto), que el ticket
+  trataba como predecesor "ya cerrado", no existe en el código** — se
+  construyó desde cero. También detectó que el cierre de salidas por
+  horario de LB-62 (`closeOutingsForBar`, ya en `development` vía
+  `feat/puntos`, commit `2d678cf`, sin pasar por este harness) ya estaba
+  fusionado con el cierre de turno pero de forma inline dentro de
+  `authenticateCashier`. Se resolvieron 3 decisiones de arquitectura vía
+  `AskUserQuestion` antes de implementar: (1) cookie/JWT único `access_token`
+  para todo, reemplaza `cashier_access_token`; (2) `closeBar(barId)`
+  extraído como función reusable en `utils/`; (3) kick-out de sesión
+  duplicada limitado al contexto cajero/dueño (patrón `Shift` existente),
+  sin mecanismo genérico de sesión única para el login normal de usuario.
+- **Resumen de Cambios:** Nuevo `ContextController` (`POST
+  /api/context/select` con `mode: user|cashier|owner` + `GET
+  /api/context/options`), `contextRoute.ts`, validado con
+  `express-validator`. `mode: user` re-emite `access_token` solo con `{id}`;
+  `cashier`/`owner` validan `BarUser` por rol (`BarUserRole`, no
+  `User.role`), aplican kick-out del `Shift` previo, invocan `closeBar`
+  antes de abrir turno nuevo, y re-emiten `access_token` con
+  `{id, barId, role}`. `closeBar(barId, options)` nuevo en
+  `utils/closeBar.ts`: cierra TODOS los `Shift` vencidos del bar (no solo
+  el del request) + invoca `closeOutingsForBar` (LB-62). `authenticateCashier`
+  adaptado a leer el cookie único y a delegar el auto-cierre en `closeBar`.
+  Eliminados `CashierController.login`, `POST /cashier/login`,
+  `CashierLoginView.tsx` y el cookie `cashier_access_token`.
+  `CashierController.logout` ahora limpia la sesión completa (antes solo la
+  de cajero), documentado como decisión aceptada, no regresión oculta.
+  Frontend: `SelectContextView.tsx` (dominio `auth/`), `ContextAPI.ts`,
+  `types/context.ts`; `LoginView.tsx` navega a `/select-context` solo si
+  hay más de una opción de contexto (salto automático preservado si el
+  usuario solo tiene rol "usuario"); `CashierLayout`/`useCashierAuth` se
+  mantuvieron (no eliminados) y se adaptaron al cookie único, minimizando
+  blast radius sobre el panel de cajero ya funcional. Sin panel de dueño
+  dedicado todavía: `mode: owner` navega al mismo panel de cajero (único
+  protegido por `authenticateCashier` que existe hoy), decisión documentada
+  como dentro del alcance más simple que satisface el criterio del ticket.
+- **Veredicto del Reviewer:** `[APPROVED]` (primera pasada) - C1-C4
+  verificados contra el código real y los 6 comandos de verificación
+  corridos en vivo por el propio Reviewer (343/343 tests server incl.
+  coverage 93%+ en `utils/`+`middleware/`, 168/168 tests client, lint y
+  build limpios en ambos). Confirmado sin `any` en producción, sin carpeta
+  `services/`, sin residuos de `cashier_access_token` ni referencias
+  colgantes a los archivos eliminados. Hallazgos no bloqueantes: `authenticate()`
+  sin argumentos sigue sin contemplar `Role.USER!==ADMIN` para el selector
+  (deuda preexistente, no introducida por este ticket) y `ContextController.select`
+  no usa transacción Mongo para cierre-de-shift-previo + creación de shift +
+  auditoría (mismo comportamiento que el código eliminado, no regresión).

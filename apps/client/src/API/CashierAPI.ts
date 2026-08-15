@@ -1,5 +1,4 @@
 import type {
-    CashierLoginForm,
     CashierSearchExactError,
     CashierSearchResult,
     CashierSession,
@@ -8,15 +7,8 @@ import type { Outing } from "@/types/outing";
 import api from "@/libs/axios";
 import { throwStandardError } from "@/utils/apiError";
 
-export async function cashierLogin(formData: CashierLoginForm) {
-    try {
-        const url = '/cashier/login'
-        const { data } = await api.post<string>(url, formData)
-        return data
-    } catch (error) {
-        throwStandardError(error)
-    }
-}
+// LB-66: el login separado de cajero (POST /cashier/login) fue eliminado.
+// El flujo unificado vive en POST /api/context/select (ver API/ContextAPI.ts).
 
 export async function cashierSession() {
     try {

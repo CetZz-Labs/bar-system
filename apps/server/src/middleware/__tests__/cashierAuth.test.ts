@@ -5,10 +5,9 @@ import { authenticateCashier } from '../auth'
 import User from '../../models/User'
 import BarUser from '../../models/BarUser'
 import Bar from '../../models/Bar'
-import Shift, { ShiftEndReason } from '../../models/Shift'
-import AuditLog, { AuditAction } from '../../models/AuditLog'
+import Shift from '../../models/Shift'
 import { getLastClosingBoundary } from '../../utils/shift'
-import { closeOutingsForBar, ClosureReason } from '../../utils/closeOuting'
+import { closeBar } from '../../utils/closeBar'
 import { buildMockRequest, buildMockResponse, buildMockNext } from '../../__tests__/helpers/mockHelpers'
 
 vi.mock('jsonwebtoken', () => ({
@@ -33,23 +32,16 @@ vi.mock('../../models/Shift', () => ({
   ShiftEndReason: { MANUAL: 'MANUAL', KICKED_OUT: 'KICKED_OUT', BAR_CLOSED: 'BAR_CLOSED' },
 }))
 
-vi.mock('../../models/AuditLog', () => ({
-  default: { create: vi.fn() },
-  AuditAction: {
-    CASHIER_LOGIN: 'CASHIER_LOGIN',
-    CASHIER_LOGOUT: 'CASHIER_LOGOUT',
-    CASHIER_KICKED_OUT: 'CASHIER_KICKED_OUT',
-    SHIFT_AUTO_CLOSED: 'SHIFT_AUTO_CLOSED',
-  },
-}))
-
 vi.mock('../../utils/shift', () => ({
   getLastClosingBoundary: vi.fn(),
 }))
 
-vi.mock('../../utils/closeOuting', () => ({
-  closeOutingsForBar: vi.fn().mockResolvedValue(0),
-  ClosureReason: { MANUAL: 'MANUAL', BAR_CLOSED: 'BAR_CLOSED' },
+// LB-66: la lógica de cierre (turnos + salidas) se extrajo a `closeBar`
+// (ver apps/server/src/utils/__tests__/closeBar.test.ts para su cobertura
+// aislada). El middleware solo la invoca cuando detecta que el turno
+// vigente quedó vencido.
+vi.mock('../../utils/closeBar', () => ({
+  closeBar: vi.fn().mockResolvedValue({ closedShifts: 0, closedOutings: 0 }),
 }))
 
 function buildDecodedToken(overrides: any = {}) {
@@ -68,11 +60,12 @@ describe('authenticateCashier middleware', () => {
     vi.mocked(BarUser.findOne).mockReset()
     vi.mocked(Bar.findById).mockReset()
     vi.mocked(Shift.findOne).mockReset()
-    vi.mocked(AuditLog.create).mockReset()
     vi.mocked(getLastClosingBoundary).mockReset()
+    vi.mocked(closeBar).mockReset()
+    vi.mocked(closeBar).mockResolvedValue({ closedShifts: 0, closedOutings: 0 })
   })
 
-  it('returns 401 when there is no cashier_access_token cookie', async () => {
+  it('returns 401 when there is no access_token cookie', async () => {
     const req = buildMockRequest({ cookies: {} })
     const res = buildMockResponse()
     const next = buildMockNext()
@@ -89,7 +82,23 @@ describe('authenticateCashier middleware', () => {
       throw new Error('invalid token')
     })
 
-    const req = buildMockRequest({ cookies: { cashier_access_token: 'bad-token' } })
+    const req = buildMockRequest({ cookies: { access_token: 'bad-token' } })
+    const res = buildMockResponse()
+    const next = buildMockNext()
+
+    await authenticateCashier(req, res, next)
+
+    expect(res.status).toHaveBeenCalledWith(401)
+    expect(res.json).toHaveBeenCalledWith({ message: 'Token no válido o expirado' })
+    expect(next).not.toHaveBeenCalled()
+  })
+
+  it('returns 401 when the decoded token has no barId (user-mode token)', async () => {
+    // LB-66: un access_token emitido en modo `user` (sin barId/role) no
+    // debe habilitar el panel de cajero.
+    vi.mocked(jwt.verify).mockReturnValue({ id: new Types.ObjectId().toString() } as any)
+
+    const req = buildMockRequest({ cookies: { access_token: 'user-mode-token' } })
     const res = buildMockResponse()
     const next = buildMockNext()
 
@@ -106,7 +115,7 @@ describe('authenticateCashier middleware', () => {
     vi.mocked(User.findById).mockResolvedValue({ _id: decoded.id, isActive: true } as any)
     vi.mocked(BarUser.findOne).mockResolvedValue(null)
 
-    const req = buildMockRequest({ cookies: { cashier_access_token: 'valid-token' } })
+    const req = buildMockRequest({ cookies: { access_token: 'valid-token' } })
     const res = buildMockResponse()
     const next = buildMockNext()
 
@@ -123,7 +132,7 @@ describe('authenticateCashier middleware', () => {
     vi.mocked(User.findById).mockResolvedValue({ _id: decoded.id, isActive: true } as any)
     vi.mocked(BarUser.findOne).mockResolvedValue({ isActive: false } as any)
 
-    const req = buildMockRequest({ cookies: { cashier_access_token: 'valid-token' } })
+    const req = buildMockRequest({ cookies: { access_token: 'valid-token' } })
     const res = buildMockResponse()
     const next = buildMockNext()
 
@@ -141,7 +150,7 @@ describe('authenticateCashier middleware', () => {
     vi.mocked(BarUser.findOne).mockResolvedValue({ isActive: true } as any)
     vi.mocked(Shift.findOne).mockResolvedValue(null)
 
-    const req = buildMockRequest({ cookies: { cashier_access_token: 'valid-token' } })
+    const req = buildMockRequest({ cookies: { access_token: 'valid-token' } })
     const res = buildMockResponse()
     const next = buildMockNext()
 
@@ -152,7 +161,7 @@ describe('authenticateCashier middleware', () => {
     expect(next).not.toHaveBeenCalled()
   })
 
-  it('auto-closes the shift and returns 401 when it started before the bar closing boundary', async () => {
+  it('delegates to closeBar and returns 401 when the shift started before the bar closing boundary', async () => {
     const decoded = buildDecodedToken()
     const boundary = new Date('2026-08-06T06:00:00')
     const shift = {
@@ -170,24 +179,19 @@ describe('authenticateCashier middleware', () => {
     vi.mocked(Bar.findById).mockResolvedValue({ closingTime: '06:00' } as any)
     vi.mocked(getLastClosingBoundary).mockReturnValue(boundary)
 
-    const req = buildMockRequest({ cookies: { cashier_access_token: 'valid-token' } })
+    const req = buildMockRequest({ cookies: { access_token: 'valid-token' } })
     const res = buildMockResponse()
     const next = buildMockNext()
 
     await authenticateCashier(req, res, next)
 
-    expect(closeOutingsForBar).toHaveBeenCalledWith(
+    expect(closeBar).toHaveBeenCalledWith(
       decoded.barId,
       expect.objectContaining({
-        reason: ClosureReason.BAR_CLOSED,
         actorUserId: decoded.id,
+        deviceInfo: shift.deviceInfo,
+        boundary,
       })
-    )
-    expect(shift.endReason).toBe(ShiftEndReason.BAR_CLOSED)
-    expect(shift.endedAt).toBe(boundary)
-    expect(shift.save).toHaveBeenCalled()
-    expect(AuditLog.create).toHaveBeenCalledWith(
-      expect.objectContaining({ action: AuditAction.SHIFT_AUTO_CLOSED })
     )
     expect(res.status).toHaveBeenCalledWith(401)
     expect(res.json).toHaveBeenCalledWith({ message: 'El turno se cerró automáticamente al horario de cierre del bar' })
@@ -211,12 +215,13 @@ describe('authenticateCashier middleware', () => {
     vi.mocked(Bar.findById).mockResolvedValue({ closingTime: '06:00' } as any)
     vi.mocked(getLastClosingBoundary).mockReturnValue(boundary)
 
-    const req = buildMockRequest({ cookies: { cashier_access_token: 'valid-token' } })
+    const req = buildMockRequest({ cookies: { access_token: 'valid-token' } })
     const res = buildMockResponse()
     const next = buildMockNext()
 
     await authenticateCashier(req, res, next)
 
+    expect(closeBar).not.toHaveBeenCalled()
     expect(next).toHaveBeenCalled()
     expect(req.cashierContext).toEqual(
       expect.objectContaining({

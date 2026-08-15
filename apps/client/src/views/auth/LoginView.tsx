@@ -5,7 +5,8 @@ import { toastApiError } from "@/utils/apiError"
 import { toast } from "sonner"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { login, session } from "@/API/AuthAPI"
-import { Link } from "react-router"
+import { getContextOptions } from "@/API/ContextAPI"
+import { Link, useLocation, useNavigate } from "react-router"
 import { motion } from "motion/react"
 import { Eye, EyeOff, Zap, ArrowRight } from "lucide-react"
 import { Button } from "@/components/ui/Button"
@@ -13,15 +14,17 @@ import { Input } from "@/components/ui/Input"
 
 export default function LoginView() {
     const queryClient = useQueryClient()
+    const navigate = useNavigate()
+    const location = useLocation()
     const [showPassword, setShowPassword] = useState(false)
-    
+
     const defaultValues: LoginFormDataType = {
         email: '',
         password: ''
     }
 
-    const { register, handleSubmit, formState: { errors } } = useForm<LoginFormDataType>({ 
-        defaultValues 
+    const { register, handleSubmit, formState: { errors } } = useForm<LoginFormDataType>({
+        defaultValues
     })
 
     const { mutate, isPending } = useMutation({
@@ -30,7 +33,25 @@ export default function LoginView() {
             toast.success('Login exitoso')
             const user = await session()
             queryClient.setQueryData(['session'], user)
-            // AuthLayout se encarga del redirect post-login (respeta state.from / ?redirect)
+
+            // LB-66: si el usuario tiene más de un contexto posible (cajero
+            // y/o dueño de algún bar, además de "usuario"), lo mandamos al
+            // selector de contexto antes de dejar que AuthLayout lo mande a
+            // MainLayout. Si solo tiene la opción "usuario" (caso más
+            // común), no navegamos nada acá: AuthLayout se encarga del
+            // redirect post-login normal (respeta state.from / ?redirect),
+            // exactamente como antes de LB-66.
+            if (user?.profileComplete) {
+                const options = await getContextOptions()
+                if (options && (options.cashier.length > 0 || options.owner.length > 0)) {
+                    const fromState = (location.state as { from?: string } | null)?.from
+                    const redirectParam = new URLSearchParams(location.search).get('redirect')
+                    navigate('/select-context', {
+                        state: { from: fromState || redirectParam || undefined },
+                        replace: true,
+                    })
+                }
+            }
         },
         onError: toastApiError
     })

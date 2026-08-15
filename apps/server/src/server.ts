@@ -15,6 +15,7 @@ import leaderConsumptionRouter from './routes/leaderConsumptionRoute'
 import outingCheckInRouter from './routes/outingCheckInRoute'
 import outingCloseRouter from './routes/outingCloseRoute'
 import cashierRouter from './routes/cashierRoute'
+import contextRouter from './routes/contextRoute'
 
 if (process.env.NODE_ENV !== 'production') {
     process.loadEnvFile()
@@ -45,6 +46,7 @@ app.use('/api/consumptions', leaderConsumptionRouter)
 app.use('/api/outings/:outingId/check-in', outingCheckInRouter)
 app.use('/api/outings/:outingId/close', outingCloseRouter)
 app.use('/api/cashier', cashierRouter)
+app.use('/api/context', contextRouter)
 app.get('/api', (req, res) => {
     res.send('Hello World!')
 })

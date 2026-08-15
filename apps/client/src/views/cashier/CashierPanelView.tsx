@@ -6,7 +6,7 @@ import { useCashierAuth } from "@/hooks/useCashierAuth"
 
 export default function CashierPanelView() {
     const { barId } = useParams<{ barId: string }>()
-    const { data, logoutCashier } = useCashierAuth(barId)
+    const { data, logoutCashier } = useCashierAuth()
 
     const shiftStartedAt = data?.shift.startedAt
         ? new Date(data.shift.startedAt).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })

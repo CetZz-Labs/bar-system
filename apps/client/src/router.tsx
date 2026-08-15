@@ -19,11 +19,11 @@ import ConfirmConsumptionView from './views/groups/ConfirmConsumptionView'
 import BarRegisterView from './views/bar/BarRegisterView'
 import MyBarsView from './views/bar/MyBarsView'
 import BarProfileView from './views/bar/BarProfileView'
-import CashierLoginView from './views/cashier/CashierLoginView'
 import CashierPanelView from './views/cashier/CashierPanelView'
 import CashierSearchView from './views/cashier/CashierSearchView'
 import CashierOutingView from './views/cashier/CashierOutingView'
 import CashierLayout from './layouts/CashierLayout'
+import SelectContextView from './views/auth/SelectContextView'
 import NotFound from './views/NotFound'
 
 export default function Router() {
@@ -58,7 +58,12 @@ export default function Router() {
                 </Route>
                 <Route path="/unirse/:inviteCode" element={<JoinGroupView />} />
 
-                <Route path="/bar/:barId/cajero/login" element={<CashierLoginView />} />
+                {/* LB-66: selector de contexto post-login (usuario / cajero / dueño).
+                    Vive fuera de AuthLayout/MainLayout: se navega acá explícitamente
+                    desde LoginView cuando el usuario tiene más de un contexto posible,
+                    y el propio componente se encarga de guardar la sesión (useAuth). */}
+                <Route path="/select-context" element={<SelectContextView />} />
+
                 <Route element={<CashierLayout />}>
                     <Route path="/bar/:barId/cajero" element={<CashierPanelView />} />
                     <Route path="/bar/:barId/cajero/buscar" element={<CashierSearchView />} />

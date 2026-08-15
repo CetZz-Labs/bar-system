@@ -52,7 +52,7 @@ describe('useCashierAuth', () => {
   });
 
   it('should return initial loading state', async () => {
-    const { result } = renderHook(() => useCashierAuth('bar-1'), { wrapper: createWrapper() });
+    const { result } = renderHook(() => useCashierAuth(), { wrapper: createWrapper() });
 
     expect(result.current.isLoading).toBe(true);
     expect(result.current.data).toBeNull();
@@ -73,7 +73,7 @@ describe('useCashierAuth', () => {
     };
     mockCashierSession.mockResolvedValue(mockSession);
 
-    const { result } = renderHook(() => useCashierAuth('bar-1'), { wrapper: createWrapper() });
+    const { result } = renderHook(() => useCashierAuth(), { wrapper: createWrapper() });
 
     await waitFor(() => {
       expect(result.current.isLoading).toBe(false);
@@ -87,7 +87,7 @@ describe('useCashierAuth', () => {
   it('should handle invalid/expired session (401) gracefully', async () => {
     mockCashierSession.mockRejectedValue({ type: 'server', message: 'No autorizado', status: 401 });
 
-    const { result } = renderHook(() => useCashierAuth('bar-1'), { wrapper: createWrapper() });
+    const { result } = renderHook(() => useCashierAuth(), { wrapper: createWrapper() });
 
     await waitFor(() => {
       expect(result.current.isLoading).toBe(false);
@@ -98,7 +98,7 @@ describe('useCashierAuth', () => {
   });
 
   it('should call logout and clear cashier session data', async () => {
-    const { result } = renderHook(() => useCashierAuth('bar-1'), { wrapper: createWrapper() });
+    const { result } = renderHook(() => useCashierAuth(), { wrapper: createWrapper() });
 
     await waitFor(() => {
       expect(result.current.isLoading).toBe(false);
@@ -116,7 +116,7 @@ describe('useCashierAuth', () => {
   it('should handle logout error gracefully without throwing', async () => {
     mockCashierLogout.mockRejectedValue(new Error('Logout failed'));
 
-    const { result } = renderHook(() => useCashierAuth('bar-1'), { wrapper: createWrapper() });
+    const { result } = renderHook(() => useCashierAuth(), { wrapper: createWrapper() });
 
     await waitFor(() => {
       expect(result.current.isLoading).toBe(false);
