@@ -14,6 +14,7 @@ import {
   FileText,
   X,
   Trophy,
+  Gift,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -281,6 +282,22 @@ export default function BarProfileView() {
           Perfil del Bar
         </h1>
       </header>
+
+      {/* Entry point to the rewards ABM (LB-67 fixup): visible for any
+          BarUser of this bar (OWNER or CASHIER); BarRewardsView itself
+          handles the CASHIER read-only mode. */}
+      <div className="mb-6">
+        <Button
+          type="button"
+          variant="surface"
+          size="md"
+          fullWidth
+          onClick={() => navigate(`/bar/${id}/rewards`)}
+        >
+          <Gift size={20} className="text-lime" />
+          RECOMPENSAS DEL BAR
+        </Button>
+      </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-6 flex-1">
         {/* Cover Section */}

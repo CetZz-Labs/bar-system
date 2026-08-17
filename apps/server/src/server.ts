@@ -16,6 +16,8 @@ import outingCheckInRouter from './routes/outingCheckInRoute'
 import outingCloseRouter from './routes/outingCloseRoute'
 import cashierRouter from './routes/cashierRoute'
 import contextRouter from './routes/contextRoute'
+import rewardRouter from './routes/rewardRoute'
+import rewardAvailableRouter from './routes/rewardAvailableRoute'
 
 if (process.env.NODE_ENV !== 'production') {
     process.loadEnvFile()
@@ -47,6 +49,8 @@ app.use('/api/outings/:outingId/check-in', outingCheckInRouter)
 app.use('/api/outings/:outingId/close', outingCloseRouter)
 app.use('/api/cashier', cashierRouter)
 app.use('/api/context', contextRouter)
+app.use('/api/bars/:barId/rewards', rewardRouter)
+app.use('/api/rewards', rewardAvailableRouter)
 app.get('/api', (req, res) => {
     res.send('Hello World!')
 })

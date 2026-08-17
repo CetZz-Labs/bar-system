@@ -507,3 +507,67 @@ navegador mucho antes de que el token firmado expire realmente.
   (deuda preexistente, no introducida por este ticket) y `ContextController.select`
   no usa transacción Mongo para cierre-de-shift-previo + creación de shift +
   auditoría (mismo comportamiento que el código eliminado, no regresión).
+
+### [2026-08-17] - LB-67: ABM de recompensas del bar (OWNER)
+- **Dominio afectado:** Monorepo (Backend + Frontend)
+- **Subagentes involucrados:** Explorer (`progress/explorers/exp_LB-67.md`),
+  Implementer (`progress/implementers/impl_LB-67.md`), Reviewer
+  (`progress/reviewers/review_LB-67.md`).
+- **Contexto:** el ticket trataba LB-58 ("mismo patrón ABM") como predecesor
+  ya resuelto — el Explorer confirmó que **LB-58 no existe en el código**
+  (mismo patrón de sorpresa que LB-24 en LB-66), así que el ABM se construyó
+  desde cero, sin plantilla. Tampoco existía middleware/util "OWNER-only"
+  reusable: `verifyBarAccess` (`utils/barAccess.ts`) resuelve el rol pero
+  ningún controller lo usaba para rechazar CASHIER hasta este ticket.
+- **Resumen de Cambios:** Colección nueva `Reward` (autorizada explícitamente
+  por este ticket, mismo patrón de comentario que `PointsTransaction`/
+  `Consumption`): `bar`, `name`, `description?`, `pointsRequired` (int≥1),
+  `unlimitedStock` (bool), `stock?` (condicional), `status`
+  (`active|inactive`), `deletedAt` (soft-delete), índice único `{bar,name}`
+  (no parcial — ver hallazgo no bloqueante). `RewardController` nuevo:
+  `listRewards` (cualquier `BarUser`), `createReward`/`updateReward`/
+  `deleteReward` (solo OWNER vía `resolveOwnerAccess`, 403 a CASHIER),
+  `getAvailableRewards` (`GET /api/rewards/available?groupId=`, resuelve el
+  bar desde la `Outing` en `status: ACTIVE` del grupo, filtra
+  `status:active`+`deletedAt:null`+stock disponible). `E11000` (nombre
+  duplicado) traducido a 409 vía guard `isMongoDuplicateKeyError` (copiado
+  del patrón local de `OutingController.ts`, no extraído a `utils/`).
+  Validación cross-field stock/`unlimitedStock` resuelta con `.if()` de
+  express-validator en el `POST`, y en el controller para el `PUT` (depende
+  de estado persistido + body parcial). Frontend: `BarRewardsView.tsx`
+  (dominio `bar/`, ruta `/bar/:id/rewards`), lista de tarjetas (no `<table>`,
+  seguí el patrón de `MyBarsView.tsx`) con alta/edición inline vía
+  `react-hook-form` + `zodResolver` (se instaló `@hookform/resolvers`, no
+  estaba en el repo pese a ser obligatorio por `frontend.md`), toasts
+  `sonner` en las 3 mutaciones, controles condicionados a `isOwner` (rol
+  resuelto vía `getMyBars()`, no vía contexto de LB-66). 12+23 tests backend
+  nuevos, 5 tests frontend nuevos — 377/377 tests server, 173/173 tests
+  client, lint y build limpios en ambos.
+- **Veredicto del Reviewer:** `[APPROVED]` (primera pasada) - C1-C4
+  verificados contra el código real y los 5 comandos de verificación
+  corridos en vivo por el propio Reviewer. 3 hallazgos no bloqueantes: (1)
+  índice único `{bar,name}` no parcial — una recompensa soft-deleted sigue
+  bloqueando su nombre para siempre, sugerido `partialFilterExpression:
+  {deletedAt:null}` como backlog; (2) **`BarRewardsView` no tiene ningún
+  punto de entrada de navegación** (sin link desde `BarProfileView.tsx` ni
+  `MyBarsView.tsx`) — solo alcanzable por URL directa, el Reviewer
+  recomienda abrir un ticket de seguimiento inmediato antes de considerar la
+  feature usable en producción; (3) inconsistencia menor de nomenclatura
+  (`/api/bar/...` singular preexistente vs. `/api/bars/...` plural nuevo),
+  no viola ninguna regla, solo observación de consistencia.
+- **Fixup (2da pasada, mismo día, autorizado por el usuario vía
+  `AskUserQuestion`):** se resolvieron los hallazgos (1) y (2) antes de
+  mergear — (3) quedó explícitamente fuera de alcance. `Reward.ts` gana
+  `partialFilterExpression: { deletedAt: null }` en el índice único
+  `{bar,name}` (mismo patrón que `JoinRequest.ts`/`Outing.ts`), con test
+  nuevo que introspecciona `Reward.schema.indexes()` para confirmar la
+  configuración real (no cosmético). `BarProfileView.tsx` gana un botón
+  "RECOMPENSAS DEL BAR" (`variant="surface"`, entre `<header>` y `<form>`)
+  que navega a `/bar/:id/rewards`, visible a cualquier `BarUser` (el modo
+  solo-lectura de CASHIER lo maneja `BarRewardsView` internamente); se
+  descartó `MyBarsView.tsx` como punto de entrada por requerir tocar el
+  click-through de `BarCard`. Diff aditivo puro sobre `BarProfileView.tsx`
+  (17 líneas insertadas, 0 eliminadas). 378/378 tests server (+1 vs. la
+  primera pasada), 173/173 tests client, sin regresiones. Reviewer:
+  `[APPROVED]` (`progress/reviewers/review_LB-67-fixup.md`), sin cambios
+  requeridos.
