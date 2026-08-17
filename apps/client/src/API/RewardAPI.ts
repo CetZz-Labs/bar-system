@@ -1,6 +1,6 @@
 import api from "@/libs/axios";
 import { throwStandardError } from "@/utils/apiError";
-import type { CreateRewardInput, Reward, UpdateRewardInput } from "@/types/reward";
+import type { CreateRewardInput, GroupRewardsAvailability, Reward, UpdateRewardInput } from "@/types/reward";
 
 /** ABM de recompensas del bar (LB-67). GET/PUT/DELETE de canje (LB-68/LB-69)
  * quedan fuera de alcance. */
@@ -35,6 +35,21 @@ export async function updateReward(barId: string, rewardId: string, body: Update
 export async function deleteReward(barId: string, rewardId: string) {
   try {
     const { data } = await api.delete<{ message: string }>(`/bars/${barId}/rewards/${rewardId}`);
+    return data;
+  } catch (error) {
+    throwStandardError(error);
+  }
+}
+
+/**
+ * LB-72: recompensas disponibles + saldo de puntos del grupo en el bar del
+ * check-in activo, en un solo round-trip. El backend resuelve el bar
+ * internamente vía la salida ACTIVE del grupo (no confía en `barId` del
+ * cliente) — no lo mandamos como query param.
+ */
+export async function getGroupRewards(groupId: string) {
+  try {
+    const { data } = await api.get<GroupRewardsAvailability>(`/groups/${groupId}/rewards`);
     return data;
   } catch (error) {
     throwStandardError(error);

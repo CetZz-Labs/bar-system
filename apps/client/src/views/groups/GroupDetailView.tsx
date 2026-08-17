@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router";
 import { motion } from "motion/react";
-import { ArrowLeft, Users, Settings, AlertCircle, LogOut, UserMinus, Crown, Receipt } from "lucide-react";
+import { ArrowLeft, Users, Settings, AlertCircle, LogOut, UserMinus, Crown, Receipt, Gift } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Avatar } from "@/components/ui/Avatar";
 import { Modal } from "@/components/ui/Modal";
@@ -369,6 +369,19 @@ export default function GroupDetailView() {
             >
               <Receipt size={18} className="mr-2" />
               Confirmar consumo
+            </Button>
+          )}
+
+          {/* LB-72 — ver recompensas disponibles (líder / co-líder) */}
+          {(group.currentUserRole === "LEADER" || group.currentUserRole === "CO_LEADER") && (
+            <Button
+              variant="outline"
+              size="md"
+              className="w-full"
+              onClick={() => navigate(`/groups/${group.slug}/recompensas`)}
+            >
+              <Gift size={18} className="mr-2" />
+              Recompensas
             </Button>
           )}
 

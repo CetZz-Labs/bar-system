@@ -18,6 +18,8 @@ import cashierRouter from './routes/cashierRoute'
 import contextRouter from './routes/contextRoute'
 import rewardRouter from './routes/rewardRoute'
 import rewardAvailableRouter from './routes/rewardAvailableRoute'
+import groupRewardsRouter from './routes/groupRewardsRoute'
+import groupRedemptionsRouter from './routes/groupRedemptionsRoute'
 
 if (process.env.NODE_ENV !== 'production') {
     process.loadEnvFile()
@@ -41,6 +43,8 @@ app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')))
 app.use('/api/auth', authRouter)
 app.use('/api/users', userRouter)
 app.use('/api/groups/:groupId/outings', outingRouter)
+app.use('/api/groups/:groupId/rewards', groupRewardsRouter)
+app.use('/api/groups/:groupId/redemptions', groupRedemptionsRouter)
 app.use('/api/groups', groupRouter)
 app.use('/api/bar', barRouter)
 app.use('/api/outings/:outingId/consumptions', consumptionRouter)

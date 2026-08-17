@@ -571,3 +571,188 @@ navegador mucho antes de que el token firmado expire realmente.
   primera pasada), 173/173 tests client, sin regresiones. Reviewer:
   `[APPROVED]` (`progress/reviewers/review_LB-67-fixup.md`), sin cambios
   requeridos.
+
+### [2026-08-17] - LB-68: Iniciar canje de recompensa (líder) — PAUSADO a mitad de implementación (no cerrado)
+- **Dominio afectado:** Backend (parcial)
+- **Subagentes involucrados:** Explorer (`progress/explorers/exp_LB-68.md`),
+  Implementer (`progress/implementers/impl_LB-68-paused.md` — reporte de
+  pausa, no el cierre normal `impl_LB-68.md`). Sin Reviewer todavía — el
+  ticket no llegó a esa etapa.
+- **Contexto:** el vault de Obsidian se actualizó a mitad de sesión con
+  specs/contratos de Sprint 3 que no existían al arrancar (ruta del vault
+  corregida de un path hardcodeado en `AGENTS.md` a `progress/vault.local.md`,
+  local por-desarrollador — ver entrada de infraestructura más abajo). El
+  spec real de LB-68 reveló que depende de **LB-72** ("Ver recompensas
+  disponibles"), que a su vez estaba bloqueado por LB-70 (Franco Espinoza,
+  saldo por bar, sin empezar). El usuario decidió (vía `AskUserQuestion`)
+  pausar LB-68 y resolver LB-72 primero.
+- **Resumen de lo ya construido (sin rutear, código muerto hasta que se
+  retome):** colección nueva `Redemption` (autorizada por el ticket, patrón
+  `Consumption`), `utils/redemptionQr.ts` (módulo paralelo a
+  `consumptionQr.ts`, no reusado tal cual porque ese estaba acoplado a
+  `Consumption` en 3/4 funciones — hallazgo del Explorer), `utils/redemptionAvailability.ts`
+  (`getAvailablePointsForBar`/`getAvailableStock`, disponibilidad de puntos y
+  stock calculada en vivo, SIN mutar `Group.pointsBalance`/`Reward.stock`
+  durante el `HOLD` — decisión de arquitectura deliberada para que la reserva
+  sea cancelable/expirable sin dejar rastro que revertir), `utils/redemptionExpiry.ts`
+  (expiración lazy, sin cron, mismo patrón que `closeBar.ts`),
+  `RedemptionController` (`create`/`cancel`/`list`/`getAvailablePoints`,
+  ninguno rutado en `server.ts` todavía). `AuditLog.AuditAction` extendido
+  con `REDEMPTION_GENERATED/CANCELLED/EXPIRED`. `pointsHub.ts` gana
+  `emitAvailablePointsForBar` (evento `available_points_updated`).
+  `tsc --noEmit` limpio, 378/378 tests server sin regresiones.
+- **Pendiente explícito para cuando se retome** (documentado en el archivo de
+  pausa): mover el consumo de `getAvailablePointsForBar` para que lo use el
+  endpoint de LB-72 en vez de exponer uno propio (ya resuelto por LB-72, ver
+  entrada siguiente); corregir el path de creación a
+  `POST /api/groups/:groupId/redemptions` (anidado, no `/api/redemptions`
+  plano); agregar estado `ABANDONED` a `Redemption` + lógica en
+  `closeOuting.ts` para abandonar canjes `HELD` al cerrar la salida (LB-62),
+  mismo patrón que ya existe ahí para `Consumption` vía `toAbandon` — el
+  Leader había descartado esto por error al delegar la primera vez, corregido
+  después de leer el spec real; rutas, tests, y todo el frontend (no
+  empezado).
+- **Veredicto:** N/A — ticket no cerrado, en pausa. No se transicionó en
+  Jira. **Actualización: retomado y CERRADO el mismo día — ver la entrada
+  siguiente a esta, después de la de LB-72, con el detalle completo del
+  cierre.**
+
+### [2026-08-17] - LB-72: Ver recompensas disponibles (líder/grupo)
+- **Dominio afectado:** Monorepo (Backend + Frontend)
+- **Subagentes involucrados:** Explorer (`progress/explorers/exp_LB-72.md`),
+  Implementer (`progress/implementers/impl_LB-72.md`), Reviewer
+  (`progress/reviewers/review_LB-72.md`).
+- **Contexto:** bloqueaba a LB-68 (ver entrada anterior) y a su vez estaba
+  bloqueado por LB-70 (Franco Espinoza, "saldo por bar", sin empezar) — el
+  contrato del vault (`contratos/balance-history-endpoints.md`) anticipaba
+  explícitamente que LB-70 y LB-72 comparten el cálculo de saldo por bar
+  ("¿mismo servicio interno?"). Resuelto sin esperar a Franco: el Explorer
+  encontró que el trabajo pausado de LB-68 ya había construido exactamente
+  ese cálculo (`utils/redemptionAvailability.ts:getAvailablePointsForBar`,
+  compilando y sin persistir nada) — LB-72 lo reusó tal cual en vez de
+  reinventarlo o esperar.
+- **Resumen de cambios:** endpoint único `GET /api/groups/:groupId/rewards`
+  → `{ rewards, balance }` (`GroupRewardsController.getAvailable`,
+  `routes/groupRewardsRoute.ts` con `Router({mergeParams:true})`, montado en
+  `server.ts` antes del catch-all de `/api/groups`, mismo patrón que
+  `outingRoute.ts`). El `barId` que manda el cliente por query string se
+  ignora deliberadamente — el backend resuelve el bar internamente vía
+  `Outing.findOne({group, status: ACTIVE})`, igual criterio que
+  `RewardController.getAvailableRewards`/`RedemptionController.getAvailablePoints`
+  (decisión de arquitectura del Leader, ningún endpoint de este dominio
+  confía en un bar provisto por el cliente). Índice nuevo `{group,bar}` en
+  `PointsTransaction` (aditivo, sin precedente previo, señalado como gap real
+  por el Explorer). Frontend: vista nueva `GroupRewardsView.tsx` (no una
+  "tab" literal como decía el texto del ticket — no existe sistema de tabs en
+  el repo, es una vista-ruta hermana `/groups/:slug/recompensas`, mismo
+  patrón de navegación que `ConfirmConsumptionView.tsx`), botón "Recompensas"
+  condicional a LEADER/CO_LEADER en `GroupDetailView.tsx`, barra de progreso
+  construida a mano con Tailwind (sin componente reusable en el repo),
+  `useGroupPointsSocket` extendido con un tercer callback opcional
+  (`onAvailablePoints`) para escuchar `available_points_updated` en la misma
+  conexión/room existente, sin abrir un socket nuevo. Botón "Canjear" queda
+  deshabilitado ("Próximamente", sin `onClick`) porque LB-68 (quien lo
+  implementaría) está pausado. Ningún archivo de LB-68 fue modificado por
+  este ticket — solo se importó `getAvailablePointsForBar` sin tocarlo,
+  verificado explícitamente por el Reviewer vía `git status`/`git diff`.
+  383/383 tests server, 176/176 tests client, tsc/eslint/build limpios en
+  ambos lados.
+- **Veredicto del Reviewer:** `[APPROVED]` (primera pasada) - C1-C4
+  verificados contra el código real y los 5 comandos de verificación
+  corridos en vivo por el propio Reviewer. 3 hallazgos no bloqueantes: (1)
+  `frontend.md` exige toasts `sonner` también para errores de queries, pero
+  el patrón real ya aprobado (`BarRewardsView.tsx`, LB-67) solo los usa para
+  mutaciones — `GroupRewardsView` sigue ese precedente real, no el texto
+  literal de la regla, señalado para que el Leader decida si actualiza
+  `frontend.md` o abre una tarea aparte; (2) el Implementer duplicó la query
+  Mongoose de recompensas disponibles (`Reward.find` + `toRewardDTO`) en vez
+  de envolver/extender `RewardController.getAvailableRewards` como pedía
+  literalmente el Leader — justificado porque `RewardController.ts` no
+  exporta esas funciones y es de otro ticket ya cerrado (mismo patrón de
+  duplicación intencional que ese archivo ya documenta para
+  `isMongoDuplicateKeyError`), riesgo de desincronización futura si el
+  filtro cambia de un lado y no del otro; (3) el endpoint backend no
+  restringe por rol (cualquier miembro del grupo puede pegarle directo, la
+  restricción a LEADER/CO_LEADER vive solo en el botón del frontend) — mismo
+  criterio que `RewardController.getAvailableRewards`, no contradice ningún
+  criterio de aceptación literal del ticket.
+
+### [2026-08-17] - Infraestructura: ruta del vault de Obsidian movida de `AGENTS.md` a archivo local por-desarrollador
+- **Dominio afectado:** Harness de IA (`AGENTS.md`, `progress/`), no
+  `apps/server`/`apps/client`.
+- **Contexto:** `AGENTS.md` (compartido, versionado) tenía hardcodeado un
+  path de Windows específico de una máquina (`G:\_dev\cetzzOrganization\...`)
+  para el vault de Obsidian del equipo. El usuario señaló que, al ser
+  `AGENTS.md` compartido por todo el equipo, cada desarrollador terminaría
+  pisando esa línea con su propia ruta local.
+- **Resumen de cambios:** creado `progress/vault.local.md` (cubierto por el
+  patrón `progress/*` ya existente en `.gitignore` — no se versiona) con la
+  ruta real del vault en la máquina de este usuario. `AGENTS.md` editado para
+  apuntar genéricamente a `progress/vault.local.md` en vez de a un path fijo,
+  con instrucción de que cada desarrollador cree el suyo si no existe
+  todavía. Hecho directamente por el Leader (no es código de negocio de
+  `apps/server`/`apps/client`, es documentación del propio arnés de
+  orquestación).
+- **Veredicto:** N/A — no aplica ciclo de Reviewer, es infraestructura del
+  harness, no una feature del producto.
+
+### [2026-08-17] - LB-68: Iniciar canje de recompensa (líder) — QR + reserva — CIERRE (retomado tras LB-72)
+- **Dominio afectado:** Monorepo (Backend + Frontend)
+- **Subagentes involucrados:** Explorer (`progress/explorers/exp_LB-68.md`,
+  reusado también `exp_LB-72.md`), Implementer (tres pasadas:
+  `progress/implementers/impl_LB-68-paused.md` — primera, solo backend,
+  pausada por el bloqueo de LB-72; `progress/implementers/impl_LB-68.md`
+  secciones 1-8 — segunda pasada, completa el ticket; sección 9 — tercera
+  pasada, fix de cobertura), Reviewer (`progress/reviewers/review_LB-68.md`,
+  dos pasadas: primera `[CHANGES_REQUESTED]`, segunda `[APPROVED]`).
+- **Resumen de cambios (acumulado de las 3 pasadas):** endpoint anidado
+  `POST/PATCH/GET /api/groups/:groupId/redemptions[...]`
+  (`groupRedemptionsRoute.ts`, `Router({mergeParams:true})`, montado en
+  `server.ts` antes del catch-all de `/api/groups`, mismo patrón que
+  `groupRewardsRoute.ts` de LB-72). Colección nueva `Redemption`
+  (`HELD/VALIDATED/REJECTED/CANCELLED/EXPIRED/ABANDONED`), disponibilidad de
+  puntos/stock calculada en vivo sin mutar `Group.pointsBalance`/`Reward.stock`
+  durante el HOLD (`utils/redemptionAvailability.ts`, mismo archivo que ya
+  reusa `GroupRewardsController` de LB-72 sin duplicarlo), expiración lazy
+  sin cron (`utils/redemptionExpiry.ts`), módulo paralelo de QR/rate-limiting
+  propio (`utils/redemptionQr.ts`, TTL 20 min, no comparte `Map` con
+  `consumptionQr.ts`). `closeOuting.ts` gana un bloque nuevo que abandona
+  (`ABANDONED`) los `Redemption` `HELD` de la salida al cerrarla, mismo
+  patrón que ya existía ahí para `Consumption` vía `toAbandon` — libera el
+  hold de inmediato en vez de esperar el TTL. `RedemptionController.getAvailablePoints`
+  (endpoint de la primera pasada, nunca ruteado) fue eliminado por quedar
+  100% redundante con el endpoint de LB-72. `cancel` scopea por
+  `{_id, group}` (no solo `{_id}`), mismo criterio que
+  `OutingController.cancelOuting`, para que un canje no sea cancelable a
+  través de una URL con `groupId` ajeno. Frontend: el botón "Canjear" de
+  `GroupRewardsView.tsx` (dejado deshabilitado por LB-72 a propósito) queda
+  conectado — modal de confirmación con el texto exacto pedido por el
+  ticket, QR + código manual + vencimiento al confirmar (estilo replicado
+  de `CashierOutingView.tsx`/LB-60, sin componente compartido porque no
+  existe ninguno en el repo), listado de canjes `HELD` propios con botón
+  cancelar, saldo en vivo vía el `onAvailablePoints` que ya había extendido
+  LB-72 más un update optimista con la respuesta de `create`. Ningún archivo
+  de LB-72 fue modificado en ninguna de las 3 pasadas (verificado
+  explícitamente por el Reviewer, no solo declarado por el Implementer).
+- **Ciclo de revisión:** primera pasada del Reviewer `[CHANGES_REQUESTED]`
+  — único bloqueo real: `pnpm --filter @bar/server test:coverage` fallaba
+  (branches 78.44% < 80%) porque `redemptionQr.ts` (10.9% stmts) y
+  `redemptionExpiry.ts` (0% stmts) quedaban siempre mockeados en los tests
+  del controller, nunca ejercitados de forma real, y `getAvailableStock`
+  tampoco tenía cobertura directa — el Implementer había corrido solo
+  `vitest run` (que sí pasaba) y nunca `test:coverage`, el comando real que
+  exige `CHECKPOINTS.md` C4 cuando se toca `utils/`. Todo lo demás (C1-C3,
+  criterios de aceptación literales, decisiones de arquitectura, integración
+  sin regresión con LB-72, scoping de `cancel`) ya había quedado verificado
+  y correcto en esa primera pasada. Tercera pasada del Implementer: agregó
+  exclusivamente 3 archivos de test nuevos (`redemptionQr.test.ts` —21
+  tests, calcado del precedente `consumptionQr.test.ts`—,
+  `redemptionExpiry.test.ts`, `redemptionAvailability.test.ts`), CERO
+  archivos de producción tocados. `test:coverage` pasó a
+  94.27%/88.33%/93.75%/95.02% (stmts/branches/funcs/lines), 416/416 tests
+  totales.
+- **Veredicto del Reviewer:** `[APPROVED]` (segunda pasada, tras el fix de
+  cobertura) — C1-C4 verificados en vivo por el propio Reviewer en ambas
+  pasadas (incluye `test:coverage` corrido dos veces, antes y después del
+  fix), sin necesidad de re-auditar C1-C3/criterios de aceptación que ya
+  habían quedado correctos en la primera pasada.

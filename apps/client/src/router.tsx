@@ -16,6 +16,7 @@ import GroupDetailView from './views/groups/GroupDetailView'
 import GroupsListView from './views/groups/GroupsListView'
 import JoinGroupView from './views/groups/JoinGroupView'
 import ConfirmConsumptionView from './views/groups/ConfirmConsumptionView'
+import GroupRewardsView from './views/groups/GroupRewardsView'
 import BarRegisterView from './views/bar/BarRegisterView'
 import MyBarsView from './views/bar/MyBarsView'
 import BarProfileView from './views/bar/BarProfileView'
@@ -53,6 +54,7 @@ export default function Router() {
                     <Route path="/groups/create" element={<GroupCreateView />} />
                     <Route path="/groups/:slug" element={<GroupDetailView />} />
                     <Route path="/groups/:slug/confirmar-consumo" element={<ConfirmConsumptionView />} />
+                    <Route path="/groups/:slug/recompensas" element={<GroupRewardsView />} />
                     <Route path="/bar/registro" element={<BarRegisterView />} />
                     <Route path="/bar/mis-bares" element={<MyBarsView />} />
                     <Route path="/bar/:id/perfil" element={<BarProfileView />} />

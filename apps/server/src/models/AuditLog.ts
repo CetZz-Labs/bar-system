@@ -12,6 +12,12 @@ export enum AuditAction {
     CONSUMPTION_DISPUTED = 'CONSUMPTION_DISPUTED',
     OUTING_CLOSED = 'OUTING_CLOSED',
     OUTING_AUTO_CLOSED = 'OUTING_AUTO_CLOSED',
+    // LB-68: canje de recompensas (líder). REDEMPTION_VALIDATED/REJECTED
+    // quedan para LB-69 (validación por el cajero), no se agregan acá
+    // porque LB-68 no llega a esos estados.
+    REDEMPTION_GENERATED = 'REDEMPTION_GENERATED',
+    REDEMPTION_CANCELLED = 'REDEMPTION_CANCELLED',
+    REDEMPTION_EXPIRED = 'REDEMPTION_EXPIRED',
 }
 
 export interface IAuditLog extends Document {
@@ -23,6 +29,9 @@ export interface IAuditLog extends Document {
     amount?: number;
     outing?: Types.ObjectId;
     group?: Types.ObjectId;
+    /** LB-68: referencia al canje auditado (REDEMPTION_*). Opcional, mismo
+     * criterio que `outing`/`group`: no todas las acciones lo usan. */
+    redemption?: Types.ObjectId;
     createdAt: Date;
 }
 
@@ -62,6 +71,10 @@ const auditLogSchema = new Schema<IAuditLog>({
     group: {
         type: Schema.Types.ObjectId,
         ref: 'Group',
+    },
+    redemption: {
+        type: Schema.Types.ObjectId,
+        ref: 'Redemption',
     },
 }, {
     timestamps: true,

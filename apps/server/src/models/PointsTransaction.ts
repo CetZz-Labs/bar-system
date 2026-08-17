@@ -84,6 +84,13 @@ pointsTransactionSchema.index(
 
 pointsTransactionSchema.index({ group: 1, createdAt: -1 });
 
+// LB-72: getAvailablePointsForBar (utils/redemptionAvailability.ts) hace
+// find({group, bar}) para calcular el saldo disponible por bar en cada
+// carga de la vista de recompensas — sin este índice compuesto, ese find
+// solo aprovecha el índice individual de `group` y filtra `bar` sin índice
+// dedicado. Aditivo, no cambia comportamiento, solo performance.
+pointsTransactionSchema.index({ group: 1, bar: 1 });
+
 const PointsTransaction = model<IPointsTransaction>('PointsTransaction', pointsTransactionSchema);
 
 export default PointsTransaction;

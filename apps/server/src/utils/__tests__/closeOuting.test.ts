@@ -5,11 +5,13 @@ import { closeOuting } from '../closeOuting'
 import Outing, { ClosureReason, OutingStatus } from '../../models/Outing'
 import Consumption, { ConsumptionStatus } from '../../models/Consumption'
 import PointsTransaction from '../../models/PointsTransaction'
+import Redemption, { RedemptionStatus } from '../../models/Redemption'
 import Group from '../../models/Group'
 import Bar from '../../models/Bar'
 import Notification from '../../models/Notification'
 import AuditLog from '../../models/AuditLog'
 import * as consumptionQr from '../consumptionQr'
+import * as redemptionQr from '../redemptionQr'
 
 vi.mock('../../models/Outing', async () => {
   const actual = await vi.importActual<typeof import('../../models/Outing')>('../../models/Outing')
@@ -30,6 +32,13 @@ vi.mock('../../models/Consumption', async () => {
 vi.mock('../../models/PointsTransaction', () => ({
   default: { find: vi.fn() },
 }))
+vi.mock('../../models/Redemption', async () => {
+  const actual = await vi.importActual<typeof import('../../models/Redemption')>('../../models/Redemption')
+  return {
+    ...actual,
+    default: { find: vi.fn() },
+  }
+})
 vi.mock('../../models/Group', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../models/Group')>()
   return {
@@ -65,6 +74,9 @@ vi.mock('../../models/AuditLog', async () => {
 vi.mock('../consumptionQr', () => ({
   invalidate: vi.fn(),
 }))
+vi.mock('../redemptionQr', () => ({
+  invalidate: vi.fn(),
+}))
 
 describe('closeOuting', () => {
   beforeEach(() => {
@@ -72,9 +84,15 @@ describe('closeOuting', () => {
     vi.mocked(PointsTransaction.find).mockReturnValue({
       lean: vi.fn().mockResolvedValue([]),
     } as any)
+    // Sin canjes HELD pendientes por default; los tests que sí los ejercitan
+    // sobreescriben este mock puntualmente.
+    vi.mocked(Redemption.find).mockReturnValue({
+      session: vi.fn().mockResolvedValue([]),
+    } as any)
     vi.mocked(Notification.insertMany).mockResolvedValue([] as any)
     vi.mocked(AuditLog.create).mockResolvedValue([] as any)
     vi.mocked(consumptionQr.invalidate).mockResolvedValue(undefined)
+    vi.mocked(redemptionQr.invalidate).mockResolvedValue(undefined)
   })
 
   it('is idempotent when already COMPLETED with summary', async () => {
@@ -193,6 +211,73 @@ describe('closeOuting', () => {
     expect(result?.summary.confirmedCount).toBe(1)
     expect(Notification.insertMany).toHaveBeenCalled()
     expect(consumptionQr.invalidate).toHaveBeenCalledTimes(2)
+  })
+
+  it('abandons HELD redemptions of the outing when closing (LB-68, segunda pasada)', async () => {
+    const session = {
+      startTransaction: vi.fn(),
+      commitTransaction: vi.fn(),
+      abortTransaction: vi.fn(),
+      endSession: vi.fn(),
+      inTransaction: vi.fn().mockReturnValue(false),
+    }
+    vi.spyOn(mongoose, 'startSession').mockResolvedValue(session as any)
+
+    const outingId = new Types.ObjectId()
+    const groupId = new Types.ObjectId()
+    const barId = new Types.ObjectId()
+    const actorId = new Types.ObjectId()
+    const save = vi.fn().mockResolvedValue(undefined)
+
+    const heldRedemption = {
+      _id: new Types.ObjectId(),
+      status: RedemptionStatus.HELD,
+      invalidatedAt: null as Date | null,
+      save,
+    }
+
+    const fresh = {
+      _id: outingId,
+      group: groupId,
+      bar: barId,
+      status: OutingStatus.ACTIVE,
+      checkedInAt: new Date('2026-08-12T22:00:00Z'),
+      save,
+    }
+
+    vi.mocked(Outing.findById)
+      .mockResolvedValueOnce({
+        _id: outingId,
+        status: OutingStatus.ACTIVE,
+        group: groupId,
+        bar: barId,
+        checkedInAt: fresh.checkedInAt,
+      } as any)
+      .mockReturnValueOnce({
+        session: vi.fn().mockResolvedValue(fresh),
+      } as any)
+
+    vi.mocked(Consumption.find)
+      .mockReturnValueOnce({ session: vi.fn().mockResolvedValue([]) } as any)
+      .mockReturnValueOnce({ lean: vi.fn().mockResolvedValue([]) } as any)
+
+    vi.mocked(Redemption.find).mockReturnValue({
+      session: vi.fn().mockResolvedValue([heldRedemption]),
+    } as any)
+
+    const result = await closeOuting(outingId.toString(), {
+      reason: ClosureReason.MANUAL,
+      closedBy: actorId,
+      actorUserId: actorId,
+    })
+
+    expect(result?.alreadyClosed).toBe(false)
+    expect(Redemption.find).toHaveBeenCalledWith(
+      expect.objectContaining({ outing: outingId, status: RedemptionStatus.HELD })
+    )
+    expect(heldRedemption.status).toBe(RedemptionStatus.ABANDONED)
+    expect(heldRedemption.invalidatedAt).not.toBeNull()
+    expect(redemptionQr.invalidate).toHaveBeenCalledWith(heldRedemption._id.toString())
   })
 
   it('closes PENDING as NO_SHOW without group notification when no confirmed consumptions', async () => {

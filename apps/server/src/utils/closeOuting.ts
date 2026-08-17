@@ -9,11 +9,13 @@ import Outing, {
 export { ClosureReason };
 import Consumption, { ConsumptionStatus } from '../models/Consumption';
 import PointsTransaction from '../models/PointsTransaction';
+import Redemption, { RedemptionStatus } from '../models/Redemption';
 import Group from '../models/Group';
 import Bar from '../models/Bar';
 import Notification, { NotificationType } from '../models/Notification';
 import AuditLog, { AuditAction } from '../models/AuditLog';
 import { invalidate } from './consumptionQr';
+import { invalidate as invalidateRedemption } from './redemptionQr';
 
 const ABANDONABLE: ConsumptionStatus[] = [
     ConsumptionStatus.PENDING_LEADER_CONFIRMATION,
@@ -132,6 +134,16 @@ export async function closeOuting(
         disputedCount = toAbandon.filter((c) => c.status === ConsumptionStatus.DISPUTED).length;
         abandonedCount = toAbandon.length;
 
+        // LB-68 (segunda pasada): mismo criterio que arriba para Consumption —
+        // libera proactivamente los canjes HELD de la salida al cerrarla, en
+        // vez de esperar hasta 20 min de TTL para que la expiración lazy los
+        // resuelva. Al salir de HELD, utils/redemptionAvailability.ts ya no
+        // los cuenta como reservados.
+        const redemptionsToAbandon = await Redemption.find({
+            outing: fresh._id,
+            status: RedemptionStatus.HELD,
+        }).session(session);
+
         const closedAt = new Date();
         const nextStatus =
             fresh.status === OutingStatus.ACTIVE
@@ -143,6 +155,13 @@ export async function closeOuting(
             consumption.invalidatedAt = closedAt;
             await consumption.save({ session });
             await invalidate(consumption._id.toString());
+        }
+
+        for (const redemption of redemptionsToAbandon) {
+            redemption.status = RedemptionStatus.ABANDONED;
+            redemption.invalidatedAt = closedAt;
+            await redemption.save({ session });
+            await invalidateRedemption(redemption._id.toString());
         }
 
         // Resumen con conteos ya calculados; confirmed/points se leen de DB

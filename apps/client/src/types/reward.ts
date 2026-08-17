@@ -83,3 +83,13 @@ export interface UpdateRewardInput {
   stock?: number;
   status?: RewardStatus;
 }
+
+/**
+ * LB-72: respuesta de `GET /api/groups/:groupId/rewards`. `balance` es el
+ * saldo de puntos del grupo disponible en el bar del check-in activo
+ * (0 y `rewards: []` si no hay check-in activo).
+ */
+export interface GroupRewardsAvailability {
+  rewards: Reward[];
+  balance: number;
+}
