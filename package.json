@@ -1,7 +1,7 @@
 {
   "name": "bar-system",
   "private": true,
-  "packageManager": "pnpm@11.18.0",
+  "packageManager": "pnpm@11.22.0",
   "scripts": {
     "dev": "pnpm -r --parallel dev",
     "dev:web": "pnpm --filter @bar/client dev",
