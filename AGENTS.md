@@ -124,7 +124,7 @@ Reviewer, en disco, dejó constancia de que `CHECKPOINTS.md` está satisfecho.
 | `.claude/agents/` | Definiciones de los subagentes (Leader, Implementer, Reviewer, Explorer) | Si estás orquestando o delegando trabajo |
 | `apps/server/` | Código del backend (Express + Mongoose) | Solo el Implementer, para implementar |
 | `apps/client/` | Código del frontend (React + Vite) | Solo el Implementer, para implementar |
-| `G:\_dev\cetzzOrganization\obsidian\projects` (externo, fuera de este repo — vault CetZz local) | Vault de Obsidian del equipo: contexto de producto, decisiones técnicas y tickets Jira en `12-Jira/`. Specs de bar en `02-Proyectos/bar-system/` | El Leader, al leer un ticket de Jira, para ampliar contexto que no esté en la descripción del propio ticket |
+| `progress/vault.local.md` (local, no versionado — ver `.gitignore`) | Apunta a la ruta real del vault de Obsidian del equipo en la máquina de cada desarrollador (contexto de producto, decisiones técnicas, tickets Jira en `12-Jira/`, specs de bar en `02-Proyectos/bar-system/`). La ruta del vault **varía por máquina** — no se versiona un path fijo en este archivo compartido. Si `progress/vault.local.md` no existe todavía en tu copia, creálo con la ruta real de tu vault antes de asumir que no hay vault disponible | El Leader, al leer un ticket de Jira, para ampliar contexto que no esté en la descripción del propio ticket |
 
 ---
 
