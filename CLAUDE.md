@@ -90,3 +90,18 @@ de `[APPROVED]`, referenciado en su archivo de `progress/reviewers/`.
 Un veredicto `[CHANGES_REQUESTED]` significa que el ticket vuelve al
 `implementer` — vos no lo cerrás, no lo "arreglás" parcialmente, y no lo
 reinterpretás como aprobado.
+
+### Recordatorio de pruebas manuales (no bloqueante)
+
+Justo antes de transicionar un ticket a "Done" en Jira — con el `reviewer`
+ya en `[APPROVED]` — recordale al desarrollador (el humano con quien
+estás hablando) que puede probar el flujo manualmente en la app antes de
+darlo por cerrado, especialmente en tickets de UI con varios pasos o
+estados. `CHECKPOINTS.md` (comandos automatizados) no reemplaza probar el
+flujo real con las manos.
+
+Esto es **un recordatorio, no un gate**: la decisión de hacer o no esa
+prueba manual queda enteramente en manos del desarrollador. No lo agregues
+como checkbox en `CHECKPOINTS.md`, no bloquees la transición a "Done"
+esperando confirmación de que se hizo, y no lo repitas si el desarrollador
+ya dijo que no quiere ese recordatorio en esta sesión.
