@@ -13,6 +13,7 @@ import outingRouter from './routes/outingRoute'
 import consumptionRouter from './routes/consumptionRoute'
 import outingCheckInRouter from './routes/outingCheckInRoute'
 import cashierRouter from './routes/cashierRoute'
+import drinkCategoryRouter from './routes/drinkCategoryRoute'
 
 if (process.env.NODE_ENV !== 'production') {
     process.loadEnvFile()
@@ -38,6 +39,7 @@ app.use('/api/users', userRouter)
 app.use('/api/groups/:groupId/outings', outingRouter)
 app.use('/api/groups', groupRouter)
 app.use('/api/bar', barRouter)
+app.use('/api/bar/:barId/categories', drinkCategoryRouter)
 app.use('/api/outings/:outingId/consumptions', consumptionRouter)
 app.use('/api/outings/:outingId/check-in', outingCheckInRouter)
 app.use('/api/cashier', cashierRouter)

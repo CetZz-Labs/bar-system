@@ -5,6 +5,7 @@ type JWTPayload = {
     id: Types.ObjectId
     barId?: Types.ObjectId
     role?: string
+    shiftId?: Types.ObjectId
 }
 
 type JWTExpiresIn = NonNullable<jwt.SignOptions['expiresIn']>

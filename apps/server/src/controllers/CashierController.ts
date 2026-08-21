@@ -7,6 +7,7 @@ import AuditLog, { AuditAction } from "../models/AuditLog";
 import { checkPassword } from "../utils/auth";
 import { generateJWT } from "../utils/jwt";
 import { searchGroupsForCashier } from "../utils/cashierSearch";
+import { generateShiftSummary } from "../utils/shiftSummary";
 
 const CASHIER_COOKIE_NAME = 'cashier_access_token';
 const CASHIER_TOKEN_MAX_AGE = 15 * 24 * 60 * 60 * 1000; // 15 días en ms
@@ -51,6 +52,10 @@ export class CashierController {
                 previousShift.endReason = ShiftEndReason.KICKED_OUT;
                 await previousShift.save();
 
+                if (previousShift._id) {
+                    await generateShiftSummary(previousShift._id.toString());
+                }
+
                 await AuditLog.create({
                     bar: barId,
                     user: user._id,
@@ -77,7 +82,7 @@ export class CashierController {
                 ip: req.ip,
             });
 
-            const token = generateJWT({ id: user._id, barId, role: barUser.role });
+            const token = generateJWT({ id: user._id, barId, role: barUser.role, shiftId: shift._id });
 
             res.cookie(CASHIER_COOKIE_NAME, token, {
                 httpOnly: true,
@@ -131,35 +136,55 @@ export class CashierController {
         }
     };
 
-    static logout = async (req: Request, res: Response) => {
+    private static completeShift = async (req: Request, res: Response, clearCookie: boolean) => {
         try {
             const { bar: barId, user, shift } = req.cashierContext!;
 
-            shift.endedAt = new Date();
-            shift.endReason = ShiftEndReason.MANUAL;
-            await shift.save();
+            const alreadyClosed = Boolean(shift.endedAt);
 
-            await AuditLog.create({
-                bar: barId,
-                user: user._id,
-                action: AuditAction.CASHIER_LOGOUT,
-                deviceInfo: shift.deviceInfo,
-                ip: req.ip,
+            if (!alreadyClosed) {
+                shift.endedAt = new Date();
+                shift.endReason = ShiftEndReason.MANUAL;
+                await shift.save();
+            }
+
+            const summary = await generateShiftSummary(shift._id.toString());
+
+            if (!alreadyClosed) {
+                await AuditLog.create({
+                    bar: barId,
+                    user: user._id,
+                    action: AuditAction.CASHIER_LOGOUT,
+                    deviceInfo: shift.deviceInfo,
+                    ip: req.ip,
+                });
+            }
+
+            if (clearCookie) {
+                res.clearCookie(CASHIER_COOKIE_NAME, {
+                    httpOnly: true,
+                    secure: process.env.NODE_ENV === 'production',
+                    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+                    path: '/',
+                });
+            }
+
+            res.status(200).json({
+                message: 'Turno cerrado correctamente',
+                shiftId: shift._id,
+                summary,
             });
-
-            res.clearCookie(CASHIER_COOKIE_NAME, {
-                httpOnly: true,
-                secure: process.env.NODE_ENV === 'production',
-                sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-                path: '/',
-            });
-
-            res.status(200).json({ message: 'Turno cerrado correctamente' });
         } catch (error) {
             console.error(error);
             res.status(500).json({ message: 'Hubo un error al cerrar el turno' });
         }
     };
+
+    static closeShift = async (req: Request, res: Response) =>
+        CashierController.completeShift(req, res, false);
+
+    static logout = async (req: Request, res: Response) =>
+        CashierController.completeShift(req, res, true);
 
     /**
      * GET /api/cashier/groups/search?q=

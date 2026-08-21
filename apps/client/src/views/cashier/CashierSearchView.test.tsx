@@ -56,7 +56,7 @@ function renderView() {
 
 describe('CashierSearchView', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
   });
 
   it('loads the default listing on mount, without any user interaction', async () => {
@@ -83,6 +83,9 @@ describe('CashierSearchView', () => {
 
     await user.type(screen.getByLabelText('Buscar grupo'), 'Pibes');
 
+    await waitFor(() => {
+      expect(CashierAPI.searchCashierGroupsRaw).toHaveBeenCalledWith('Pibes');
+    });
     expect(await screen.findByText('Los Pibes')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Iniciar check-in' }));
@@ -114,6 +117,9 @@ describe('CashierSearchView', () => {
     renderView();
 
     await user.type(screen.getByLabelText('Buscar grupo'), 'Pibes');
+    await waitFor(() => {
+      expect(CashierAPI.searchCashierGroupsRaw).toHaveBeenCalledWith('Pibes');
+    });
     expect(await screen.findByText('Los Pibes')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Iniciar check-in' }));

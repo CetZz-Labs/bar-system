@@ -1,8 +1,10 @@
 import type {
+    CashierCloseShiftResponse,
     CashierLoginForm,
     CashierSearchExactError,
     CashierSearchResult,
     CashierSession,
+    CashierShiftSummaryResponse,
 } from "@/types/cashier";
 import type { Outing } from "@/types/outing";
 import api from "@/libs/axios";
@@ -35,6 +37,55 @@ export async function cashierLogout() {
         return data
     } catch (error) {
         throwStandardError(error)
+    }
+}
+
+export async function closeCashierShift(): Promise<CashierCloseShiftResponse> {
+    try {
+        const { data } = await api.post<CashierCloseShiftResponse>('/cashier/shift/close');
+        return data;
+    } catch (error) {
+        return throwStandardError(error);
+    }
+}
+
+export async function getShiftSummary(shiftId: string): Promise<CashierShiftSummaryResponse> {
+    try {
+        const { data } = await api.get<CashierShiftSummaryResponse>(`/cashier/shifts/${shiftId}/summary`);
+        return data;
+    } catch (error) {
+        return throwStandardError(error);
+    }
+}
+
+export async function getPendingShiftSummary(): Promise<CashierShiftSummaryResponse> {
+    try {
+        const { data } = await api.get<CashierShiftSummaryResponse>('/cashier/shifts/pending-summary');
+        return data;
+    } catch (error) {
+        return throwStandardError(error);
+    }
+}
+
+export async function downloadShiftSummaryPdf(shiftId: string): Promise<Blob> {
+    try {
+        const { data } = await api.get<Blob>(`/cashier/shifts/${shiftId}/summary/pdf`, {
+            responseType: 'blob',
+        });
+        return data;
+    } catch (error) {
+        return throwStandardError(error);
+    }
+}
+
+export async function downloadShiftSummaryCsv(shiftId: string): Promise<Blob> {
+    try {
+        const { data } = await api.get<Blob>(`/cashier/shifts/${shiftId}/summary/csv`, {
+            responseType: 'blob',
+        });
+        return data;
+    } catch (error) {
+        return throwStandardError(error);
     }
 }
 

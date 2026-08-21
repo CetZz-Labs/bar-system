@@ -11,6 +11,7 @@ export interface ModalProps {
   confirmText?: string;
   cancelText?: string;
   isPending?: boolean;
+  children?: React.ReactNode;
 }
 
 export function Modal({
@@ -22,6 +23,7 @@ export function Modal({
   confirmText = "Confirmar",
   cancelText = "Cancelar",
   isPending = false,
+  children,
 }: ModalProps) {
   const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.target === e.currentTarget) {
@@ -63,6 +65,7 @@ export function Modal({
             {description && (
               <p className="text-text-secondary text-base mb-6">{description}</p>
             )}
+            {children}
 
             <div className="flex gap-3 mt-6">
               <Button

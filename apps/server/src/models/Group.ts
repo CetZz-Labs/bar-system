@@ -154,8 +154,7 @@ const groupSchema = new Schema<IGroup>({
     timestamps: true
 });
 
-groupSchema.index({ slug: 1 }, { unique: true });
-groupSchema.index({ inviteCode: 1 }, { unique: true });
+groupSchema.index({ leader: 1 })
 
 groupSchema.pre('save', async function () {
     const group = this;

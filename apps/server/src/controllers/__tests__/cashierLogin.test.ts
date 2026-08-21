@@ -45,6 +45,10 @@ vi.mock('../../utils/jwt', () => ({
   generateJWT: vi.fn(),
 }))
 
+vi.mock('../../utils/shiftSummary', () => ({
+  generateShiftSummary: vi.fn(),
+}))
+
 function buildMockDbUser(overrides: any = {}) {
   return {
     _id: new Types.ObjectId(),
@@ -224,5 +228,50 @@ describe('CashierController.login', () => {
       expect.objectContaining({ bar: barId, deviceInfo: 'NEW-DEVICE' })
     )
     expect(res.status).toHaveBeenCalledWith(200)
+  })
+})
+
+describe('CashierController.closeShift', () => {
+  it('closes the active shift and returns its persisted summary', async () => {
+    const summary = {
+      status: 'PENDING',
+      totalConsumptions: 1,
+      confirmedConsumptions: 1,
+      pendingConsumptions: 0,
+      rejectedConsumptions: 0,
+      disputedConsumptions: 0,
+      totalAmount: 5000,
+      pointsAwarded: 3,
+      redemptionCount: 0,
+      redemptionsAvailable: false,
+      generatedAt: new Date(),
+    }
+    const shift = {
+      _id: new Types.ObjectId(),
+      deviceInfo: 'POS-1',
+      save: vi.fn().mockResolvedValue(true),
+    }
+    const user = { _id: new Types.ObjectId() }
+    const { generateShiftSummary } = await import('../../utils/shiftSummary')
+    vi.mocked(generateShiftSummary).mockResolvedValue(summary as any)
+    vi.mocked(AuditLog.create).mockResolvedValue({} as any)
+
+    const req = buildMockRequest({
+      ip: '127.0.0.1',
+      cashierContext: {
+        user,
+        bar: new Types.ObjectId(),
+        barUser: { role: BarUserRole.CASHIER },
+        shift,
+      },
+    } as any)
+    const res = buildMockResponse()
+
+    await CashierController.closeShift(req, res)
+
+    expect(shift.save).toHaveBeenCalled()
+    expect(generateShiftSummary).toHaveBeenCalledWith(shift._id.toString())
+    expect(res.status).toHaveBeenCalledWith(200)
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ summary }))
   })
 })

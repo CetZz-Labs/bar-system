@@ -67,6 +67,36 @@ describe('throwStandardError', () => {
     }
   });
 
+  it('should preserve the automatic-close recovery contract', () => {
+    const mockError = {
+      response: {
+        status: 401,
+        data: {
+          message: 'El turno se cerró automáticamente',
+          code: 'SHIFT_AUTO_CLOSED',
+          shiftId: 'shift-closed',
+          summary: { redemptionsAvailable: false },
+        },
+      },
+    };
+
+    (isAxiosError as unknown as ReturnType<typeof vi.fn>).mockReturnValue(true);
+
+    expect(() => throwStandardError(mockError)).toThrowError();
+    try {
+      throwStandardError(mockError);
+    } catch (error) {
+      expect(error).toEqual({
+        type: 'server',
+        message: 'El turno se cerró automáticamente',
+        status: 401,
+        code: 'SHIFT_AUTO_CLOSED',
+        shiftId: 'shift-closed',
+        summary: { redemptionsAvailable: false },
+      });
+    }
+  });
+
   it('should throw unknown error for non-axios errors', () => {
     const mockError = new Error('Network error');
 

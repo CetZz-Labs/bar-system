@@ -1,7 +1,14 @@
 import { Router } from "express";
-import { body, query } from "express-validator";
+import { body, param, query } from "express-validator";
 import { CashierController } from "../controllers/CashierController";
-import { authenticateCashier } from "../middleware/auth";
+import { ShiftSummaryController } from "../controllers/ShiftSummaryController";
+import {
+    authenticate,
+    authenticateCashier,
+    authenticateCashierForClose,
+    authenticateCashierSummary,
+    authenticateShiftSummary,
+} from "../middleware/auth";
 import { handleInputErrors } from "../middleware/validation";
 
 const router: Router = Router();
@@ -23,6 +30,46 @@ router.get('/session',
 router.post('/logout',
     authenticateCashier,
     CashierController.logout
+);
+
+router.post('/shift/close',
+    authenticateCashierForClose,
+    CashierController.closeShift
+);
+
+router.get('/shifts/history',
+    authenticate(),
+    query('barId').isMongoId().withMessage('barId inválido'),
+    query('from').optional().isISO8601().withMessage('from debe ser una fecha ISO 8601'),
+    query('to').optional().isISO8601().withMessage('to debe ser una fecha ISO 8601'),
+    handleInputErrors,
+    ShiftSummaryController.history
+);
+
+router.get('/shifts/pending-summary',
+    authenticateCashierSummary,
+    ShiftSummaryController.pendingSummary
+);
+
+router.get('/shifts/:shiftId/summary/pdf',
+    authenticateShiftSummary,
+    param('shiftId').isMongoId().withMessage('shiftId inválido'),
+    handleInputErrors,
+    ShiftSummaryController.downloadPdf
+);
+
+router.get('/shifts/:shiftId/summary/csv',
+    authenticateShiftSummary,
+    param('shiftId').isMongoId().withMessage('shiftId inválido'),
+    handleInputErrors,
+    ShiftSummaryController.downloadCsv
+);
+
+router.get('/shifts/:shiftId/summary',
+    authenticateShiftSummary,
+    param('shiftId').isMongoId().withMessage('shiftId inválido'),
+    handleInputErrors,
+    ShiftSummaryController.getSummary
 );
 
 router.get(

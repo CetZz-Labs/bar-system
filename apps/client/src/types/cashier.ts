@@ -1,5 +1,9 @@
 export type CashierRole = 'OWNER' | 'CASHIER'
 
+export type ShiftEndReason = 'MANUAL' | 'KICKED_OUT' | 'BAR_CLOSED'
+
+export type ShiftSummaryStatus = 'PENDING' | 'VIEWED'
+
 export interface CashierLoginForm {
     email: string
     password: string
@@ -21,6 +25,43 @@ export interface CashierSession {
         name: string
         lastName: string
     }
+}
+
+export interface CashierShiftSummary {
+    status: ShiftSummaryStatus
+    totalConsumptions: number
+    confirmedConsumptions: number
+    pendingConsumptions: number
+    rejectedConsumptions: number
+    disputedConsumptions: number
+    totalAmount: number
+    pointsAwarded: number
+    redemptionCount: number
+    redemptionsAvailable: boolean
+    generatedAt: string
+}
+
+export interface CashierShiftSummaryResponse {
+    shiftId: string
+    barId: string
+    cashierId: string
+    role: CashierRole
+    deviceInfo: string
+    startedAt: string
+    endedAt?: string
+    endReason?: ShiftEndReason
+    summary: CashierShiftSummary
+}
+
+export interface CashierCloseShiftResponse {
+    message: string
+    shiftId: string
+    summary: CashierShiftSummary
+}
+
+export interface CashierShiftSummaryRecovery {
+    shiftId: string
+    summary: CashierShiftSummary
 }
 
 export type CashierSearchResult = {

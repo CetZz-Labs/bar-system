@@ -42,3 +42,7 @@ graphify-out/
 progress/*
 !progress/history.md
 !progress/current.template.md
+
+# AI tool config — local per-developer, not shared
+.opencode/
+opencode.json

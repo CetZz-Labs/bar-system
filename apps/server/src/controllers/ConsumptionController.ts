@@ -58,6 +58,7 @@ export class ConsumptionController {
                 outing: outingId,
                 bar: outing.bar,
                 cashier: cashierContext.user._id,
+                ...(cashierContext.shift._id ? { shift: cashierContext.shift._id } : {}),
                 amount,
                 isUnusualAmount,
                 breakdown,

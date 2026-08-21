@@ -48,7 +48,7 @@ const outOfRangeDatetime = () =>
 
 describe('OutingFormModal', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     vi.mocked(BarAPI.getActiveBars).mockResolvedValue(mockBars);
   });
 

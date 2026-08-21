@@ -64,7 +64,7 @@ describe('ProfileView', () => {
   ];
 
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     mockUseAuth.mockReturnValue({
       data: mockProfile,
       isLoading: false,
@@ -114,15 +114,17 @@ describe('ProfileView', () => {
   it('enters inline edit mode when name is clicked', async () => {
     mockGetUserProfile.mockResolvedValue(mockProfile);
     mockGetUserGroups.mockResolvedValue([]);
+    const user = userEvent.setup();
 
     renderWithProviders(<ProfileView />);
 
-    await waitFor(() => {
-      expect(screen.getByText('Juan Pérez')).toBeInTheDocument();
-    });
+    const nameButton = await screen.findByRole(
+      'button',
+      { name: /Juan Pérez/ },
+      { timeout: 3000 },
+    );
 
-    const nameButton = screen.getByRole('button', { name: /Juan Pérez/ });
-    await userEvent.click(nameButton);
+    await user.click(nameButton);
 
     expect(screen.getByRole('textbox')).toBeInTheDocument();
     expect(screen.getByRole('textbox')).toHaveValue('Juan Pérez');

@@ -18,10 +18,12 @@ import JoinGroupView from './views/groups/JoinGroupView'
 import BarRegisterView from './views/bar/BarRegisterView'
 import MyBarsView from './views/bar/MyBarsView'
 import BarProfileView from './views/bar/BarProfileView'
+import BarCategoriesView from './views/bar/BarCategoriesView'
 import CashierLoginView from './views/cashier/CashierLoginView'
 import CashierPanelView from './views/cashier/CashierPanelView'
 import CashierSearchView from './views/cashier/CashierSearchView'
 import CashierOutingView from './views/cashier/CashierOutingView'
+import CashierShiftSummaryView from './views/cashier/CashierShiftSummaryView'
 import CashierLayout from './layouts/CashierLayout'
 import NotFound from './views/NotFound'
 
@@ -53,10 +55,12 @@ export default function Router() {
                     <Route path="/bar/registro" element={<BarRegisterView />} />
                     <Route path="/bar/mis-bares" element={<MyBarsView />} />
                     <Route path="/bar/:id/perfil" element={<BarProfileView />} />
+                    <Route path="/bar/:id/categorias" element={<BarCategoriesView />} />
                 </Route>
                 <Route path="/unirse/:inviteCode" element={<JoinGroupView />} />
 
                 <Route path="/bar/:barId/cajero/login" element={<CashierLoginView />} />
+                <Route path="/bar/:barId/cajero/cierre/:shiftId" element={<CashierShiftSummaryView />} />
                 <Route element={<CashierLayout />}>
                     <Route path="/bar/:barId/cajero" element={<CashierPanelView />} />
                     <Route path="/bar/:barId/cajero/buscar" element={<CashierSearchView />} />
