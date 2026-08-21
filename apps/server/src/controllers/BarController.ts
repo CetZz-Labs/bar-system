@@ -2,6 +2,8 @@ import { Request, Response } from "express";
 import { Types } from "mongoose";
 import Bar, { BarStatus, IAddress, IAttendancePointsByDay, IBar } from "../models/Bar";
 import BarUser, { BarUserRole } from "../models/BarUser";
+import User from "../models/User";
+import Outing, { OutingStatus } from "../models/Outing";
 import { generateSlug } from "../utils/slug";
 import { saveBarLogo, saveBarCover } from "../utils/storage";
 import { verifyBarAccess } from "../utils/barAccess";
@@ -329,6 +331,51 @@ export class BarController {
         } catch (error) {
             console.error(error);
             res.status(500).json({ message: 'Hubo un error al obtener el perfil del bar' });
+        }
+    };
+
+    /**
+     * GET /api/bar/:id/detail — LB-76. Ficha pública de un bar, accesible por
+     * cualquier cliente autenticado (rol USER/ADMIN), sin exigir `BarUser`
+     * (a diferencia de `getBarProfile`, que exige `verifyBarAccess` y es la
+     * vista de gestión del dueño/cajero). Mismo criterio "bar activo" que
+     * `getActiveBars`: 404 si no existe o no está `ACTIVE`.
+     */
+    static getPublicBarDetail = async (req: Request, res: Response) => {
+        try {
+            const userId = req.user!._id.toString();
+            const { id } = req.params;
+
+            const bar = await Bar.findById(id);
+            if (!bar || bar.status !== BarStatus.ACTIVE) {
+                res.status(404).json({ message: 'Bar no encontrado' });
+                return;
+            }
+
+            // "¿Tiene el usuario un check-in ACTIVE en este bar?": se resuelve
+            // sin exponer en qué grupo, encadenando sus grupos (mismo patrón
+            // de UserController.getUserGroups) con la Outing ACTIVE de ese bar
+            // en cualquiera de esos grupos (mismo enum que getActiveOuting).
+            const user = await User.findById(userId).select('memberships').lean();
+            const groupIds = (user?.memberships ?? []).map((membership) => membership.group);
+
+            const activeOuting = await Outing.findOne({
+                group: { $in: groupIds },
+                bar: bar._id,
+                status: OutingStatus.ACTIVE,
+            }).select('_id').lean();
+
+            res.status(200).json({
+                id: bar._id,
+                name: bar.name,
+                address: bar.address,
+                closingTime: bar.closingTime,
+                attendancePointsByDay: bar.attendancePointsByDay,
+                hasActiveCheckIn: !!activeOuting,
+            });
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ message: 'Hubo un error al obtener el detalle del bar' });
         }
     };
 

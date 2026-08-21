@@ -1,7 +1,7 @@
 import api from "@/libs/axios";
 import { throwStandardError } from "@/utils/apiError";
 import type { ActiveBar, CreateBarFormData, EditBarProfileFormData, MyBar, RegisterBarResponse } from "@/types/bar";
-import type { Bar } from "@/types/bar";
+import type { Bar, BarPublicDetail } from "@/types/bar";
 
 export async function getActiveBars() {
   try {
@@ -33,6 +33,20 @@ export async function getMyBars() {
 export async function getBarProfile(id: string) {
   try {
     const { data } = await api.get<Bar>(`/bar/${id}/perfil`);
+    return data;
+  } catch (error) {
+    throwStandardError(error);
+  }
+}
+
+/**
+ * LB-76: ficha pública de un bar, accesible por cualquier cliente
+ * autenticado (sin ser BarUser). Distinto de `getBarProfile`, que es la
+ * vista de gestión del dueño/cajero.
+ */
+export async function getBarDetail(id: string) {
+  try {
+    const { data } = await api.get<BarPublicDetail>(`/bar/${id}/detail`);
     return data;
   } catch (error) {
     throwStandardError(error);

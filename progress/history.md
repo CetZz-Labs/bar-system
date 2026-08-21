@@ -756,3 +756,141 @@ navegador mucho antes de que el token firmado expire realmente.
   pasadas (incluye `test:coverage` corrido dos veces, antes y después del
   fix), sin necesidad de re-auditar C1-C3/criterios de aceptación que ya
   habían quedado correctos en la primera pasada.
+
+### [2026-08-20] - LB-76: Detalle de un bar (ficha para el cliente)
+- **Dominio afectado:** Monorepo (Backend + Frontend)
+- **Subagentes involucrados:** Explorer (`progress/explorers/exp_LB-76.md`),
+  Implementer (`progress/implementers/impl_LB-76.md`, con una sección de
+  fixup post-review al final), Reviewer (`progress/reviewers/review_LB-76.md`
+  — primera pasada, y `progress/reviewers/review_LB-76-round2.md` — segunda
+  pasada).
+- **Contexto:** el vault tenía la spec completa
+  (`specs/spec-LB-76-detalle-bar.md`) pero el contrato `reward-catalog.md`
+  de LB-67 (owner Facundo) seguía "pendiente" sin completar — se ignoró, el
+  código real ya mergeado de LB-67/LB-72 fue la fuente de verdad. El
+  Explorer confirmó que **ningún endpoint existente permitía pedir recursos
+  de un bar (perfil o recompensas) dado un `barId` directo sin pasar por
+  `verifyBarAccess`(rol `BarUser`) o por `groupId`+`Outing` `ACTIVE`** — LB-76
+  necesitaba ambos como vista pública para cualquier cliente logueado, sin
+  rol y sin check-in. Ambigüedad de producto resuelta vía `AskUserQuestion`:
+  el botón "Crear salida en este bar" usa un selector de grupo intermedio
+  (modal nuevo), no query-param+auto-open ni restricción a un solo grupo.
+- **Resumen de cambios:** dos endpoints nuevos bajo el prefijo singular
+  existente `/api/bar` (no se agravó la inconsistencia `/api/bar` vs.
+  `/api/bars` ya señalada en LB-67): `GET /api/bar/:id/detail`
+  (`BarController.getPublicBarDetail` — 404 si el bar no existe o no está
+  `ACTIVE`, sin `verifyBarAccess`, devuelve `name`/`address`/`closingTime`/
+  `attendancePointsByDay` + `hasActiveCheckIn` calculado resolviendo los
+  grupos del usuario y buscando una `Outing` `ACTIVE` en ese bar — sin
+  filtrar grupo ni id de salida en el payload) y `GET
+  /api/bar/:id/rewards/available` (`RewardController.getAvailableRewardsForBar`
+  — mismo filtro `status:ACTIVE, deletedAt:null, stock disponible` que ya
+  usaban `getAvailableRewards`/`GroupRewardsController.getAvailable`, pero
+  resuelto directo del `barId` en vez de vía `groupId`+`Outing`). Ninguno de
+  los endpoints preexistentes (`getBarProfile`, `listRewards`,
+  `getAvailableRewards`, `GroupRewardsController.getAvailable`) fue
+  modificado. Frontend: `Bar` gana `closingTime` (faltaba en el tipo pese a
+  que el backend ya lo devolvía desde antes), vista nueva
+  `BarDetailView.tsx` (ruta `/bar/:id`, distinta de `/bar/:id/perfil` que es
+  edición del dueño) con info del bar, grilla de puntos de solo lectura
+  (mismo layout que `BarProfileView.tsx` pero sin `<Input>`), `RewardCard`
+  duplicado de `GroupRewardsView.tsx` sin el botón "Canjear" (mismo patrón
+  de duplicación intencional ya aceptado en el repo), badge "Estás acá
+  ahora" condicional a `hasActiveCheckIn`. `GroupPickerModal.tsx` nuevo
+  (lista los grupos del usuario, navega a `/groups/:slug` con
+  `state.preselectedBarId` — state de navegación, no query string).
+  `OutingFormModal`/`OutingSection` ganan un prop opcional
+  `preselectedBarId` (usado en el `reset()` inicial); `GroupDetailView`
+  lee ese `state` una vez, auto-abre el modal de crear salida, y limpia el
+  `state` con `navigate(..., {replace:true})` para que un refresh no lo
+  reabra. Limitación documentada y aceptada por el Reviewer: si el grupo
+  elegido en el picker tiene al usuario como `MEMBER` (no
+  `LEADER`/`CO_LEADER`), el modal no se auto-abre — mismo guard
+  `canManageOuting` que ya regía la creación de salidas, no es una regresión
+  de este ticket.
+- **Ciclo de revisión:** primera pasada del Reviewer `[CHANGES_REQUESTED]`
+  — único motivo: `CHECKPOINTS.md` §C4 exige al menos un test junto a todo
+  archivo de UI nuevo, y `BarDetailView.tsx`/`GroupPickerModal.tsx` no
+  tenían ninguno (el Implementer había interpretado una instrucción
+  ambigua del Leader como permiso para omitirlos; el Reviewer confirmó que
+  esa instrucción no tiene autoridad sobre `CHECKPOINTS.md`). C1-C3 y el
+  resto de C4 (5 comandos corridos en vivo) ya estaban correctos en esa
+  primera pasada. Fixup: 8 tests nuevos (5 en `BarDetailView.test.tsx`, 3 en
+  `GroupPickerModal.test.tsx`), cero archivos de producción tocados.
+- **Veredicto del Reviewer:** `[APPROVED]` (segunda pasada, tras el fixup de
+  tests) — gap de C4 verificado cerrado en vivo (188/188 tests client, lint
+  limpio), C1-C3 confirmados sin cambios desde la primera pasada vía
+  timestamps/`git diff --stat`.
+- **Reapertura post-cierre (mismo día, tercera pasada):** con el ticket ya
+  `Finalizada` en Jira, una prueba manual del usuario (con datos de prueba
+  sembrados directamente en Mongo por el Leader — 4 `Reward` en un bar de
+  prueba y una `Outing` existente movida a `ACTIVE` en ese bar para simular
+  el check-in, ver nota operativa más abajo) encontró un gap real de UX no
+  cubierto por los criterios literales del ticket: si el grupo elegido en
+  `GroupPickerModal` ya tenía una `Outing` `PENDING`/`ACTIVE` (en cualquier
+  bar), `OutingFormModal` caía en modo edición (`isEditMode = !!outing`) e
+  ignoraba `preselectedBarId` por completo, sin avisar al usuario por qué
+  el bar elegido en la ficha no aparecía precargado. Se reabrió el ticket en
+  Jira (`En curso`) y se autorizó el fixup vía `AskUserQuestion`. Cambio
+  aplicado: único archivo tocado,
+  `apps/client/src/views/groups/components/OutingSection.tsx` — nuevo
+  `useEffect` (gateado por `useRef` para dispararse una sola vez por
+  montaje, no en cada refetch) que dispara `toast.info` de `sonner` cuando
+  `preselectedBarId && canManageOuting && activeOuting`, aclarando además
+  en qué bar está la salida existente si difiere del bar elegido. No se
+  cambió el comportamiento (edición sigue prevaleciendo sobre creación),
+  solo se lo comunicó. Sin test nuevo dedicado (archivo modificado, no
+  nuevo, con `OutingSection.test.tsx` preexistente — mismo criterio de C4
+  aplicado en la ronda 1).
+- **Veredicto del Reviewer (tercera pasada):** `[APPROVED]`
+  (`review_LB-76-round3.md`) — diff real confirmado como único archivo
+  tocado, lógica del toast verificada línea por línea, 188/188 tests client
+  y lint limpio corridos en vivo. Ticket vuelto a `Finalizada` en Jira.
+- **Nota operativa (no versionada, no forma parte del código):** para la
+  prueba manual se sembraron datos de prueba directo en la base de Atlas
+  compartida (`LaBanda`) vía un script descartable corrido por el Leader
+  desde el scratchpad de sesión (nunca escrito dentro de `apps/server`):
+  4 `Reward` activas en el bar `6a3b1aa29fe4ddd4346bb4e4`, y la `Outing`
+  `PENDING`/`ACTIVE` preexistente del primer grupo del usuario de prueba
+  `correo2@correo.com` fue reutilizada/movida a `ACTIVE` en ese mismo bar
+  para simular el check-in (el modelo solo permite una `Outing`
+  `PENDING`/`ACTIVE` por grupo a la vez). Si esa salida formaba parte de
+  otra prueba en curso de otro desarrollador, quedó pisada — no hay rollback
+  automático, señalado explícitamente al usuario en el momento.
+- **Reapertura #2 (mismo día, cuarta y quinta pasada):** el toast del fixup
+  anterior no alcanzó — el usuario probó el flujo con la `Outing` ya
+  `ACTIVE` (en curso, con check-in confirmado) y el modal de "Editar
+  salida" se seguía abriendo igual, algo sin sentido de negocio (el propio
+  código ya reconocía en `canEditOuting` que editar solo aplica a `PENDING`,
+  pero el auto-open no respetaba esa regla; el backend además rechazaría
+  cualquier guardado con 409). Causa raíz real: `modalOpen` se inicializaba
+  en `true` de forma síncrona (`useState(() => !!preselectedBarId &&
+  canManageOuting)`), antes de que la query de `activeOuting` resolviera,
+  sin mirar su `status` en absoluto. Fix (mismo único archivo,
+  `OutingSection.tsx`): `modalOpen` arranca en `false`; un ajuste de estado
+  derivado durante el render (mismo patrón que `BarProfileView.tsx` —
+  `setState` síncrono dentro de un efecto lo marca ESLint como error real,
+  `react-hooks/set-state-in-effect`), gateado para correr una sola vez,
+  abre el modal solo si no hay `activeOuting` o si su `status` es
+  `PENDING`; para cualquier otro estado (`ACTIVE` incluido) el modal no se
+  abre y el toast cambia de texto ("no se puede crear ni editar otra hasta
+  que termine" en vez de prometer una edición que no va a pasar). El
+  Reviewer (cuarta pasada) confirmó el fix correcto pero rechazó por falta
+  de tests dedicados a esa lógica — criterio elevado explícitamente por el
+  antecedente de que esa misma zona ya produjo un bug real invisible en dos
+  rondas `[APPROVED]` previas. Fixup de solo-tests: 4 casos nuevos en
+  `OutingSection.test.tsx` (creación silenciosa, edición+toast mismo bar,
+  bloqueo+toast mismo bar — el que reproduce el bug real —, bloqueo+toast
+  bar distinto), 192/192 tests en verde.
+- **Veredicto del Reviewer (quinta pasada):** `[APPROVED]`
+  (`review_LB-76-round5.md`) — confirmó por lectura que el test de bloqueo
+  rompería contra el código viejo (no es un selector roto ni un falso
+  positivo), diff acotado a un solo archivo de test verificado por
+  timestamp, lint/test corridos en vivo. Nota no bloqueante: falta test
+  dedicado para la combinación `PENDING` + bar distinto (solo se cubrió
+  `PENDING` + mismo bar), no bloqueante porque el riesgo real (auto-abrir
+  para un status no editable) ya queda cubierto por las 4 combinaciones
+  de `status` probadas. Ticket vuelto a `Finalizada` en Jira — cinco
+  rondas de review en total para este ticket, tres fixups post-aprobación
+  inicial motivados por pruebas manuales del usuario que la suite
+  automatizada no había capturado.

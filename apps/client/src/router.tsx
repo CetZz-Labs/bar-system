@@ -20,6 +20,7 @@ import GroupRewardsView from './views/groups/GroupRewardsView'
 import BarRegisterView from './views/bar/BarRegisterView'
 import MyBarsView from './views/bar/MyBarsView'
 import BarProfileView from './views/bar/BarProfileView'
+import BarDetailView from './views/bar/BarDetailView'
 import BarRewardsView from './views/bar/BarRewardsView'
 import CashierPanelView from './views/cashier/CashierPanelView'
 import CashierSearchView from './views/cashier/CashierSearchView'
@@ -59,6 +60,7 @@ export default function Router() {
                     <Route path="/bar/mis-bares" element={<MyBarsView />} />
                     <Route path="/bar/:id/perfil" element={<BarProfileView />} />
                     <Route path="/bar/:id/rewards" element={<BarRewardsView />} />
+                    <Route path="/bar/:id" element={<BarDetailView />} />
                 </Route>
                 <Route path="/unirse/:inviteCode" element={<JoinGroupView />} />
 

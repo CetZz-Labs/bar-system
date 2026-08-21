@@ -55,3 +55,17 @@ export async function getGroupRewards(groupId: string) {
     throwStandardError(error);
   }
 }
+
+/**
+ * LB-76: recompensas activas y disponibles de un bar, resueltas directo del
+ * `barId` (sin pasar por groupId/Outing como `getGroupRewards`). Accesible
+ * por cualquier cliente autenticado sin necesidad de check-in activo.
+ */
+export async function getAvailableRewardsForBar(barId: string) {
+  try {
+    const { data } = await api.get<Reward[]>(`/bar/${barId}/rewards/available`);
+    return data;
+  } catch (error) {
+    throwStandardError(error);
+  }
+}

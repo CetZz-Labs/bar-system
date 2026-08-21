@@ -1,7 +1,8 @@
 import { Router } from "express";
 import { BarController } from "../controllers/BarController";
+import { RewardController } from "../controllers/RewardController";
 import { authenticate, requireCompleteProfile } from "../middleware/auth";
-import { body } from "express-validator";
+import { body, param } from "express-validator";
 import { handleInputErrors } from "../middleware/validation";
 import { Role } from "../models/User";
 import { uploadSingle } from "../middleware/upload";
@@ -58,6 +59,24 @@ router.patch('/:id/activar',
 router.get('/:id/perfil',
     authenticate([Role.USER, Role.ADMIN]),
     BarController.getBarProfile
+);
+
+// LB-76: ficha pública del bar para cualquier cliente autenticado (sin
+// BarUser), distinta de `/:id/perfil` (gestión, exige verifyBarAccess).
+router.get('/:id/detail',
+    authenticate([Role.USER, Role.ADMIN]),
+    param('id').isMongoId().withMessage('El ID del bar es inválido'),
+    handleInputErrors,
+    BarController.getPublicBarDetail
+);
+
+// LB-76: recompensas activas/disponibles del bar, resueltas directo del
+// :id (sin groupId/Outing), mismo criterio de acceso que `/:id/detail`.
+router.get('/:id/rewards/available',
+    authenticate([Role.USER, Role.ADMIN]),
+    param('id').isMongoId().withMessage('El ID del bar es inválido'),
+    handleInputErrors,
+    RewardController.getAvailableRewardsForBar
 );
 
 router.patch('/:id/perfil',

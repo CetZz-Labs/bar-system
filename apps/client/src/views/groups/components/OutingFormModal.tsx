@@ -30,6 +30,11 @@ interface OutingFormModalProps {
   groupId: string;
   members: GroupMember[];
   outing: Outing | null;
+  /** LB-76: bar pre-seleccionado al abrir el modal desde la ficha de un bar
+   * (`BarDetailView` → `GroupPickerModal` → `GroupDetailView`), vía `state`
+   * de navegación. Solo se usa para el `reset()` inicial en modo creación
+   * (`!outing`) — en modo edición siempre prevalece el bar de la salida. */
+  preselectedBarId?: string;
 }
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -44,6 +49,7 @@ export default function OutingFormModal({
   groupId,
   members,
   outing,
+  preselectedBarId,
 }: OutingFormModalProps) {
   const queryClient = useQueryClient();
   const isEditMode = !!outing;
@@ -86,11 +92,11 @@ export default function OutingFormModal({
       });
       setSelectedInvitees(outing.invitees);
     } else {
-      reset({ barId: "", scheduledFor: "", note: "" });
+      reset({ barId: preselectedBarId ?? "", scheduledFor: "", note: "" });
       setSelectedInvitees(members.map((m) => m.id));
     }
     setConflictOutingId(null);
-  }, [isOpen, outing, members, reset]);
+  }, [isOpen, outing, members, reset, preselectedBarId]);
 
   const toggleInvitee = (memberId: string) => {
     if (leader && memberId === leader.id) return; // leader is a mandatory invitee

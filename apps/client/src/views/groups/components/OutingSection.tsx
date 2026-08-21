@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarClock, MapPin, PenLine, PlusCircle, XCircle } from "lucide-react";
 import { toast } from "sonner";
@@ -13,16 +13,30 @@ interface OutingSectionProps {
   groupId: string;
   members: GroupMember[];
   currentUserRole: GroupRole;
+  /** LB-76: bar pre-seleccionado al llegar desde la ficha de un bar
+   * (`state` de navegación leído por GroupDetailView). Si está presente y
+   * el usuario puede gestionar salidas, abre automáticamente el modal de
+   * creación con ese bar precargado. */
+  preselectedBarId?: string;
 }
 
 export default function OutingSection({
   groupId,
   members,
   currentUserRole,
+  preselectedBarId,
 }: OutingSectionProps) {
+  const canManageOuting = currentUserRole === "LEADER" || currentUserRole === "CO_LEADER";
+  // LB-76 fixup: el auto-open ya no puede decidirse síncronamente en el
+  // inicializador. Antes arrancaba en `true` con solo mirar
+  // `preselectedBarId`/`canManageOuting` (disponibles al montar), pero eso
+  // ignoraba el `status` real de `activeOuting` (llega async vía useQuery) y
+  // abría el modal de edición incluso para una salida `ACTIVE` (en curso,
+  // check-in confirmado), que no tiene sentido editar — ver `canEditOuting`
+  // más abajo. Arranca en `false`; el bloque de `autoOpenDecided` más abajo
+  // decide una vez que `activeOuting` resuelve.
   const [modalOpen, setModalOpen] = useState(false);
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
-  const canManageOuting = currentUserRole === "LEADER" || currentUserRole === "CO_LEADER";
   const queryClient = useQueryClient();
 
   const { data: activeOuting, isLoading } = useQuery({
@@ -31,6 +45,70 @@ export default function OutingSection({
     enabled: !!groupId,
     refetchOnWindowFocus: false,
   });
+
+  // LB-76 fixup: `activeOuting` llega async (useQuery), a diferencia de
+  // `preselectedBarId`/`canManageOuting` que ya están disponibles al montar.
+  // Por eso el auto-open no puede calcularse en el inicializador de
+  // `modalOpen` de arriba: hay que esperar a que la query resuelva para
+  // saber si corresponde crear (sin `activeOuting`), editar (`PENDING`, el
+  // único estado que `canEditOuting` habilita) o no abrir nada (`ACTIVE` u
+  // otro estado no editable — no tiene sentido "editar" una salida ya en
+  // curso).
+  //
+  // Este ajuste de estado se hace durante el render (no dentro de un
+  // useEffect) siguiendo el mismo criterio que `syncedBarId` en
+  // BarProfileView.tsx: es estado derivado de datos que llegaron de un
+  // fetch, no una sincronización con un sistema externo, y llamar a
+  // `setState` directamente en el cuerpo de un efecto dispara la regla
+  // react-hooks/set-state-in-effect (cascading renders). `autoOpenDecided`
+  // garantiza que la decisión se tome una única vez por montaje, no en cada
+  // refetch posterior (cancelar/crear invalida
+  // `["outings", "active", groupId]`).
+  const [autoOpenDecided, setAutoOpenDecided] = useState(false);
+  if (!isLoading && !autoOpenDecided && preselectedBarId && canManageOuting) {
+    setAutoOpenDecided(true);
+    if (!activeOuting || activeOuting.status === "PENDING") {
+      setModalOpen(true);
+    }
+  }
+
+  // El aviso por toast sí es un efecto legítimo (notifica a través de un
+  // sistema externo, sonner), por eso se queda en un useEffect separado del
+  // ajuste de estado de arriba. El ref replica la misma garantía de "una
+  // sola vez por montaje" que `autoOpenDecided`, pero de forma independiente
+  // para no acoplar el side effect a la decisión de abrir el modal.
+  const warnedPreselectedConflictRef = useRef(false);
+  useEffect(() => {
+    if (isLoading || warnedPreselectedConflictRef.current) return;
+    warnedPreselectedConflictRef.current = true;
+
+    if (!preselectedBarId || !canManageOuting || !activeOuting) return;
+
+    if (activeOuting.status === "PENDING") {
+      if (activeOuting.bar._id !== preselectedBarId) {
+        toast.info(
+          `Ya tenés una salida en curso en este grupo — te abrimos para editarla en vez de crear una nueva. La salida existente es en ${activeOuting.bar.name}, no en el que elegiste.`
+        );
+      } else {
+        toast.info(
+          "Ya tenés una salida en curso en este grupo — te abrimos para editarla en vez de crear una nueva."
+        );
+      }
+      return;
+    }
+
+    // Estado no editable (ACTIVE u otro distinto de PENDING): el modal se
+    // queda cerrado, el toast solo informa que no hay nada para abrir.
+    if (activeOuting.bar._id !== preselectedBarId) {
+      toast.info(
+        `Ya tenés una salida en curso en este grupo — no se puede crear ni editar otra hasta que termine. La salida en curso es en ${activeOuting.bar.name}, no en el que elegiste.`
+      );
+    } else {
+      toast.info(
+        "Ya tenés una salida en curso en este grupo — no se puede crear ni editar otra hasta que termine."
+      );
+    }
+  }, [isLoading, activeOuting, preselectedBarId, canManageOuting]);
 
   const cancelMutation = useMutation({
     mutationFn: () => {
@@ -140,6 +218,7 @@ export default function OutingSection({
           groupId={groupId}
           members={members}
           outing={activeOuting ?? null}
+          preselectedBarId={preselectedBarId}
         />
       )}
 

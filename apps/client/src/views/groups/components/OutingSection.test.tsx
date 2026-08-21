@@ -223,4 +223,100 @@ describe('OutingSection', () => {
       expect(toast.error).toHaveBeenCalledWith('La salida ya no puede cancelarse');
     });
   });
+
+  describe('LB-76: preselectedBarId auto-open and toast logic', () => {
+    it('opens the creation modal silently when there is no active outing', async () => {
+      vi.mocked(OutingAPI.getActiveOuting).mockResolvedValue(null);
+
+      renderWithProviders(
+        <OutingSection
+          groupId="group-1"
+          members={mockMembers}
+          currentUserRole="LEADER"
+          preselectedBarId="bar-1"
+        />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByRole('dialog')).toBeInTheDocument();
+      });
+      expect(screen.getByRole('heading', { name: 'Crear salida' })).toBeInTheDocument();
+      expect(toast.info).not.toHaveBeenCalled();
+    });
+
+    it('opens the edit modal and shows the "editing" toast when the active outing is PENDING for the same bar', async () => {
+      vi.mocked(OutingAPI.getActiveOuting).mockResolvedValue({
+        ...mockOuting,
+        status: 'PENDING',
+        bar: { ...mockOuting.bar, _id: 'bar-1' },
+      });
+
+      renderWithProviders(
+        <OutingSection
+          groupId="group-1"
+          members={mockMembers}
+          currentUserRole="LEADER"
+          preselectedBarId="bar-1"
+        />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByRole('dialog')).toBeInTheDocument();
+      });
+      expect(screen.getByRole('heading', { name: 'Editar salida' })).toBeInTheDocument();
+      await waitFor(() => {
+        expect(toast.info).toHaveBeenCalledWith(
+          'Ya tenés una salida en curso en este grupo — te abrimos para editarla en vez de crear una nueva.'
+        );
+      });
+    });
+
+    it('does not open any modal and shows the "blocked" toast when the active outing is ACTIVE for the same bar', async () => {
+      vi.mocked(OutingAPI.getActiveOuting).mockResolvedValue({
+        ...mockOuting,
+        status: 'ACTIVE',
+        bar: { ...mockOuting.bar, _id: 'bar-1' },
+      });
+
+      renderWithProviders(
+        <OutingSection
+          groupId="group-1"
+          members={mockMembers}
+          currentUserRole="LEADER"
+          preselectedBarId="bar-1"
+        />
+      );
+
+      await waitFor(() => {
+        expect(toast.info).toHaveBeenCalledWith(
+          'Ya tenés una salida en curso en este grupo — no se puede crear ni editar otra hasta que termine.'
+        );
+      });
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
+    it('does not open any modal and shows the "blocked" toast naming the other bar when the active outing is ACTIVE for a different bar', async () => {
+      vi.mocked(OutingAPI.getActiveOuting).mockResolvedValue({
+        ...mockOuting,
+        status: 'ACTIVE',
+        bar: { ...mockOuting.bar, _id: 'bar-1', name: 'Bar de Prueba' },
+      });
+
+      renderWithProviders(
+        <OutingSection
+          groupId="group-1"
+          members={mockMembers}
+          currentUserRole="LEADER"
+          preselectedBarId="bar-2"
+        />
+      );
+
+      await waitFor(() => {
+        expect(toast.info).toHaveBeenCalledWith(
+          'Ya tenés una salida en curso en este grupo — no se puede crear ni editar otra hasta que termine. La salida en curso es en Bar de Prueba, no en el que elegiste.'
+        );
+      });
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+  });
 });

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { useParams, useNavigate } from "react-router";
+import { useParams, useNavigate, useLocation } from "react-router";
 import { motion } from "motion/react";
 import { ArrowLeft, Users, Settings, AlertCircle, LogOut, UserMinus, Crown, Receipt, Gift } from "lucide-react";
 import { Button } from "@/components/ui/Button";
@@ -19,7 +19,24 @@ type ErrorType = "not_found" | "forbidden" | "server" | null;
 export default function GroupDetailView() {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { data: user } = useAuth();
+
+  // LB-76: bar pre-seleccionado al llegar desde BarDetailView →
+  // GroupPickerModal, vía `state` de navegación (no query string). Se
+  // captura una única vez en el inicializador de useState (persiste incluso
+  // después del `replace` de abajo, que limpia `location.state` para que un
+  // refresh no reabra el modal solo).
+  const [preselectedBarId] = useState<string | undefined>(
+    () => (location.state as { preselectedBarId?: string } | null)?.preselectedBarId
+  );
+
+  useEffect(() => {
+    if (preselectedBarId) {
+      navigate(location.pathname, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [group, setGroup] = useState<GroupDetail | null>(null);
   const [loading, setLoading] = useState(!!slug);
@@ -357,6 +374,7 @@ export default function GroupDetailView() {
             groupId={group.id}
             members={group.members}
             currentUserRole={group.currentUserRole}
+            preselectedBarId={preselectedBarId}
           />
 
           {/* LB-61 — confirmar consumo (líder / co-líder) */}

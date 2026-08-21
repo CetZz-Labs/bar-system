@@ -41,7 +41,26 @@ export interface Bar {
   status: BarStatus;
   logoUrl?: string;
   coverUrl?: string;
+  /** Hora de cierre del bar (HH:MM). Devuelto por el backend en
+   * `GET /bar/:id/perfil` (`BarController.ts`) pero faltaba en este tipo
+   * espejo — completado para LB-76 (frontend.md §3, sin import cruzado). */
+  closingTime: string;
   attendancePointsByDay: AttendancePointsByDay;
+}
+
+/**
+ * Ficha pública de un bar (LB-76), `GET /bar/:id/detail`. Espejo manual del
+ * response de `BarController.getPublicBarDetail` — subconjunto de campos
+ * públicos de `Bar` más `hasActiveCheckIn`, sin exponer en qué grupo está
+ * ese check-in.
+ */
+export interface BarPublicDetail {
+  id: string;
+  name: string;
+  address: BarAddress;
+  closingTime: string;
+  attendancePointsByDay: AttendancePointsByDay;
+  hasActiveCheckIn: boolean;
 }
 
 export interface MyBar extends Bar {

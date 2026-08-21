@@ -33,6 +33,7 @@ const mockOwnerBar: MyBar = {
   phone: '+54 11 1234-5678',
   schedule: [{ day: 1, open: '20:00', close: '03:00' }],
   status: 'active',
+  closingTime: '06:00',
   attendancePointsByDay: {
     monday: 0, tuesday: 0, wednesday: 0, thursday: 0, friday: 0, saturday: 0, sunday: 0,
   },

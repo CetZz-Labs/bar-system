@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import Bar, { BarStatus } from "../models/Bar";
 import Group from "../models/Group";
 import Outing, { OutingStatus } from "../models/Outing";
 import Reward, { IReward, RewardStatus } from "../models/Reward";
@@ -243,6 +244,33 @@ export class RewardController {
 
         const rewards = await Reward.find({
             bar: outing.bar,
+            status: RewardStatus.ACTIVE,
+            deletedAt: null,
+            $or: [{ unlimitedStock: true }, { stock: { $gt: 0 } }],
+        }).sort({ pointsRequired: 1 });
+
+        res.status(200).json(rewards.map(toRewardDTO));
+    };
+
+    /**
+     * GET /api/bar/:id/rewards/available — LB-76. Recompensas activas y
+     * disponibles del bar, resueltas directo del :id (sin pasar por
+     * groupId/Outing como getAvailableRewards), accesibles por cualquier
+     * cliente autenticado sin `BarUser` — mismo criterio "bar activo, sin
+     * rol" que BarController.getPublicBarDetail. Mismo filtro exacto que
+     * getAvailableRewards/GroupRewardsController.getAvailable.
+     */
+    static getAvailableRewardsForBar = async (req: Request, res: Response) => {
+        const barId = req.params.id as string;
+
+        const bar = await Bar.findById(barId).select('status').lean();
+        if (!bar || bar.status !== BarStatus.ACTIVE) {
+            res.status(404).json({ message: 'Bar no encontrado' });
+            return;
+        }
+
+        const rewards = await Reward.find({
+            bar: barId,
             status: RewardStatus.ACTIVE,
             deletedAt: null,
             $or: [{ unlimitedStock: true }, { stock: { $gt: 0 } }],
