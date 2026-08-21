@@ -48,6 +48,11 @@ export interface IRedemption extends Document {
     invalidatedAt?: Date | null;
     /** Preparado para LB-69 (rechazo por el cajero), no usado en LB-68. */
     rejectionReason?: string;
+    /** LB-69: cajero que entregó/rechazó el canje (a diferencia de `leader`,
+     * que es quien lo generó). Sin equivalente en LB-68. */
+    cashier?: Types.ObjectId | null;
+    /** LB-69: momento en que el cajero resolvió (entregó/rechazó) el canje. */
+    validatedAt?: Date | null;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -125,6 +130,15 @@ const redemptionSchema = new Schema<IRedemption>({
     rejectionReason: {
         type: String,
         trim: true,
+    },
+    cashier: {
+        type: Schema.Types.ObjectId,
+        ref: 'User',
+        default: null,
+    },
+    validatedAt: {
+        type: Date,
+        default: null,
     },
 }, {
     timestamps: true,

@@ -24,6 +24,7 @@ import BarRewardsView from './views/bar/BarRewardsView'
 import CashierPanelView from './views/cashier/CashierPanelView'
 import CashierSearchView from './views/cashier/CashierSearchView'
 import CashierOutingView from './views/cashier/CashierOutingView'
+import CashierRedemptionsView from './views/cashier/CashierRedemptionsView'
 import CashierLayout from './layouts/CashierLayout'
 import SelectContextView from './views/auth/SelectContextView'
 import NotFound from './views/NotFound'
@@ -72,6 +73,7 @@ export default function Router() {
                     <Route path="/bar/:barId/cajero" element={<CashierPanelView />} />
                     <Route path="/bar/:barId/cajero/buscar" element={<CashierSearchView />} />
                     <Route path="/bar/:barId/cajero/salida/:outingId" element={<CashierOutingView />} />
+                    <Route path="/bar/:barId/cajero/canjes" element={<CashierRedemptionsView />} />
                 </Route>
 
                 <Route path="*" element={<NotFound />} />

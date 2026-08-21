@@ -12,12 +12,13 @@ export enum AuditAction {
     CONSUMPTION_DISPUTED = 'CONSUMPTION_DISPUTED',
     OUTING_CLOSED = 'OUTING_CLOSED',
     OUTING_AUTO_CLOSED = 'OUTING_AUTO_CLOSED',
-    // LB-68: canje de recompensas (líder). REDEMPTION_VALIDATED/REJECTED
-    // quedan para LB-69 (validación por el cajero), no se agregan acá
-    // porque LB-68 no llega a esos estados.
+    // LB-68: canje de recompensas (líder).
     REDEMPTION_GENERATED = 'REDEMPTION_GENERATED',
     REDEMPTION_CANCELLED = 'REDEMPTION_CANCELLED',
     REDEMPTION_EXPIRED = 'REDEMPTION_EXPIRED',
+    // LB-69: validación del canje por el cajero (entrega/rechazo).
+    REDEMPTION_VALIDATED = 'REDEMPTION_VALIDATED',
+    REDEMPTION_REJECTED = 'REDEMPTION_REJECTED',
 }
 
 export interface IAuditLog extends Document {

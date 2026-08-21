@@ -756,3 +756,77 @@ navegador mucho antes de que el token firmado expire realmente.
   pasadas (incluye `test:coverage` corrido dos veces, antes y después del
   fix), sin necesidad de re-auditar C1-C3/criterios de aceptación que ya
   habían quedado correctos en la primera pasada.
+
+### [2026-08-21] - LB-69: Validar y entregar canje (cajero)
+- **Dominio afectado:** Monorepo (Backend + Frontend)
+- **Subagentes involucrados:** Explorer (`progress/explorers/exp_LB-69.md`),
+  Implementer (`progress/implementers/impl_LB-69.md`), Reviewer
+  (`progress/reviewers/review_LB-69.md`).
+- **Contexto:** siguiente ticket en la cola del usuario tras el cierre de
+  LB-68 (su único bloqueante). Rama `feat/69` creada desde `development`. El
+  Explorer encontró un hueco arquitectónico real: `getAvailablePointsForBar`/
+  `getAvailableStock` (`utils/redemptionAvailability.ts`, LB-68) solo restan
+  `Redemption` en estado `HELD` — pasar a `VALIDATED` sin otra mutación
+  habría hecho que el saldo/stock "volvieran a subir" al entregar un canje,
+  contradiciendo el criterio de aceptación literal ("puntos y stock quedan
+  definitivos"). **Decisión de arquitectura resuelta con el usuario vía
+  `AskUserQuestion`** (sin precedente en el código, dos opciones viables):
+  se optó por el mecanismo simétrico a `ATTENDANCE`/`CONSUMPTION` — nuevo
+  `PointsTransactionType.REDEMPTION` (monto negativo) + decremento directo
+  de `Reward.stock` — en vez de ampliar los cálculos en vivo para restar
+  también `VALIDATED` sin dejar historial persistente.
+- **Resumen de cambios:** endpoint nuevo `POST /api/redemptions/:tokenOrCode/validate`
+  (+ `POST /:tokenOrCode/lookup` de preview, decisión del implementer dentro
+  del margen que dejaba el ticket) en `CashierRedemptionController.ts`,
+  montado como `/api/redemptions` (prefijo libre, sin colisión con
+  `groupRedemptionsRoute.ts`), protegido con `authenticateCashier` — dirección
+  invertida respecto a LB-61 (ahí el líder valida algo del cajero; acá el
+  cajero valida algo del líder). `resolveHeldRedemption` encadena rate
+  limiting (`redemptionQr.ts`) → resolución de token/código → expiración lazy
+  puntual (`redemptionExpiry.ts`, extendido para aceptar filtro por `_id`) →
+  scoping por bar del cajero (chequeo agregado por el implementer, no pedido
+  explícitamente por el ticket, mismo patrón que `ConsumptionController`) →
+  chequeo de estado (`ABANDONED` se interpreta como "salida cerrada", único
+  motivo real de ese estado hoy) → chequeo de `Outing.status === ACTIVE`.
+  `deliver`: transacción Mongo con doble-check anti-carrera, crea
+  `PointsTransaction{type:REDEMPTION, amount negativo}` + `$inc` en
+  `Group.pointsBalance` + `$inc:{stock:-1}` en `Reward` si no
+  `unlimitedStock`, audita `REDEMPTION_VALIDATED`, notifica a
+  líderes/co-líderes, emite `emitAvailablePointsForBar`. `reject`: mismo
+  patrón transaccional sin ningún contador de rechazos ni transición a
+  disputa (a diferencia de `LeaderConsumptionController.reject` — LB-69 es
+  one-shot, `Redemption` ni siquiera tiene `rejectCount`), motivo predefinido
+  + "Otro" (modelado en frontend con zod; backend solo exige string no
+  vacío). Modelo `Redemption` gana `cashier`/`validatedAt` (no existían,
+  a diferencia de `Consumption.cashier`). `PointsTransaction.amount` se
+  relajó de `min:1` a `Number.isInteger(v) && v!==0` para admitir montos
+  negativos, sin afectar `ATTENDANCE`/`CONSUMPTION` (siguen siendo positivos
+  por construcción del caller). `AuditAction`/`NotificationType` ganan
+  `REDEMPTION_VALIDATED`/`REDEMPTION_REJECTED`. Frontend: vista nueva
+  `CashierRedemptionsView.tsx` (dominio `cashier/`, ruta
+  `/bar/:barId/cajero/canjes`), reusa el lector QR/`BarcodeDetector` de
+  `CashierSearchView.tsx`, modal de rechazo con `react-hook-form`+
+  `zodResolver`, botón de entrada real agregado en `CashierPanelView.tsx`
+  (a diferencia del hallazgo no bloqueante que tuvo `BarRewardsView` en
+  LB-67, acá se agregó el punto de entrada desde el arranque). 425/425 tests
+  server (coverage 94.27%), 184/184 tests client, lint/build limpios en
+  ambos lados.
+- **Veredicto del Reviewer:** `[APPROVED]` (primera pasada) — C1-C4
+  verificados contra el código real y los 6 comandos de verificación
+  corridos en vivo por el propio Reviewer. Confirmó explícitamente que el
+  débito persistente queda resuelto de fondo (no solo declarado): verificó a
+  mano que `getAvailablePointsForBar` resta el `PointsTransaction` negativo
+  de forma permanente y que `getAvailableStock` no se recupera tras la
+  entrega porque `Reward.stock` ya bajó. Confirmó también la idempotencia
+  real (tanto el corte externo por estado como el doble-check transaccional
+  concurrente, este último con test dedicado que verifica
+  `session.abortTransaction` sin doble mutación) y que los cambios en
+  archivos de LB-68/LB-72 (`Redemption.ts`, `AuditLog.ts`, `Notification.ts`,
+  `PointsTransaction.ts`, `redemptionExpiry.ts`, `server.ts`) son aditivos y
+  acotados. Única observación: el scoping por bar del cajero, aunque
+  correcto y necesario, fue una extensión de alcance que idealmente se
+  hubiera mencionado al Leader antes de implementarla — no bloqueante, sin
+  cambios requeridos. Nota no bloqueante adicional: falta un test dedicado
+  (distinto del de carrera concurrente) para el camino de segunda llamada
+  secuencial sobre un canje ya `VALIDATED`, cubierto solo indirectamente por
+  lectura de código.
