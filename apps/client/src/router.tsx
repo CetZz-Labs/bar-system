@@ -22,6 +22,7 @@ import MyBarsView from './views/bar/MyBarsView'
 import BarProfileView from './views/bar/BarProfileView'
 import BarDetailView from './views/bar/BarDetailView'
 import BarRewardsView from './views/bar/BarRewardsView'
+import ExploreBarsView from './views/bar/ExploreBarsView'
 import CashierPanelView from './views/cashier/CashierPanelView'
 import CashierSearchView from './views/cashier/CashierSearchView'
 import CashierOutingView from './views/cashier/CashierOutingView'
@@ -57,6 +58,7 @@ export default function Router() {
                     <Route path="/groups/:slug/confirmar-consumo" element={<ConfirmConsumptionView />} />
                     <Route path="/groups/:slug/recompensas" element={<GroupRewardsView />} />
                     <Route path="/bar/registro" element={<BarRegisterView />} />
+                    <Route path="/bar/explorar" element={<ExploreBarsView />} />
                     <Route path="/bar/mis-bares" element={<MyBarsView />} />
                     <Route path="/bar/:id/perfil" element={<BarProfileView />} />
                     <Route path="/bar/:id/rewards" element={<BarRewardsView />} />

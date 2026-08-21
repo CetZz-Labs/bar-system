@@ -63,6 +63,21 @@ export interface BarPublicDetail {
   hasActiveCheckIn: boolean;
 }
 
+/**
+ * Item de listado de exploración de bares (LB-79), `GET /bars?search=`.
+ * Espejo manual de `BarController.listBars` — NO reusa `BarPublicDetail`
+ * (le falta `todayAttendancePoints` y ese tipo trae el mapa completo de
+ * `attendancePointsByDay`, no el valor de HOY ya resuelto por el backend).
+ */
+export interface ExploreBar {
+  id: string;
+  name: string;
+  address: BarAddress;
+  closingTime: string;
+  todayAttendancePoints: number;
+  hasActiveCheckIn: boolean;
+}
+
 export interface MyBar extends Bar {
   role: "OWNER";
   registeredAt: string;

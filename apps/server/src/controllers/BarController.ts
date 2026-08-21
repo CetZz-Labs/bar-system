@@ -1,12 +1,13 @@
 import { Request, Response } from "express";
 import { Types } from "mongoose";
-import Bar, { BarStatus, IAddress, IAttendancePointsByDay, IBar } from "../models/Bar";
+import Bar, { ATTENDANCE_POINTS_DAY_KEYS, BarStatus, IAddress, IAttendancePointsByDay, IBar } from "../models/Bar";
 import BarUser, { BarUserRole } from "../models/BarUser";
 import User from "../models/User";
 import Outing, { OutingStatus } from "../models/Outing";
 import { generateSlug } from "../utils/slug";
 import { saveBarLogo, saveBarCover } from "../utils/storage";
 import { verifyBarAccess } from "../utils/barAccess";
+import { getBarDayOfWeek } from "../utils/barDay";
 import path from "path";
 import sharp from "sharp";
 
@@ -226,6 +227,67 @@ export class BarController {
         } catch (error) {
             console.error(error);
             res.status(500).json({ message: 'Hubo un error al obtener los bares activos' });
+        }
+    };
+
+    /**
+     * GET /api/bars — LB-79. Listado de bares ACTIVE para explorar, con los
+     * puntos de asistencia de HOY ya resueltos (`getBarDayOfWeek` +
+     * `ATTENDANCE_POINTS_DAY_KEYS`, en memoria, sin queries extra por bar) y
+     * `hasActiveCheckIn` por bar sin N+1: 1 query a `User` (memberships) + 1
+     * query a `Outing` para TODOS los grupos del usuario, sin filtrar por
+     * bar, resuelta en un `Set` en memoria (mismo criterio de "check-in
+     * activo" que `getPublicBarDetail`, LB-76). Búsqueda `?search=` por
+     * nombre: regex case-insensitive parcial (mismo patrón que
+     * `utils/cashierSearch.ts`, no el patrón exacto/anclado de `registerBar`).
+     */
+    static listBars = async (req: Request, res: Response) => {
+        try {
+            const userId = req.user!._id.toString();
+            const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
+
+            const filter: { status: BarStatus; name?: { $regex: string; $options: string } } = {
+                status: BarStatus.ACTIVE,
+            };
+            if (search) {
+                const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                filter.name = { $regex: escaped, $options: 'i' };
+            }
+
+            const bars = await Bar.find(filter)
+                .select('name address closingTime attendancePointsByDay')
+                .sort({ name: 1 })
+                .lean();
+
+            const user = await User.findById(userId).select('memberships').lean();
+            const groupIds = (user?.memberships ?? []).map((membership) => membership.group);
+
+            const activeOutings = await Outing.find({
+                group: { $in: groupIds },
+                status: OutingStatus.ACTIVE,
+            }).select('bar').lean();
+            const activeBarIds = new Set(activeOutings.map((outing) => outing.bar.toString()));
+
+            const now = new Date();
+            const result = bars.map((bar) => {
+                const dayIndex = getBarDayOfWeek(now, bar.closingTime);
+                const dayKey = ATTENDANCE_POINTS_DAY_KEYS[dayIndex];
+                const todayAttendancePoints = bar.attendancePointsByDay?.[dayKey] ?? 0;
+
+                return {
+                    id: bar._id,
+                    name: bar.name,
+                    address: bar.address,
+                    closingTime: bar.closingTime,
+                    todayAttendancePoints,
+                    hasActiveCheckIn: activeBarIds.has(bar._id.toString()),
+                };
+            });
+
+            res.status(200).json(result);
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ message: 'Hubo un error al obtener los bares' });
         }
     };
 

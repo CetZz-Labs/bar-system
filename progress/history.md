@@ -894,3 +894,49 @@ navegador mucho antes de que el token firmado expire realmente.
   rondas de review en total para este ticket, tres fixups post-aprobación
   inicial motivados por pruebas manuales del usuario que la suite
   automatizada no había capturado.
+
+### [2026-08-21] - LB-79: Explorar bares (listado + puntos del día + filtros)
+- **Dominio afectado:** Monorepo (Backend + Frontend)
+- **Subagentes involucrados:** Explorer (`progress/explorers/exp_LB-79.md`),
+  Implementer (`progress/implementers/impl_LB-79.md`), Reviewer
+  (`progress/reviewers/review_LB-79.md`).
+- **Contexto:** el contrato del ticket (`closeTime`, `hasActiveCheckin`)
+  divergía de las convenciones ya establecidas por LB-76 en el mismo dominio
+  (`closingTime`, `hasActiveCheckIn`). Resuelto vía `AskUserQuestion` antes
+  de delegar al Implementer: se homologó a `closingTime`/`hasActiveCheckIn`.
+  Se dejó comentario en LB-79 sugiriendo a quien redacta specs validar
+  nombres de campo contra el código real antes de publicar el contrato.
+- **Resumen de cambios:** endpoint nuevo `GET /api/bars?search=X` →
+  `[{ id, name, address, closingTime, todayAttendancePoints, hasActiveCheckIn }]`
+  (`BarController.listBars`, `routes/barsRoute.ts`, router plural montado en
+  `server.ts` **después** de `/api/bars/:barId/rewards` existente para
+  evitar riesgo de orden de mount). Sin N+1: 1 query a `Bar` (filtrada por
+  `status: ACTIVE`, con `$regex` case-insensitive sin anclas + escape de
+  caracteres especiales para `search`, mismo patrón que `cashierSearch.ts`),
+  1 query a `User` + 1 a `Outing` (sin filtrar por bar) para resolver
+  `hasActiveCheckIn` de todos los bares vía `Set` en memoria —
+  `todayAttendancePoints` calculado 100% en memoria con `getBarDayOfWeek` +
+  `ATTENDANCE_POINTS_DAY_KEYS` (reusado de `utils/barDay.ts`/`attendancePoints.ts`,
+  sin tocar esos archivos), tolerando `attendancePointsByDay` undefined en
+  bares pre-LB-59. Auth: `authenticate([Role.USER, Role.ADMIN])`, igual que
+  `getPublicBarDetail` (LB-76). Frontend: `ExploreBarsView.tsx` (ruta
+  `/bar/explorar`, español por consistencia con `/bar/registro`/`/bar/mis-bares`
+  hermanas, aunque los identificadores de código quedaron en inglés), cards
+  con patrón de `MyBarsView.tsx`, búsqueda con debounce manual (patrón de
+  `CashierSearchView.tsx`, sin hook `useDebounce` reusable en el repo), tipo
+  nuevo `ExploreBar` en `types/bar.ts` (espejo manual, no reusa
+  `BarPublicDetail`), función nueva `exploreBars` en `API/BarAPI.ts`. Punto
+  de entrada agregado en `Home.tsx` (segundo botón, no en el bottom nav
+  compartido de `MainLayout` para evitar tocar un componente global). Badge
+  "Estás acá" (texto acortado respecto al "Estás acá ahora" de LB-76 por
+  espacio de la card) — decisión de UI confirmada por el Reviewer como no
+  bloqueante. 4 tests backend nuevos (incluye verificación explícita de
+  `toHaveBeenCalledTimes(1)` en `User.findById`/`Outing.find` como evidencia
+  real de no-N+1), 5 tests frontend nuevos. 428/428 tests server, 197/197
+  tests client (un fallo puntual de flakiness pre-existente en
+  `CashierSearchView.test.tsx`, no tocado por este ticket, confirmado no
+  regresivo al re-correrlo aislado), lint y build limpios en ambos lados.
+- **Veredicto del Reviewer:** `[APPROVED]` (primera pasada) - C1-C4
+  verificados contra el código real y los 5 comandos de verificación
+  corridos en vivo por el propio Reviewer. Sin cambios requeridos. Ticket
+  transicionado a "Finalizada" en Jira.

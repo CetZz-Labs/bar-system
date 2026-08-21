@@ -1,11 +1,28 @@
 import api from "@/libs/axios";
 import { throwStandardError } from "@/utils/apiError";
-import type { ActiveBar, CreateBarFormData, EditBarProfileFormData, MyBar, RegisterBarResponse } from "@/types/bar";
+import type { ActiveBar, CreateBarFormData, EditBarProfileFormData, ExploreBar, MyBar, RegisterBarResponse } from "@/types/bar";
 import type { Bar, BarPublicDetail } from "@/types/bar";
 
 export async function getActiveBars() {
   try {
     const { data } = await api.get<ActiveBar[]>("/bar/activos");
+    return data;
+  } catch (error) {
+    throwStandardError(error);
+  }
+}
+
+/**
+ * LB-79: listado de bares ACTIVE para explorar (puntos de HOY,
+ * `hasActiveCheckIn`), con búsqueda opcional por nombre. Distinto de
+ * `getActiveBars` (`/bar/activos`, sin puntos/check-in, usado para
+ * selectores de bar existentes).
+ */
+export async function exploreBars(search?: string) {
+  try {
+    const { data } = await api.get<ExploreBar[]>("/bars", {
+      params: search ? { search } : undefined,
+    });
     return data;
   } catch (error) {
     throwStandardError(error);
