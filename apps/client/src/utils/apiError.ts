@@ -13,12 +13,38 @@ export interface ValidationErrorDetail {
 // Define la estructura global de tu error estandarizado
 export type ApiError =
     | { type: 'validation'; details: ValidationErrorDetail[] }
-    | { type: 'server'; message: string; status?: number }
+    | {
+        type: 'server';
+        message: string;
+        status?: number;
+        code?: string;
+        shiftId?: string;
+        summary?: unknown;
+    }
     | { type: 'unknown'; message: string };
+
+type ApiResponseData = {
+    errors?: ValidationErrorDetail[];
+    message?: string;
+    code?: string;
+    shiftId?: string;
+    summary?: unknown;
+};
+
+function isApiResponseData(value: unknown): value is ApiResponseData {
+    return typeof value === 'object' && value !== null;
+}
 
 export const throwStandardError = (error: unknown): never => {
     if (isAxiosError(error) && error.response) {
-        const data = error.response.data;
+        const data: unknown = error.response.data;
+
+        if (!isApiResponseData(data)) {
+            throw {
+                type: 'unknown',
+                message: "Ocurrió un error inesperado al conectar con el servidor."
+            };
+        }
 
         // 1. Si es un error de express-validator (arreglo 'errors')
         if (data.errors) {
@@ -30,11 +56,17 @@ export const throwStandardError = (error: unknown): never => {
 
         // 2. Si es un error del controlador (string 'message')
         if (data.message) {
-            throw {
+            const serverError: ApiError = {
                 type: 'server',
                 message: data.message,
                 status: error.response.status
             };
+
+            if (data.code) serverError.code = data.code;
+            if (data.shiftId) serverError.shiftId = data.shiftId;
+            if (data.summary !== undefined) serverError.summary = data.summary;
+
+            throw serverError;
         }
     }
 

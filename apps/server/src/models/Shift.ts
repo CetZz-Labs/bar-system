@@ -7,6 +7,25 @@ export enum ShiftEndReason {
     BAR_CLOSED = 'BAR_CLOSED',
 }
 
+export enum ShiftSummaryStatus {
+    PENDING = 'PENDING',
+    VIEWED = 'VIEWED',
+}
+
+export interface IShiftSummary {
+    status: ShiftSummaryStatus;
+    totalConsumptions: number;
+    confirmedConsumptions: number;
+    pendingConsumptions: number;
+    rejectedConsumptions: number;
+    disputedConsumptions: number;
+    totalAmount: number;
+    pointsAwarded: number;
+    redemptionCount: number;
+    redemptionsAvailable: boolean;
+    generatedAt: Date;
+}
+
 export interface IShift extends Document {
     bar: Types.ObjectId;
     user: Types.ObjectId;
@@ -16,7 +35,26 @@ export interface IShift extends Document {
     startedAt: Date;
     endedAt?: Date;
     endReason?: ShiftEndReason;
+    summary?: IShiftSummary;
 }
+
+const shiftSummarySchema = new Schema<IShiftSummary>({
+    status: {
+        type: String,
+        enum: Object.values(ShiftSummaryStatus),
+        required: true,
+    },
+    totalConsumptions: { type: Number, required: true, min: 0 },
+    confirmedConsumptions: { type: Number, required: true, min: 0 },
+    pendingConsumptions: { type: Number, required: true, min: 0 },
+    rejectedConsumptions: { type: Number, required: true, min: 0 },
+    disputedConsumptions: { type: Number, required: true, min: 0 },
+    totalAmount: { type: Number, required: true, min: 0 },
+    pointsAwarded: { type: Number, required: true, min: 0 },
+    redemptionCount: { type: Number, required: true, min: 0 },
+    redemptionsAvailable: { type: Boolean, required: true },
+    generatedAt: { type: Date, required: true },
+}, { _id: false });
 
 const shiftSchema = new Schema<IShift>({
     bar: {
@@ -56,6 +94,9 @@ const shiftSchema = new Schema<IShift>({
     endReason: {
         type: String,
         enum: Object.values(ShiftEndReason),
+    },
+    summary: {
+        type: shiftSummarySchema,
     },
 });
 

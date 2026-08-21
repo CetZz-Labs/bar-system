@@ -95,6 +95,44 @@ describe('useCashierAuth', () => {
 
     expect(result.current.data).toBeNull();
     expect(result.current.isError).toBe(true);
+    expect(result.current.autoClosedRecovery).toBeNull();
+  });
+
+  it('should expose the automatic-close summary without logging out', async () => {
+    const summary = {
+      status: 'PENDING' as const,
+      totalConsumptions: 2,
+      confirmedConsumptions: 1,
+      pendingConsumptions: 1,
+      rejectedConsumptions: 0,
+      disputedConsumptions: 0,
+      totalAmount: 1000,
+      pointsAwarded: 10,
+      redemptionCount: 0,
+      redemptionsAvailable: false,
+      generatedAt: '2026-08-19T04:00:00.000Z',
+    };
+    mockCashierSession.mockRejectedValue({
+      type: 'server',
+      message: 'El turno se cerró automáticamente',
+      status: 401,
+      code: 'SHIFT_AUTO_CLOSED',
+      shiftId: 'shift-closed',
+      summary,
+    });
+
+    const { result } = renderHook(() => useCashierAuth(), { wrapper: createWrapper() });
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    expect(result.current.data).toBeNull();
+    expect(result.current.autoClosedRecovery).toEqual({
+      shiftId: 'shift-closed',
+      summary,
+    });
+    expect(mockCashierLogout).not.toHaveBeenCalled();
   });
 
   it('should call logout and clear cashier session data', async () => {

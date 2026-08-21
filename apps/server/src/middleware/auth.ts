@@ -2,9 +2,9 @@ import { Request, Response, NextFunction } from "express";
 import jwt from 'jsonwebtoken';
 import { Types } from "mongoose";
 import User, { IUser, Role } from "../models/User";
-import BarUser, { IBarUser } from "../models/BarUser";
+import BarUser, { BarUserRole, IBarUser } from "../models/BarUser";
 import Bar from "../models/Bar";
-import Shift, { IShift } from "../models/Shift";
+import Shift, { IShift, ShiftEndReason } from "../models/Shift";
 import { getLastClosingBoundary } from "../utils/shift";
 
 interface IDecodedToken {
@@ -17,6 +17,7 @@ interface ICashierDecodedToken {
     id: string;
     barId: string;
     role?: string;
+    shiftId?: string;
     iat?: number;
     exp?: number;
 }
@@ -30,6 +31,11 @@ declare global {
                 bar: Types.ObjectId;
                 barUser: IBarUser;
                 shift: IShift;
+            };
+            cashierSummaryContext?: {
+                user: IUser;
+                bar: Types.ObjectId;
+                barUser: IBarUser;
             };
         }
     }
@@ -149,8 +155,23 @@ export const authenticate = (allowedRoles: Role[] = [Role.USER]) => {
  * con el bar (BarUser), el estado del cajero y la vigencia del turno
  * (Shift), cerrándolo automáticamente si ya pasó el horario de cierre del
  * bar.
+ *
+ * LB-73: la lógica quedó refactorizada en `authenticateCashierRequest` con
+ * `allowManualCloseRetry` (permite reintentar el cierre de un turno
+ * cerrado manualmente usando el shiftId del token), expone los wrappers
+ * `authenticateCashier`/`authenticateCashierForClose` y los middlewares de
+ * resumen `authenticateCashierSummary`/`authenticateShiftSummary`.
  */
-export const authenticateCashier = async (req: Request, res: Response, next: NextFunction) => {
+interface CashierAuthenticationOptions {
+    allowManualCloseRetry: boolean;
+}
+
+const authenticateCashierRequest = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+    options: CashierAuthenticationOptions,
+) => {
     const token = req.cookies.access_token;
 
     // 1. Verificamos si hay token
@@ -195,9 +216,34 @@ export const authenticateCashier = async (req: Request, res: Response, next: Nex
             return;
         }
 
-        // 6. Buscamos el turno activo
-        const shift = await Shift.findOne({ bar: decoded.barId, user: decoded.id, endedAt: null });
+        // 6. A close retries, bind the request to the exact shift in the token.
+        // Older tokens without shiftId may still close their active shift, but
+        // they cannot retry a closed shift because they do not identify one.
+        const shift = decoded.shiftId
+            ? (Types.ObjectId.isValid(decoded.shiftId) ? await Shift.findById(decoded.shiftId) : null)
+            : await Shift.findOne({ bar: decoded.barId, user: decoded.id, endedAt: null });
         if (!shift) {
+            res.status(401).json({ message: 'No hay un turno activo, iniciá sesión nuevamente' });
+            return;
+        }
+
+        if (shift.bar.toString() !== decoded.barId || shift.user.toString() !== decoded.id) {
+            res.status(403).json({ message: 'No tenés acceso a este turno' });
+            return;
+        }
+
+        if (shift.endedAt) {
+            if (options.allowManualCloseRetry && decoded.shiftId && shift.endReason === ShiftEndReason.MANUAL) {
+                req.cashierContext = {
+                    user,
+                    bar: new Types.ObjectId(decoded.barId),
+                    barUser,
+                    shift,
+                };
+                next();
+                return;
+            }
+
             res.status(401).json({ message: 'No hay un turno activo, iniciá sesión nuevamente' });
             return;
         }
@@ -219,7 +265,17 @@ export const authenticateCashier = async (req: Request, res: Response, next: Nex
                     boundary,
                 });
 
-                res.status(401).json({ message: 'El turno se cerró automáticamente al horario de cierre del bar' });
+                // LB-73: envelope de auto-cierre para que el cliente pueda
+                // ofrecer la recuperación del resumen (ver useCashierAuth).
+                const { generateShiftSummary } = await import('../utils/shiftSummary.js');
+                const summary = await generateShiftSummary(shift._id.toString());
+
+                res.status(401).json({
+                    message: 'El turno se cerró automáticamente al horario de cierre del bar',
+                    code: 'SHIFT_AUTO_CLOSED',
+                    shiftId: shift._id.toString(),
+                    summary,
+                });
                 return;
             }
         }
@@ -236,4 +292,74 @@ export const authenticateCashier = async (req: Request, res: Response, next: Nex
         console.error(error);
         res.status(500).json({ message: 'Hubo un error al autenticar el turno' });
     }
+};
+
+export const authenticateCashier = async (req: Request, res: Response, next: NextFunction) =>
+    authenticateCashierRequest(req, res, next, { allowManualCloseRetry: false });
+
+export const authenticateCashierForClose = async (req: Request, res: Response, next: NextFunction) =>
+    authenticateCashierRequest(req, res, next, { allowManualCloseRetry: true });
+
+/**
+ * Authenticates a cashier token for closed-shift summary access.
+ * Unlike authenticateCashier, it deliberately does not require an active shift.
+ */
+export const authenticateCashierSummary = async (req: Request, res: Response, next: NextFunction) => {
+    const token = req.cookies.access_token;
+
+    if (!token) {
+        res.status(401).json({ message: 'No Autorizado' });
+        return;
+    }
+
+    let decoded: ICashierDecodedToken;
+    try {
+        decoded = jwt.verify(token, process.env.JWT_SECRET as string) as ICashierDecodedToken;
+    } catch {
+        res.status(401).json({ message: 'Token no válido o expirado' });
+        return;
+    }
+
+    if (!decoded || !decoded.id || !decoded.barId) {
+        res.status(401).json({ message: 'Token no válido o expirado' });
+        return;
+    }
+
+    const user = await User.findById(decoded.id);
+    if (!user || !user.isActive) {
+        res.status(401).json({ message: 'Token no válido o expirado' });
+        return;
+    }
+
+    const barUser = await BarUser.findOne({ bar: decoded.barId, user: decoded.id });
+    if (!barUser) {
+        res.status(403).json({ message: 'No tenés acceso a este bar' });
+        return;
+    }
+
+    if (!barUser.isActive || ![BarUserRole.CASHIER, BarUserRole.OWNER].includes(barUser.role)) {
+        res.status(403).json({ message: 'No tenés permisos para consultar resúmenes de turnos' });
+        return;
+    }
+
+    req.cashierSummaryContext = {
+        user,
+        bar: new Types.ObjectId(decoded.barId),
+        barUser,
+    };
+    next();
+};
+
+/**
+ * Accepts either the cashier session for that cashier's own shifts or the
+ * generic authenticated session for OWNER access. The controller performs the
+ * resource-level ownership check for every summary and export operation.
+ */
+export const authenticateShiftSummary = async (req: Request, res: Response, next: NextFunction) => {
+    if (req.cookies.access_token) {
+        await authenticateCashierSummary(req, res, next);
+        return;
+    }
+
+    await authenticate()(req, res, next);
 };

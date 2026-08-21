@@ -21,9 +21,11 @@ import BarRegisterView from './views/bar/BarRegisterView'
 import MyBarsView from './views/bar/MyBarsView'
 import BarProfileView from './views/bar/BarProfileView'
 import BarRewardsView from './views/bar/BarRewardsView'
+import BarCategoriesView from './views/bar/BarCategoriesView'
 import CashierPanelView from './views/cashier/CashierPanelView'
 import CashierSearchView from './views/cashier/CashierSearchView'
 import CashierOutingView from './views/cashier/CashierOutingView'
+import CashierShiftSummaryView from './views/cashier/CashierShiftSummaryView'
 import CashierLayout from './layouts/CashierLayout'
 import SelectContextView from './views/auth/SelectContextView'
 import NotFound from './views/NotFound'
@@ -59,6 +61,7 @@ export default function Router() {
                     <Route path="/bar/mis-bares" element={<MyBarsView />} />
                     <Route path="/bar/:id/perfil" element={<BarProfileView />} />
                     <Route path="/bar/:id/rewards" element={<BarRewardsView />} />
+                    <Route path="/bar/:id/categorias" element={<BarCategoriesView />} />
                 </Route>
                 <Route path="/unirse/:inviteCode" element={<JoinGroupView />} />
 
@@ -68,6 +71,7 @@ export default function Router() {
                     y el propio componente se encarga de guardar la sesión (useAuth). */}
                 <Route path="/select-context" element={<SelectContextView />} />
 
+                <Route path="/bar/:barId/cajero/cierre/:shiftId" element={<CashierShiftSummaryView />} />
                 <Route element={<CashierLayout />}>
                     <Route path="/bar/:barId/cajero" element={<CashierPanelView />} />
                     <Route path="/bar/:barId/cajero/buscar" element={<CashierSearchView />} />

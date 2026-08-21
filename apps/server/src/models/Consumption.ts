@@ -22,6 +22,7 @@ export interface IConsumption extends Document {
     outing: Types.ObjectId;
     bar: Types.ObjectId;
     cashier: Types.ObjectId;
+    shift?: Types.ObjectId;
     amount: number;
     isUnusualAmount: boolean;
     breakdown?: IConsumptionBreakdownItem[];
@@ -71,6 +72,11 @@ const consumptionSchema = new Schema<IConsumption>({
         type: Schema.Types.ObjectId,
         ref: 'User',
         required: true,
+    },
+    shift: {
+        type: Schema.Types.ObjectId,
+        ref: 'Shift',
+        index: true,
     },
     amount: {
         type: Number,

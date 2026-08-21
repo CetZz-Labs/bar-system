@@ -20,6 +20,7 @@ import rewardRouter from './routes/rewardRoute'
 import rewardAvailableRouter from './routes/rewardAvailableRoute'
 import groupRewardsRouter from './routes/groupRewardsRoute'
 import groupRedemptionsRouter from './routes/groupRedemptionsRoute'
+import drinkCategoryRouter from './routes/drinkCategoryRoute'
 
 if (process.env.NODE_ENV !== 'production') {
     process.loadEnvFile()
@@ -47,6 +48,7 @@ app.use('/api/groups/:groupId/rewards', groupRewardsRouter)
 app.use('/api/groups/:groupId/redemptions', groupRedemptionsRouter)
 app.use('/api/groups', groupRouter)
 app.use('/api/bar', barRouter)
+app.use('/api/bar/:barId/categories', drinkCategoryRouter)
 app.use('/api/outings/:outingId/consumptions', consumptionRouter)
 app.use('/api/consumptions', leaderConsumptionRouter)
 app.use('/api/outings/:outingId/check-in', outingCheckInRouter)

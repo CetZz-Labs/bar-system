@@ -1,7 +1,7 @@
 import { vi, describe, it, expect, beforeEach } from 'vitest'
 import jwt from 'jsonwebtoken'
 import { Types } from 'mongoose'
-import { authenticateCashier } from '../auth'
+import { authenticateCashier, authenticateCashierSummary } from '../auth'
 import User from '../../models/User'
 import BarUser from '../../models/BarUser'
 import Bar from '../../models/Bar'
@@ -9,6 +9,8 @@ import Shift from '../../models/Shift'
 import { getLastClosingBoundary } from '../../utils/shift'
 import { closeBar } from '../../utils/closeBar'
 import { buildMockRequest, buildMockResponse, buildMockNext } from '../../__tests__/helpers/mockHelpers'
+
+import { generateShiftSummary } from '../../utils/shiftSummary'
 
 vi.mock('jsonwebtoken', () => ({
   default: { verify: vi.fn() },
@@ -44,6 +46,12 @@ vi.mock('../../utils/closeBar', () => ({
   closeBar: vi.fn().mockResolvedValue({ closedShifts: 0, closedOutings: 0 }),
 }))
 
+// LB-73: tras el cierre automático el middleware devuelve el envelope de
+// recuperación con el resumen del turno.
+vi.mock('../../utils/shiftSummary', () => ({
+  generateShiftSummary: vi.fn(),
+}))
+
 function buildDecodedToken(overrides: any = {}) {
   return {
     id: new Types.ObjectId().toString(),
@@ -63,6 +71,7 @@ describe('authenticateCashier middleware', () => {
     vi.mocked(getLastClosingBoundary).mockReset()
     vi.mocked(closeBar).mockReset()
     vi.mocked(closeBar).mockResolvedValue({ closedShifts: 0, closedOutings: 0 })
+    vi.mocked(generateShiftSummary).mockReset()
   })
 
   it('returns 401 when there is no access_token cookie', async () => {
@@ -165,6 +174,9 @@ describe('authenticateCashier middleware', () => {
     const decoded = buildDecodedToken()
     const boundary = new Date('2026-08-06T06:00:00')
     const shift = {
+      _id: new Types.ObjectId(),
+      bar: new Types.ObjectId(decoded.barId),
+      user: new Types.ObjectId(decoded.id),
       startedAt: new Date('2026-08-05T20:00:00'), // antes del boundary
       deviceInfo: 'POS-1',
       endedAt: undefined,
@@ -178,6 +190,8 @@ describe('authenticateCashier middleware', () => {
     vi.mocked(Shift.findOne).mockResolvedValue(shift as any)
     vi.mocked(Bar.findById).mockResolvedValue({ closingTime: '06:00' } as any)
     vi.mocked(getLastClosingBoundary).mockReturnValue(boundary)
+    const summary = { redemptionsAvailable: false }
+    vi.mocked(generateShiftSummary).mockResolvedValue(summary as any)
 
     const req = buildMockRequest({ cookies: { access_token: 'valid-token' } })
     const res = buildMockResponse()
@@ -194,8 +208,35 @@ describe('authenticateCashier middleware', () => {
       })
     )
     expect(res.status).toHaveBeenCalledWith(401)
-    expect(res.json).toHaveBeenCalledWith({ message: 'El turno se cerró automáticamente al horario de cierre del bar' })
+    expect(res.json).toHaveBeenCalledWith({
+      message: 'El turno se cerró automáticamente al horario de cierre del bar',
+      code: 'SHIFT_AUTO_CLOSED',
+      shiftId: shift._id.toString(),
+      summary,
+    })
     expect(next).not.toHaveBeenCalled()
+  })
+
+  it('authenticates a cashier for a closed-shift summary without requiring an active shift', async () => {
+    const decoded = buildDecodedToken()
+    const user = { _id: decoded.id, isActive: true }
+    const barUser = { isActive: true, role: 'CASHIER' }
+    vi.mocked(jwt.verify).mockReturnValue(decoded as any)
+    vi.mocked(User.findById).mockResolvedValue(user as any)
+    vi.mocked(BarUser.findOne).mockResolvedValue(barUser as any)
+
+    const req = buildMockRequest({ cookies: { access_token: 'valid-token' } })
+    const res = buildMockResponse()
+    const next = buildMockNext()
+
+    await authenticateCashierSummary(req, res, next)
+
+    expect(next).toHaveBeenCalled()
+    expect(req.cashierSummaryContext).toEqual(expect.objectContaining({
+      user,
+      barUser,
+    }))
+    expect(Shift.findOne).not.toHaveBeenCalled()
   })
 
   it('calls next() and sets req.cashierContext on the happy path', async () => {
@@ -204,6 +245,8 @@ describe('authenticateCashier middleware', () => {
     const mockUser = { _id: decoded.id, isActive: true }
     const mockBarUser = { isActive: true, role: 'CASHIER' }
     const shift = {
+      bar: new Types.ObjectId(decoded.barId),
+      user: new Types.ObjectId(decoded.id),
       startedAt: new Date('2026-08-06T08:00:00'), // después del boundary, turno vigente
       deviceInfo: 'POS-1',
     }

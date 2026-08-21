@@ -54,7 +54,7 @@ const renderBarProfile = () =>
 
 describe('BarProfileView — attendance points section (LB-59)', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     vi.mocked(BarAPI.getBarProfile).mockResolvedValue(mockBar);
     vi.mocked(BarAPI.updateBarProfile).mockResolvedValue({ message: 'ok' });
   });

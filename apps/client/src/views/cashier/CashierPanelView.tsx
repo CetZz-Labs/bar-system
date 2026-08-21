@@ -1,12 +1,35 @@
-import { Link, useParams } from "react-router"
+import { useState } from "react"
+import { Link, useNavigate, useParams } from "react-router"
 import { motion } from "motion/react"
-import { LogOut, Store, Clock, UserCog, Search } from "lucide-react"
+import { AlertTriangle, Clock, Search, Store, UserCog } from "lucide-react"
+import { useMutation, useQueryClient } from "@tanstack/react-query"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/Button"
+import { Modal } from "@/components/ui/Modal"
+import { closeCashierShift } from "@/API/CashierAPI"
 import { useCashierAuth } from "@/hooks/useCashierAuth"
+import { toastApiError } from "@/utils/apiError"
 
 export default function CashierPanelView() {
     const { barId } = useParams<{ barId: string }>()
-    const { data, logoutCashier } = useCashierAuth()
+    const navigate = useNavigate()
+    const queryClient = useQueryClient()
+    const { data } = useCashierAuth()
+    const [isCloseModalOpen, setIsCloseModalOpen] = useState(false)
+
+    const closeShiftMutation = useMutation({
+        mutationFn: closeCashierShift,
+        onSuccess: (result) => {
+            if (!result || !barId) return
+            queryClient.setQueryData(['cashier-session'], null)
+            toast.success('Turno cerrado correctamente')
+            navigate(`/bar/${barId}/cajero/cierre/${result.shiftId}`, {
+                state: { summary: result.summary },
+                replace: true,
+            })
+        },
+        onError: toastApiError,
+    })
 
     const shiftStartedAt = data?.shift.startedAt
         ? new Date(data.shift.startedAt).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
@@ -75,11 +98,27 @@ export default function CashierPanelView() {
                 size="lg"
                 fullWidth
                 className="mt-6"
-                onClick={logoutCashier}
+                onClick={() => setIsCloseModalOpen(true)}
+                disabled={closeShiftMutation.isPending}
             >
-                <LogOut size={20} />
                 CERRAR TURNO
             </Button>
+
+            <Modal
+                isOpen={isCloseModalOpen}
+                onClose={() => setIsCloseModalOpen(false)}
+                onConfirm={() => closeShiftMutation.mutate()}
+                title="¿Cerrar turno?"
+                description="El cierre no bloquea consumos pendientes o en disputa: quedarán reflejados en el resumen para su seguimiento. ¿Querés cerrar el turno ahora?"
+                confirmText="Cerrar turno"
+                cancelText="Seguir trabajando"
+                isPending={closeShiftMutation.isPending}
+            >
+                <div className="mt-4 flex items-start gap-2 rounded-md border border-error-border bg-error-dim p-3 text-sm text-error" role="alert">
+                    <AlertTriangle size={18} className="mt-0.5 shrink-0" />
+                    <span>Los consumos pendientes o en disputa no impiden cerrar el turno.</span>
+                </div>
+            </Modal>
         </motion.div>
     )
 }

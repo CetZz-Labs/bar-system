@@ -15,6 +15,7 @@ import {
   X,
   Trophy,
   Gift,
+  Wine,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -460,6 +461,27 @@ export default function BarProfileView() {
               />
             ))}
           </div>
+        </div>
+
+        {/* Drink Categories (LB-58) */}
+        <div className="flex flex-col gap-3">
+          <h2 className="text-lg font-display font-bold tracking-tight flex items-center gap-2">
+            <Wine size={20} className="text-lime" />
+            Catálogo de bebidas
+          </h2>
+          <p className="text-text-muted text-xs">
+            Administrá las categorías de bebidas que ofrece tu bar.
+          </p>
+          <Button
+            type="button"
+            variant="surface"
+            size="md"
+            fullWidth
+            onClick={() => navigate(`/bar/${id}/categorias`)}
+          >
+            <Wine size={18} />
+            GESTIONAR CATEGORÍAS
+          </Button>
         </div>
 
         {/* Save Button */}
