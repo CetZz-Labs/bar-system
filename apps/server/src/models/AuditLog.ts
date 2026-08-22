@@ -19,6 +19,9 @@ export enum AuditAction {
     // LB-69: validación del canje por el cajero (entrega/rechazo).
     REDEMPTION_VALIDATED = 'REDEMPTION_VALIDATED',
     REDEMPTION_REJECTED = 'REDEMPTION_REJECTED',
+    // LB-74: resolución manual de una disputa (Consumption DISPUTED) por el
+    // OWNER, desde el dashboard del bar.
+    CONSUMPTION_RESOLVED_BY_OWNER = 'CONSUMPTION_RESOLVED_BY_OWNER',
 }
 
 export interface IAuditLog extends Document {

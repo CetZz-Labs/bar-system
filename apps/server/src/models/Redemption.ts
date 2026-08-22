@@ -150,6 +150,10 @@ redemptionSchema.index({ group: 1, bar: 1, status: 1, expiresAt: 1 });
 redemptionSchema.index({ group: 1, createdAt: -1 });
 // Disponibilidad de stock en vivo por recompensa (utils/redemptionAvailability.ts).
 redemptionSchema.index({ reward: 1, status: 1, expiresAt: 1 });
+// LB-74: dashboard del bar (OWNER) — "canjes entregados" filtra por `bar` +
+// `status=VALIDATED` + rango de `validatedAt` (el índice de línea 149 usa
+// `expiresAt`, no `validatedAt`; ver progress/explorers/exp_LB-74.md §4).
+redemptionSchema.index({ bar: 1, status: 1, validatedAt: 1 });
 
 const Redemption = model<IRedemption>('Redemption', redemptionSchema);
 

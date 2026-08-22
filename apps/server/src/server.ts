@@ -21,6 +21,7 @@ import rewardAvailableRouter from './routes/rewardAvailableRoute'
 import groupRewardsRouter from './routes/groupRewardsRoute'
 import groupRedemptionsRouter from './routes/groupRedemptionsRoute'
 import cashierRedemptionRouter from './routes/cashierRedemptionRoute'
+import dashboardRouter from './routes/dashboardRoute'
 
 if (process.env.NODE_ENV !== 'production') {
     process.loadEnvFile()
@@ -56,6 +57,7 @@ app.use('/api/outings/:outingId/close', outingCloseRouter)
 app.use('/api/cashier', cashierRouter)
 app.use('/api/context', contextRouter)
 app.use('/api/bars/:barId/rewards', rewardRouter)
+app.use('/api/bars/:barId', dashboardRouter)
 app.use('/api/rewards', rewardAvailableRouter)
 app.get('/api', (req, res) => {
     res.send('Hello World!')

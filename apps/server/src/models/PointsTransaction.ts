@@ -111,6 +111,11 @@ pointsTransactionSchema.index({ group: 1, createdAt: -1 });
 // dedicado. Aditivo, no cambia comportamiento, solo performance.
 pointsTransactionSchema.index({ group: 1, bar: 1 });
 
+// LB-74: dashboard del bar (OWNER) — filtra por `bar` + rango de fecha
+// (createdAt) sin depender de `group`. El índice { group, bar } de LB-72 no
+// alcanza para ese caso (ver progress/explorers/exp_LB-74.md §3).
+pointsTransactionSchema.index({ bar: 1, createdAt: 1 });
+
 const PointsTransaction = model<IPointsTransaction>('PointsTransaction', pointsTransactionSchema);
 
 export default PointsTransaction;

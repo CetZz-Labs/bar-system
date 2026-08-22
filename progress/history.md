@@ -830,3 +830,97 @@ navegador mucho antes de que el token firmado expire realmente.
   (distinto del de carrera concurrente) para el camino de segunda llamada
   secuencial sobre un canje ya `VALIDATED`, cubierto solo indirectamente por
   lectura de código.
+
+### [2026-08-21] - LB-74: Dashboard del bar (OWNER)
+- **Dominio afectado:** Monorepo (Backend + Frontend)
+- **Subagentes involucrados:** Explorer (`progress/explorers/exp_LB-74.md`),
+  Implementer (`progress/implementers/impl_LB-74.md`), Reviewer
+  (`progress/reviewers/review_LB-74.md`).
+- **Contexto:** siguiente ticket en la cola tras LB-69 (sus 3 bloqueantes —
+  LB-67, LB-69, LB-62 — ya Done), implementado sobre la misma rama `feat/69`
+  (encima del commit de LB-69, sin mergear a `development` todavía por
+  decisión explícita del usuario: se juntan ambos tickets y se mergea recién
+  al final). El ticket citaba un "contrato día 1"
+  (`contratos/bar-dashboard-aggregations.md`) que a primera vista parecía no
+  existir — el vault de Obsidian local (`C:\_dev\Cetzz\obsidian\obsidian`,
+  ruta ahora documentada en `progress/vault.local.md`) estaba desactualizado
+  2 commits (`SPRINT 2 - tareas`, `SPRINT 3 - specs y demas`); tras
+  `git pull` apareció el contrato real, como stub sin completar (`estado:
+  pendiente`, "Facundo: completá abajo"). **El Leader completó el contrato
+  técnico** en el propio vault (documentación de coordinación con LB-78, no
+  código) a partir de la exploración real del código + 3 decisiones de
+  arquitectura/negocio resueltas con el usuario vía `AskUserQuestion` (sin
+  precedente en el repo para ninguna de las tres): (1) resolución de
+  disputas = estado nuevo `RESOLVED_BY_OWNER` en `Consumption` (no reusa
+  `CONFIRMED`/`REJECTED`, con `resolutionOutcome`/`resolutionNote`); (2)
+  "neto por cajero" = Consumo ARS − ARS equivalente de canjes entregados;
+  (3) las 4 secciones del dashboard se calculan con Mongo `aggregate()`/
+  `$group` — primer uso de ese patrón en todo el repo (todo lo anterior era
+  `find().lean()`+`.reduce()` en JS) — sin cache (no hay Redis autorizado),
+  siempre on-demand. Contrato completado y pusheado al repo del vault
+  (commit `2137e09`, `CetZz-Labs/obsidian`) antes de delegar al
+  `implementer`, para que LB-78 (Juan) lo pueda consumir.
+- **Resumen de cambios:** `GET /api/bars/:barId/dashboard` (query
+  `period|from|to|cashierId|status`, rango máximo 3 meses en `custom` → 400
+  si se excede) + `PATCH /api/bars/:barId/consumptions/:consumptionId/resolve`
+  (body `{outcome, note}`), ambos con `authenticate()` normal (no
+  `authenticateCashier`) + `resolveOwnerAccess` — **extraída de
+  `RewardController.ts` a `utils/barAccess.ts`** (segunda vez que se
+  necesitaba, sin cambio de comportamiento, tests de `RewardController` sin
+  diff). Módulo reusable `utils/barDashboard.ts` (6 funciones exportadas,
+  independientes del controller HTTP, pensadas explícitamente para que
+  LB-78 las importe sin duplicar queries — mismo criterio que
+  `getAvailablePointsForBar` de LB-68/72) con las 4 secciones vía
+  `aggregate()`: stat cards (grupos del período, consumo ARS, puntos
+  otorgados desglosados consumo/asistencia, canjes entregados + ARS
+  equivalente), tabla de actividad (una fila por `Outing`, estado derivado
+  con prioridad `"disputa"` si tiene algún `Consumption.DISPUTED`, si no
+  mapea `ACTIVE→"en curso"`/`COMPLETED`+`NO_SHOW→"finalizada"`/
+  `PENDING→"reservada"`), panel de disputas, tabla de cajeros (con "neto" =
+  consumo−canjes por columna, fila de totales sumando columnas, no
+  recalculada aparte). 4 índices nuevos (`Outing{bar,checkedInAt}`/
+  `{bar,scheduledFor}`, `Consumption{bar,createdAt}`/`{bar,cashier,createdAt}`,
+  `PointsTransaction{bar,createdAt}`, `Redemption{bar,status,validatedAt}`)
+  — ninguno existía, confirmado por el Explorer. `POINTS_TO_ARS_RATE=1000`
+  en `utils/points.ts` (no existía conversión punto→ARS en el repo).
+  Frontend: `BarDashboardView.tsx` (dominio `bar/`, ruta
+  `/bar/:barId/dashboard`), filtros reflejados en la URL vía
+  `useSearchParams` (deep-linkable, criterio explícito del ticket), modal de
+  resolución de disputa con `react-hook-form`+`zod`, auto-refresh de 60s SÍ
+  implementado (marcado opcional en la spec, no atrasó), botón "Ver
+  registros" (LB-77, inexistente) deshabilitado "Próximamente", botón de
+  entrada real desde `BarProfileView.tsx`. 453/453 tests server (coverage
+  agregado 94.46%/86.64%/94%/95.47%), 190/190 tests client, lint/build
+  limpios en ambos lados.
+- **Decisiones del implementer dentro del margen del contrato** (evaluadas
+  y aceptadas por el Reviewer, sin bloquear): default `period=today`;
+  `week`/`month` como ventanas fijas de 7/30 días terminando en el día de
+  bar de hoy (no calendario); el filtro `status` de la tabla de actividad
+  **no** se aplica a la tabla de cajeros (se aparta de la letra literal del
+  contrato, que decía que ambos filtros aplicaban a ambas tablas, pero no
+  hay una fila-por-salida en la tabla de cajeros a la que mapear ese estado
+  sin inventar semántica nueva — señalado como observación no bloqueante
+  para que el usuario confirme o ajuste el contrato); scoping anti-crossbar
+  del `resolve` con 404 genérico (no el 403 anti-enumeración que usó LB-69
+  para cajeros, criterio distinto porque acá el OWNER ya está autenticado
+  contra el bar puntual); dropdown de cajeros resuelto con una query extra
+  a `GET /dashboard` sin filtros (no hay endpoint dedicado de "listar
+  cajeros del bar" y crear uno hubiera excedido los 2 endpoints del
+  contrato).
+- **Veredicto del Reviewer:** `[APPROVED]` (primera pasada) — C1-C4
+  verificados contra el código real y los 6 comandos de verificación
+  corridos en vivo por el propio Reviewer (incluye `test:coverage`).
+  Confirmó fidelidad exacta al contrato del vault (shape de ambos
+  endpoints, los 4 índices con sus claves exactas, uso real de `aggregate()`
+  en las 4 secciones — cero `find()+reduce()` para esta funcionalidad),
+  el mecanismo completo de `RESOLVED_BY_OWNER` (otorga/no otorga puntos
+  según `outcome`, scoping, auditoría), la fórmula exacta de "neto", la
+  extracción limpia de `resolveOwnerAccess`, auth real (403 a `CASHIER`
+  verificado con test), y que las 6 funciones de `barDashboard.ts` están
+  genuinamente reusables por LB-78 (exportadas a nivel de módulo, sin
+  `Request`/`Response`). 3 observaciones no bloqueantes: el apartamiento
+  documentado sobre el filtro `status` en la tabla de cajeros (ver arriba),
+  inconsistencia de nombre de param de ruta (`:id` en `/bar/:id/rewards` vs.
+  `:barId` en la ruta nueva, cosmético), y el helper `pointsToArs()` que
+  queda exportado sin uso interno (`barDashboard.ts` multiplica por la
+  constante directo) — pensado a propósito para que LB-78 lo reuse.
