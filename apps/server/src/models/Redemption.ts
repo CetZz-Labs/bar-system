@@ -48,6 +48,11 @@ export interface IRedemption extends Document {
     invalidatedAt?: Date | null;
     /** Preparado para LB-69 (rechazo por el cajero), no usado en LB-68. */
     rejectionReason?: string;
+    /** LB-69: cajero que entregó/rechazó el canje (a diferencia de `leader`,
+     * que es quien lo generó). Sin equivalente en LB-68. */
+    cashier?: Types.ObjectId | null;
+    /** LB-69: momento en que el cajero resolvió (entregó/rechazó) el canje. */
+    validatedAt?: Date | null;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -126,6 +131,15 @@ const redemptionSchema = new Schema<IRedemption>({
         type: String,
         trim: true,
     },
+    cashier: {
+        type: Schema.Types.ObjectId,
+        ref: 'User',
+        default: null,
+    },
+    validatedAt: {
+        type: Date,
+        default: null,
+    },
 }, {
     timestamps: true,
 });
@@ -136,6 +150,10 @@ redemptionSchema.index({ group: 1, bar: 1, status: 1, expiresAt: 1 });
 redemptionSchema.index({ group: 1, createdAt: -1 });
 // Disponibilidad de stock en vivo por recompensa (utils/redemptionAvailability.ts).
 redemptionSchema.index({ reward: 1, status: 1, expiresAt: 1 });
+// LB-74: dashboard del bar (OWNER) — "canjes entregados" filtra por `bar` +
+// `status=VALIDATED` + rango de `validatedAt` (el índice de línea 149 usa
+// `expiresAt`, no `validatedAt`; ver progress/explorers/exp_LB-74.md §4).
+redemptionSchema.index({ bar: 1, status: 1, validatedAt: 1 });
 
 const Redemption = model<IRedemption>('Redemption', redemptionSchema);
 

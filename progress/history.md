@@ -940,3 +940,171 @@ navegador mucho antes de que el token firmado expire realmente.
   verificados contra el código real y los 5 comandos de verificación
   corridos en vivo por el propio Reviewer. Sin cambios requeridos. Ticket
   transicionado a "Finalizada" en Jira.
+
+### [2026-08-21] - LB-69: Validar y entregar canje (cajero)
+- **Dominio afectado:** Monorepo (Backend + Frontend)
+- **Subagentes involucrados:** Explorer (`progress/explorers/exp_LB-69.md`),
+  Implementer (`progress/implementers/impl_LB-69.md`), Reviewer
+  (`progress/reviewers/review_LB-69.md`).
+- **Contexto:** siguiente ticket en la cola del usuario tras el cierre de
+  LB-68 (su único bloqueante). Rama `feat/69` creada desde `development`. El
+  Explorer encontró un hueco arquitectónico real: `getAvailablePointsForBar`/
+  `getAvailableStock` (`utils/redemptionAvailability.ts`, LB-68) solo restan
+  `Redemption` en estado `HELD` — pasar a `VALIDATED` sin otra mutación
+  habría hecho que el saldo/stock "volvieran a subir" al entregar un canje,
+  contradiciendo el criterio de aceptación literal ("puntos y stock quedan
+  definitivos"). **Decisión de arquitectura resuelta con el usuario vía
+  `AskUserQuestion`** (sin precedente en el código, dos opciones viables):
+  se optó por el mecanismo simétrico a `ATTENDANCE`/`CONSUMPTION` — nuevo
+  `PointsTransactionType.REDEMPTION` (monto negativo) + decremento directo
+  de `Reward.stock` — en vez de ampliar los cálculos en vivo para restar
+  también `VALIDATED` sin dejar historial persistente.
+- **Resumen de cambios:** endpoint nuevo `POST /api/redemptions/:tokenOrCode/validate`
+  (+ `POST /:tokenOrCode/lookup` de preview, decisión del implementer dentro
+  del margen que dejaba el ticket) en `CashierRedemptionController.ts`,
+  montado como `/api/redemptions` (prefijo libre, sin colisión con
+  `groupRedemptionsRoute.ts`), protegido con `authenticateCashier` — dirección
+  invertida respecto a LB-61 (ahí el líder valida algo del cajero; acá el
+  cajero valida algo del líder). `resolveHeldRedemption` encadena rate
+  limiting (`redemptionQr.ts`) → resolución de token/código → expiración lazy
+  puntual (`redemptionExpiry.ts`, extendido para aceptar filtro por `_id`) →
+  scoping por bar del cajero (chequeo agregado por el implementer, no pedido
+  explícitamente por el ticket, mismo patrón que `ConsumptionController`) →
+  chequeo de estado (`ABANDONED` se interpreta como "salida cerrada", único
+  motivo real de ese estado hoy) → chequeo de `Outing.status === ACTIVE`.
+  `deliver`: transacción Mongo con doble-check anti-carrera, crea
+  `PointsTransaction{type:REDEMPTION, amount negativo}` + `$inc` en
+  `Group.pointsBalance` + `$inc:{stock:-1}` en `Reward` si no
+  `unlimitedStock`, audita `REDEMPTION_VALIDATED`, notifica a
+  líderes/co-líderes, emite `emitAvailablePointsForBar`. `reject`: mismo
+  patrón transaccional sin ningún contador de rechazos ni transición a
+  disputa (a diferencia de `LeaderConsumptionController.reject` — LB-69 es
+  one-shot, `Redemption` ni siquiera tiene `rejectCount`), motivo predefinido
+  + "Otro" (modelado en frontend con zod; backend solo exige string no
+  vacío). Modelo `Redemption` gana `cashier`/`validatedAt` (no existían,
+  a diferencia de `Consumption.cashier`). `PointsTransaction.amount` se
+  relajó de `min:1` a `Number.isInteger(v) && v!==0` para admitir montos
+  negativos, sin afectar `ATTENDANCE`/`CONSUMPTION` (siguen siendo positivos
+  por construcción del caller). `AuditAction`/`NotificationType` ganan
+  `REDEMPTION_VALIDATED`/`REDEMPTION_REJECTED`. Frontend: vista nueva
+  `CashierRedemptionsView.tsx` (dominio `cashier/`, ruta
+  `/bar/:barId/cajero/canjes`), reusa el lector QR/`BarcodeDetector` de
+  `CashierSearchView.tsx`, modal de rechazo con `react-hook-form`+
+  `zodResolver`, botón de entrada real agregado en `CashierPanelView.tsx`
+  (a diferencia del hallazgo no bloqueante que tuvo `BarRewardsView` en
+  LB-67, acá se agregó el punto de entrada desde el arranque). 425/425 tests
+  server (coverage 94.27%), 184/184 tests client, lint/build limpios en
+  ambos lados.
+- **Veredicto del Reviewer:** `[APPROVED]` (primera pasada) — C1-C4
+  verificados contra el código real y los 6 comandos de verificación
+  corridos en vivo por el propio Reviewer. Confirmó explícitamente que el
+  débito persistente queda resuelto de fondo (no solo declarado): verificó a
+  mano que `getAvailablePointsForBar` resta el `PointsTransaction` negativo
+  de forma permanente y que `getAvailableStock` no se recupera tras la
+  entrega porque `Reward.stock` ya bajó. Confirmó también la idempotencia
+  real (tanto el corte externo por estado como el doble-check transaccional
+  concurrente, este último con test dedicado que verifica
+  `session.abortTransaction` sin doble mutación) y que los cambios en
+  archivos de LB-68/LB-72 (`Redemption.ts`, `AuditLog.ts`, `Notification.ts`,
+  `PointsTransaction.ts`, `redemptionExpiry.ts`, `server.ts`) son aditivos y
+  acotados. Única observación: el scoping por bar del cajero, aunque
+  correcto y necesario, fue una extensión de alcance que idealmente se
+  hubiera mencionado al Leader antes de implementarla — no bloqueante, sin
+  cambios requeridos. Nota no bloqueante adicional: falta un test dedicado
+  (distinto del de carrera concurrente) para el camino de segunda llamada
+  secuencial sobre un canje ya `VALIDATED`, cubierto solo indirectamente por
+  lectura de código.
+
+### [2026-08-21] - LB-74: Dashboard del bar (OWNER)
+- **Dominio afectado:** Monorepo (Backend + Frontend)
+- **Subagentes involucrados:** Explorer (`progress/explorers/exp_LB-74.md`),
+  Implementer (`progress/implementers/impl_LB-74.md`), Reviewer
+  (`progress/reviewers/review_LB-74.md`).
+- **Contexto:** siguiente ticket en la cola tras LB-69 (sus 3 bloqueantes —
+  LB-67, LB-69, LB-62 — ya Done), implementado sobre la misma rama `feat/69`
+  (encima del commit de LB-69, sin mergear a `development` todavía por
+  decisión explícita del usuario: se juntan ambos tickets y se mergea recién
+  al final). El ticket citaba un "contrato día 1"
+  (`contratos/bar-dashboard-aggregations.md`) que a primera vista parecía no
+  existir — el vault de Obsidian local (`C:\_dev\Cetzz\obsidian\obsidian`,
+  ruta ahora documentada en `progress/vault.local.md`) estaba desactualizado
+  2 commits (`SPRINT 2 - tareas`, `SPRINT 3 - specs y demas`); tras
+  `git pull` apareció el contrato real, como stub sin completar (`estado:
+  pendiente`, "Facundo: completá abajo"). **El Leader completó el contrato
+  técnico** en el propio vault (documentación de coordinación con LB-78, no
+  código) a partir de la exploración real del código + 3 decisiones de
+  arquitectura/negocio resueltas con el usuario vía `AskUserQuestion` (sin
+  precedente en el repo para ninguna de las tres): (1) resolución de
+  disputas = estado nuevo `RESOLVED_BY_OWNER` en `Consumption` (no reusa
+  `CONFIRMED`/`REJECTED`, con `resolutionOutcome`/`resolutionNote`); (2)
+  "neto por cajero" = Consumo ARS − ARS equivalente de canjes entregados;
+  (3) las 4 secciones del dashboard se calculan con Mongo `aggregate()`/
+  `$group` — primer uso de ese patrón en todo el repo (todo lo anterior era
+  `find().lean()`+`.reduce()` en JS) — sin cache (no hay Redis autorizado),
+  siempre on-demand. Contrato completado y pusheado al repo del vault
+  (commit `2137e09`, `CetZz-Labs/obsidian`) antes de delegar al
+  `implementer`, para que LB-78 (Juan) lo pueda consumir.
+- **Resumen de cambios:** `GET /api/bars/:barId/dashboard` (query
+  `period|from|to|cashierId|status`, rango máximo 3 meses en `custom` → 400
+  si se excede) + `PATCH /api/bars/:barId/consumptions/:consumptionId/resolve`
+  (body `{outcome, note}`), ambos con `authenticate()` normal (no
+  `authenticateCashier`) + `resolveOwnerAccess` — **extraída de
+  `RewardController.ts` a `utils/barAccess.ts`** (segunda vez que se
+  necesitaba, sin cambio de comportamiento, tests de `RewardController` sin
+  diff). Módulo reusable `utils/barDashboard.ts` (6 funciones exportadas,
+  independientes del controller HTTP, pensadas explícitamente para que
+  LB-78 las importe sin duplicar queries — mismo criterio que
+  `getAvailablePointsForBar` de LB-68/72) con las 4 secciones vía
+  `aggregate()`: stat cards (grupos del período, consumo ARS, puntos
+  otorgados desglosados consumo/asistencia, canjes entregados + ARS
+  equivalente), tabla de actividad (una fila por `Outing`, estado derivado
+  con prioridad `"disputa"` si tiene algún `Consumption.DISPUTED`, si no
+  mapea `ACTIVE→"en curso"`/`COMPLETED`+`NO_SHOW→"finalizada"`/
+  `PENDING→"reservada"`), panel de disputas, tabla de cajeros (con "neto" =
+  consumo−canjes por columna, fila de totales sumando columnas, no
+  recalculada aparte). 4 índices nuevos (`Outing{bar,checkedInAt}`/
+  `{bar,scheduledFor}`, `Consumption{bar,createdAt}`/`{bar,cashier,createdAt}`,
+  `PointsTransaction{bar,createdAt}`, `Redemption{bar,status,validatedAt}`)
+  — ninguno existía, confirmado por el Explorer. `POINTS_TO_ARS_RATE=1000`
+  en `utils/points.ts` (no existía conversión punto→ARS en el repo).
+  Frontend: `BarDashboardView.tsx` (dominio `bar/`, ruta
+  `/bar/:barId/dashboard`), filtros reflejados en la URL vía
+  `useSearchParams` (deep-linkable, criterio explícito del ticket), modal de
+  resolución de disputa con `react-hook-form`+`zod`, auto-refresh de 60s SÍ
+  implementado (marcado opcional en la spec, no atrasó), botón "Ver
+  registros" (LB-77, inexistente) deshabilitado "Próximamente", botón de
+  entrada real desde `BarProfileView.tsx`. 453/453 tests server (coverage
+  agregado 94.46%/86.64%/94%/95.47%), 190/190 tests client, lint/build
+  limpios en ambos lados.
+- **Decisiones del implementer dentro del margen del contrato** (evaluadas
+  y aceptadas por el Reviewer, sin bloquear): default `period=today`;
+  `week`/`month` como ventanas fijas de 7/30 días terminando en el día de
+  bar de hoy (no calendario); el filtro `status` de la tabla de actividad
+  **no** se aplica a la tabla de cajeros (se aparta de la letra literal del
+  contrato, que decía que ambos filtros aplicaban a ambas tablas, pero no
+  hay una fila-por-salida en la tabla de cajeros a la que mapear ese estado
+  sin inventar semántica nueva — señalado como observación no bloqueante
+  para que el usuario confirme o ajuste el contrato); scoping anti-crossbar
+  del `resolve` con 404 genérico (no el 403 anti-enumeración que usó LB-69
+  para cajeros, criterio distinto porque acá el OWNER ya está autenticado
+  contra el bar puntual); dropdown de cajeros resuelto con una query extra
+  a `GET /dashboard` sin filtros (no hay endpoint dedicado de "listar
+  cajeros del bar" y crear uno hubiera excedido los 2 endpoints del
+  contrato).
+- **Veredicto del Reviewer:** `[APPROVED]` (primera pasada) — C1-C4
+  verificados contra el código real y los 6 comandos de verificación
+  corridos en vivo por el propio Reviewer (incluye `test:coverage`).
+  Confirmó fidelidad exacta al contrato del vault (shape de ambos
+  endpoints, los 4 índices con sus claves exactas, uso real de `aggregate()`
+  en las 4 secciones — cero `find()+reduce()` para esta funcionalidad),
+  el mecanismo completo de `RESOLVED_BY_OWNER` (otorga/no otorga puntos
+  según `outcome`, scoping, auditoría), la fórmula exacta de "neto", la
+  extracción limpia de `resolveOwnerAccess`, auth real (403 a `CASHIER`
+  verificado con test), y que las 6 funciones de `barDashboard.ts` están
+  genuinamente reusables por LB-78 (exportadas a nivel de módulo, sin
+  `Request`/`Response`). 3 observaciones no bloqueantes: el apartamiento
+  documentado sobre el filtro `status` en la tabla de cajeros (ver arriba),
+  inconsistencia de nombre de param de ruta (`:id` en `/bar/:id/rewards` vs.
+  `:barId` en la ruta nueva, cosmético), y el helper `pointsToArs()` que
+  queda exportado sin uso interno (`barDashboard.ts` multiplica por la
+  constante directo) — pensado a propósito para que LB-78 lo reuse.

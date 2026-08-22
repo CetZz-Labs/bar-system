@@ -1,6 +1,6 @@
 import { Link, useParams } from "react-router"
 import { motion } from "motion/react"
-import { LogOut, Store, Clock, UserCog, Search } from "lucide-react"
+import { LogOut, Store, Clock, UserCog, Search, Gift } from "lucide-react"
 import { Button } from "@/components/ui/Button"
 import { useCashierAuth } from "@/hooks/useCashierAuth"
 
@@ -64,9 +64,12 @@ export default function CashierPanelView() {
                     </Button>
                 </Link>
 
-                <p className="text-text-muted text-sm mt-4">
-                    La gestión de puntos y consumos estará disponible próximamente.
-                </p>
+                <Link to={`/bar/${barId}/cajero/canjes`}>
+                    <Button type="button" variant="outline" size="lg" fullWidth>
+                        <Gift size={20} />
+                        Validar canje
+                    </Button>
+                </Link>
             </div>
 
             <Button

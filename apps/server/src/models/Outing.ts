@@ -156,6 +156,13 @@ outingSchema.index(
     }
 );
 
+// LB-74: dashboard del bar (OWNER) — filtra por `bar` + rango de fecha
+// "anchor date" (`checkedInAt ?? scheduledFor`, ver utils/barDashboard.ts).
+// Ninguno de los dos índices existía antes (ver progress/explorers/exp_LB-74.md
+// §1); sin ellos, ese filtro corre sin soporte de índice dedicado.
+outingSchema.index({ bar: 1, checkedInAt: 1 });
+outingSchema.index({ bar: 1, scheduledFor: 1 });
+
 const Outing = model<IOuting>('Outing', outingSchema);
 
 export default Outing;
