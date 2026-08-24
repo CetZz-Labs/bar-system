@@ -1,6 +1,6 @@
 import { Link } from "react-router"
 import { Button } from "@/components/ui/Button"
-import { Users, Plus } from "lucide-react"
+import { Users, Plus, Search } from "lucide-react"
 
 export default function Home() {
     return (
@@ -21,6 +21,12 @@ export default function Home() {
                     <Button variant="primary" size="lg" fullWidth>
                         <Plus size={20} />
                         Crear grupo
+                    </Button>
+                </Link>
+                <Link to="/bar/explorar" className="w-full">
+                    <Button variant="surface" size="lg" fullWidth>
+                        <Search size={20} />
+                        Explorar bares
                     </Button>
                 </Link>
             </div>

@@ -11,13 +11,15 @@ import AuditLog, { AuditAction } from "../models/AuditLog";
  * antes de validar un QR/código.
  *
  * `filter` acota qué HELD evaluar (ej. `{ group: groupId }` desde el
- * listado del líder) para no barrer la colección completa en cada request.
- * Tipado explícito (no `FilterQuery<IRedemption>` genérico de mongoose:
- * este mongoose 9.x no lo exporta como named export) acotado a los campos
- * que efectivamente se filtran hoy — ampliar si un consumidor futuro (ej.
- * LB-69) necesita acotar por otro campo indexado.
+ * listado del líder, o `{ _id: redemptionId }` desde LB-69 para evaluar un
+ * único canje ya resuelto por token/código antes de re-leerlo) para no
+ * barrer la colección completa en cada request. Tipado explícito (no
+ * `FilterQuery<IRedemption>` genérico de mongoose: este mongoose 9.x no lo
+ * exporta como named export) acotado a los campos que efectivamente se
+ * filtran hoy — ampliar si un consumidor futuro necesita acotar por otro
+ * campo indexado.
  */
-export async function expireStaleRedemptions(filter: { group?: string; reward?: string }): Promise<void> {
+export async function expireStaleRedemptions(filter: { group?: string; reward?: string; _id?: string }): Promise<void> {
     const now = new Date();
 
     const stale = await Redemption.find({

@@ -8,6 +8,9 @@ export enum NotificationType {
     OUTING_CLOSED = 'OUTING_CLOSED',
     GROUP_LEADERSHIP_ACQUIRED = 'GROUP_LEADERSHIP_ACQUIRED',
     CONSUMPTION_DISPUTED = 'CONSUMPTION_DISPUTED',
+    // LB-69: resultado de la validación de un canje por el cajero.
+    REDEMPTION_VALIDATED = 'REDEMPTION_VALIDATED',
+    REDEMPTION_REJECTED = 'REDEMPTION_REJECTED',
 }
 
 export interface INotification extends Document {

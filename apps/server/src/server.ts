@@ -21,6 +21,9 @@ import rewardAvailableRouter from './routes/rewardAvailableRoute'
 import groupRewardsRouter from './routes/groupRewardsRoute'
 import groupRedemptionsRouter from './routes/groupRedemptionsRoute'
 import drinkCategoryRouter from './routes/drinkCategoryRoute'
+import barsRouter from './routes/barsRoute'
+import cashierRedemptionRouter from './routes/cashierRedemptionRoute'
+import dashboardRouter from './routes/dashboardRoute'
 
 if (process.env.NODE_ENV !== 'production') {
     process.loadEnvFile()
@@ -46,6 +49,7 @@ app.use('/api/users', userRouter)
 app.use('/api/groups/:groupId/outings', outingRouter)
 app.use('/api/groups/:groupId/rewards', groupRewardsRouter)
 app.use('/api/groups/:groupId/redemptions', groupRedemptionsRouter)
+app.use('/api/redemptions', cashierRedemptionRouter)
 app.use('/api/groups', groupRouter)
 app.use('/api/bar', barRouter)
 app.use('/api/bar/:barId/categories', drinkCategoryRouter)
@@ -56,6 +60,10 @@ app.use('/api/outings/:outingId/close', outingCloseRouter)
 app.use('/api/cashier', cashierRouter)
 app.use('/api/context', contextRouter)
 app.use('/api/bars/:barId/rewards', rewardRouter)
+app.use('/api/bars/:barId', dashboardRouter)
+// LB-79: registrado DESPUÉS del mount de rewards de arriba a propósito (ver
+// routes/barsRoute.ts) — orden de app.use() importa en Express 5.
+app.use('/api/bars', barsRouter)
 app.use('/api/rewards', rewardAvailableRouter)
 app.get('/api', (req, res) => {
     res.send('Hello World!')

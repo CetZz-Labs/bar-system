@@ -1,42 +1,23 @@
 import { Request, Response } from "express";
+import Bar, { BarStatus } from "../models/Bar";
 import Group from "../models/Group";
 import Outing, { OutingStatus } from "../models/Outing";
 import Reward, { IReward, RewardStatus } from "../models/Reward";
-import { BarUserRole } from "../models/BarUser";
-import { verifyBarAccess } from "../utils/barAccess";
+import { verifyBarAccess, resolveOwnerAccess } from "../utils/barAccess";
 
 // LB-67: ABM de recompensas del bar. No existe middleware OWNER-only
 // reusable en el repo (ver progress/explorers/exp_LB-67.md §3) — el
-// chequeo de rol se resuelve acá, mismo patrón manual que
+// chequeo de rol se resuelve con `resolveOwnerAccess` (extraída a
+// utils/barAccess.ts por LB-74, segunda vez que se necesita — ver
+// progress/implementers/impl_LB-74.md), mismo patrón manual que
 // BarController.updateBarProfile (verifyBarAccess + chequeo explícito de
-// `role`, en vez de un middleware compartido).
+// `role`).
 
 // Duplicado intencional del type guard de OutingController.ts (no se
 // extrae a utils/ para no tocar ese archivo fuera del alcance de este
 // ticket — ver progress/implementers/impl_LB-67.md).
 function isMongoDuplicateKeyError(error: unknown): error is { code: number } {
     return typeof error === 'object' && error !== null && 'code' in error;
-}
-
-interface OwnerAccessGranted {
-    ok: true;
-}
-
-interface OwnerAccessDenied {
-    ok: false;
-    status: number;
-    message: string;
-}
-
-async function resolveOwnerAccess(userId: string, barId: string): Promise<OwnerAccessGranted | OwnerAccessDenied> {
-    const { hasAccess, role } = await verifyBarAccess(userId, barId);
-    if (!hasAccess) {
-        return { ok: false, status: 403, message: 'No tenés acceso a este bar' };
-    }
-    if (role !== BarUserRole.OWNER) {
-        return { ok: false, status: 403, message: 'Solo el dueño del bar puede gestionar las recompensas' };
-    }
-    return { ok: true };
 }
 
 interface RewardDTO {
@@ -243,6 +224,33 @@ export class RewardController {
 
         const rewards = await Reward.find({
             bar: outing.bar,
+            status: RewardStatus.ACTIVE,
+            deletedAt: null,
+            $or: [{ unlimitedStock: true }, { stock: { $gt: 0 } }],
+        }).sort({ pointsRequired: 1 });
+
+        res.status(200).json(rewards.map(toRewardDTO));
+    };
+
+    /**
+     * GET /api/bar/:id/rewards/available — LB-76. Recompensas activas y
+     * disponibles del bar, resueltas directo del :id (sin pasar por
+     * groupId/Outing como getAvailableRewards), accesibles por cualquier
+     * cliente autenticado sin `BarUser` — mismo criterio "bar activo, sin
+     * rol" que BarController.getPublicBarDetail. Mismo filtro exacto que
+     * getAvailableRewards/GroupRewardsController.getAvailable.
+     */
+    static getAvailableRewardsForBar = async (req: Request, res: Response) => {
+        const barId = req.params.id as string;
+
+        const bar = await Bar.findById(barId).select('status').lean();
+        if (!bar || bar.status !== BarStatus.ACTIVE) {
+            res.status(404).json({ message: 'Bar no encontrado' });
+            return;
+        }
+
+        const rewards = await Reward.find({
+            bar: barId,
             status: RewardStatus.ACTIVE,
             deletedAt: null,
             $or: [{ unlimitedStock: true }, { stock: { $gt: 0 } }],

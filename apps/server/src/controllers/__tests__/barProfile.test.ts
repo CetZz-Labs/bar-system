@@ -38,6 +38,23 @@ vi.mock('../../models/BarUser', () => ({
   },
 }))
 
+// Mock Outing model (LB-76: BarController now imports Outing at module
+// scope for getPublicBarDetail; mocked here — instead of letting the real
+// Outing.ts load — so its schema definition doesn't need the real
+// `attendancePointsByDaySchema` export from the mocked Bar module above).
+vi.mock('../../models/Outing', () => ({
+  default: {
+    findOne: vi.fn(),
+  },
+  OutingStatus: {
+    PENDING: 'PENDING',
+    ACTIVE: 'ACTIVE',
+    CANCELLED: 'CANCELLED',
+    COMPLETED: 'COMPLETED',
+    NO_SHOW: 'NO_SHOW',
+  },
+}))
+
 // Mock fs
 vi.mock('fs/promises', () => ({
   default: {

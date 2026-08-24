@@ -1,11 +1,28 @@
 import api from "@/libs/axios";
 import { throwStandardError } from "@/utils/apiError";
-import type { ActiveBar, CreateBarFormData, EditBarProfileFormData, MyBar, RegisterBarResponse } from "@/types/bar";
-import type { Bar } from "@/types/bar";
+import type { ActiveBar, CreateBarFormData, EditBarProfileFormData, ExploreBar, MyBar, RegisterBarResponse } from "@/types/bar";
+import type { Bar, BarPublicDetail } from "@/types/bar";
 
 export async function getActiveBars() {
   try {
     const { data } = await api.get<ActiveBar[]>("/bar/activos");
+    return data;
+  } catch (error) {
+    throwStandardError(error);
+  }
+}
+
+/**
+ * LB-79: listado de bares ACTIVE para explorar (puntos de HOY,
+ * `hasActiveCheckIn`), con búsqueda opcional por nombre. Distinto de
+ * `getActiveBars` (`/bar/activos`, sin puntos/check-in, usado para
+ * selectores de bar existentes).
+ */
+export async function exploreBars(search?: string) {
+  try {
+    const { data } = await api.get<ExploreBar[]>("/bars", {
+      params: search ? { search } : undefined,
+    });
     return data;
   } catch (error) {
     throwStandardError(error);
@@ -33,6 +50,20 @@ export async function getMyBars() {
 export async function getBarProfile(id: string) {
   try {
     const { data } = await api.get<Bar>(`/bar/${id}/perfil`);
+    return data;
+  } catch (error) {
+    throwStandardError(error);
+  }
+}
+
+/**
+ * LB-76: ficha pública de un bar, accesible por cualquier cliente
+ * autenticado (sin ser BarUser). Distinto de `getBarProfile`, que es la
+ * vista de gestión del dueño/cajero.
+ */
+export async function getBarDetail(id: string) {
+  try {
+    const { data } = await api.get<BarPublicDetail>(`/bar/${id}/detail`);
     return data;
   } catch (error) {
     throwStandardError(error);

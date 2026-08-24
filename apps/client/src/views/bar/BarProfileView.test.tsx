@@ -33,6 +33,7 @@ const mockBar: Bar = {
   status: 'active',
   logoUrl: undefined,
   coverUrl: undefined,
+  closingTime: '06:00',
   attendancePointsByDay: {
     monday: 0,
     tuesday: 0,

@@ -16,6 +16,7 @@ import {
   Trophy,
   Gift,
   Wine,
+  LayoutDashboard,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -287,7 +288,7 @@ export default function BarProfileView() {
       {/* Entry point to the rewards ABM (LB-67 fixup): visible for any
           BarUser of this bar (OWNER or CASHIER); BarRewardsView itself
           handles the CASHIER read-only mode. */}
-      <div className="mb-6">
+      <div className="flex flex-col gap-3 mb-6">
         <Button
           type="button"
           variant="surface"
@@ -297,6 +298,21 @@ export default function BarProfileView() {
         >
           <Gift size={20} className="text-lime" />
           RECOMPENSAS DEL BAR
+        </Button>
+
+        {/* Entry point al dashboard del bar (LB-74). BarProfileView solo es
+            alcanzable desde "Mis bares" (getMyBars, siempre role OWNER),
+            así que no hace falta un chequeo de rol adicional acá — mismo
+            criterio que el resto de esta vista. */}
+        <Button
+          type="button"
+          variant="surface"
+          size="md"
+          fullWidth
+          onClick={() => navigate(`/bar/${id}/dashboard`)}
+        >
+          <LayoutDashboard size={20} className="text-lime" />
+          DASHBOARD DEL BAR
         </Button>
       </div>
 

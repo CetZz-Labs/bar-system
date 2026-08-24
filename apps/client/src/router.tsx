@@ -20,12 +20,16 @@ import GroupRewardsView from './views/groups/GroupRewardsView'
 import BarRegisterView from './views/bar/BarRegisterView'
 import MyBarsView from './views/bar/MyBarsView'
 import BarProfileView from './views/bar/BarProfileView'
+import BarDetailView from './views/bar/BarDetailView'
 import BarRewardsView from './views/bar/BarRewardsView'
+import ExploreBarsView from './views/bar/ExploreBarsView'
+import BarDashboardView from './views/bar/BarDashboardView'
 import BarCategoriesView from './views/bar/BarCategoriesView'
 import CashierPanelView from './views/cashier/CashierPanelView'
 import CashierSearchView from './views/cashier/CashierSearchView'
 import CashierOutingView from './views/cashier/CashierOutingView'
 import CashierShiftSummaryView from './views/cashier/CashierShiftSummaryView'
+import CashierRedemptionsView from './views/cashier/CashierRedemptionsView'
 import CashierLayout from './layouts/CashierLayout'
 import SelectContextView from './views/auth/SelectContextView'
 import NotFound from './views/NotFound'
@@ -58,10 +62,13 @@ export default function Router() {
                     <Route path="/groups/:slug/confirmar-consumo" element={<ConfirmConsumptionView />} />
                     <Route path="/groups/:slug/recompensas" element={<GroupRewardsView />} />
                     <Route path="/bar/registro" element={<BarRegisterView />} />
+                    <Route path="/bar/explorar" element={<ExploreBarsView />} />
                     <Route path="/bar/mis-bares" element={<MyBarsView />} />
                     <Route path="/bar/:id/perfil" element={<BarProfileView />} />
                     <Route path="/bar/:id/rewards" element={<BarRewardsView />} />
                     <Route path="/bar/:id/categorias" element={<BarCategoriesView />} />
+                    <Route path="/bar/:id" element={<BarDetailView />} />
+                    <Route path="/bar/:barId/dashboard" element={<BarDashboardView />} />
                 </Route>
                 <Route path="/unirse/:inviteCode" element={<JoinGroupView />} />
 
@@ -76,6 +83,7 @@ export default function Router() {
                     <Route path="/bar/:barId/cajero" element={<CashierPanelView />} />
                     <Route path="/bar/:barId/cajero/buscar" element={<CashierSearchView />} />
                     <Route path="/bar/:barId/cajero/salida/:outingId" element={<CashierOutingView />} />
+                    <Route path="/bar/:barId/cajero/canjes" element={<CashierRedemptionsView />} />
                 </Route>
 
                 <Route path="*" element={<NotFound />} />

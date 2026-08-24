@@ -10,7 +10,18 @@ export enum ConsumptionStatus {
     REJECTED = 'REJECTED',     // seteado por LB-61
     DISPUTED = 'DISPUTED',     // seteado por LB-61
     ABANDONED = 'ABANDONED',   // seteado por LB-62 al cerrar la salida
+    // LB-74: resolución manual de una disputa por el OWNER, único mecanismo
+    // que existe para sacar un Consumption de DISPUTED (antes de LB-74 no
+    // había ninguno, ver progress/explorers/exp_LB-74.md §2). No se reusa
+    // CONFIRMED/REJECTED a propósito: el dashboard necesita distinguir "lo
+    // que confirmó el líder normalmente" de "lo que resolvió el dueño tras
+    // una disputa", y el `resolutionOutcome` es lo que determina si cuenta
+    // o no en las agregaciones (ver utils/barDashboard.ts).
+    RESOLVED_BY_OWNER = 'RESOLVED_BY_OWNER',
 }
+
+/** LB-74: resultado de la resolución manual de una disputa por el OWNER. */
+export type ConsumptionResolutionOutcome = 'ACCEPTED' | 'REJECTED';
 
 export interface IConsumptionBreakdownItem {
     category: string;
@@ -34,6 +45,11 @@ export interface IConsumption extends Document {
     manualCode: string;
     expiresAt: Date;
     invalidatedAt?: Date | null;
+    /** LB-74: solo presentes cuando status=RESOLVED_BY_OWNER. */
+    resolutionOutcome?: ConsumptionResolutionOutcome;
+    resolutionNote?: string;
+    resolvedBy?: Types.ObjectId;
+    resolvedAt?: Date;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -141,12 +157,35 @@ const consumptionSchema = new Schema<IConsumption>({
         type: Date,
         default: null,
     },
+    // LB-74: resolución manual de una disputa por el OWNER (dashboard del
+    // bar). Solo se completan cuando status=RESOLVED_BY_OWNER.
+    resolutionOutcome: {
+        type: String,
+        enum: ['ACCEPTED', 'REJECTED'],
+    },
+    resolutionNote: {
+        type: String,
+        trim: true,
+    },
+    resolvedBy: {
+        type: Schema.Types.ObjectId,
+        ref: 'User',
+    },
+    resolvedAt: {
+        type: Date,
+    },
 }, {
     timestamps: true,
 });
 
 // Para la vista de "consumos pendientes de la salida" del cajero.
 consumptionSchema.index({ outing: 1, status: 1 });
+
+// LB-74: dashboard del bar (OWNER) — filtra por `bar` + rango de fecha
+// (createdAt) y, para la tabla de cajeros, también por `cashier`. Ninguno de
+// los dos existía antes (ver progress/explorers/exp_LB-74.md §2).
+consumptionSchema.index({ bar: 1, createdAt: 1 });
+consumptionSchema.index({ bar: 1, cashier: 1, createdAt: 1 });
 
 const Consumption = model<IConsumption>('Consumption', consumptionSchema);
 
