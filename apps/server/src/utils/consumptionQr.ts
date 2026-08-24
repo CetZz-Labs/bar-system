@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import jwt from "jsonwebtoken";
 import QRCode from "qrcode";
+import type { ClientSession } from "mongoose";
 import Consumption from "../models/Consumption";
 
 /**
@@ -139,8 +140,19 @@ export async function validate(tokenOrCode: string): Promise<{
     return { valid: true, consumptionId: consumption._id.toString() };
 }
 
-export async function invalidate(consumptionId: string): Promise<void> {
-    await Consumption.updateOne({ _id: consumptionId }, { invalidatedAt: new Date() });
+export async function invalidate(
+    consumptionId: string,
+    session?: ClientSession
+): Promise<void> {
+    if (session) {
+        await Consumption.updateOne(
+            { _id: consumptionId },
+            { invalidatedAt: new Date() },
+            { session }
+        );
+    } else {
+        await Consumption.updateOne({ _id: consumptionId }, { invalidatedAt: new Date() });
+    }
 }
 
 interface AttemptRecord {

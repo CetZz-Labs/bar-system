@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import jwt from "jsonwebtoken";
 import QRCode from "qrcode";
+import type { ClientSession } from "mongoose";
 import Redemption from "../models/Redemption";
 
 /**
@@ -145,8 +146,19 @@ export async function validate(tokenOrCode: string): Promise<{
     return { valid: true, redemptionId: redemption._id.toString() };
 }
 
-export async function invalidate(redemptionId: string): Promise<void> {
-    await Redemption.updateOne({ _id: redemptionId }, { invalidatedAt: new Date() });
+export async function invalidate(
+    redemptionId: string,
+    session?: ClientSession
+): Promise<void> {
+    if (session) {
+        await Redemption.updateOne(
+            { _id: redemptionId },
+            { invalidatedAt: new Date() },
+            { session }
+        );
+    } else {
+        await Redemption.updateOne({ _id: redemptionId }, { invalidatedAt: new Date() });
+    }
 }
 
 interface AttemptRecord {

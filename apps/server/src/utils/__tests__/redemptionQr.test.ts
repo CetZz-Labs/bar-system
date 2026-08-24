@@ -210,6 +210,20 @@ describe('redemptionQr.invalidate', () => {
       { invalidatedAt: expect.any(Date) }
     )
   })
+
+  it('forwards an optional transaction session to updateOne', async () => {
+    const redemptionId = new Types.ObjectId().toString()
+    const session = { id: 'txn-session' } as any
+    vi.mocked(Redemption.updateOne).mockResolvedValue({} as any)
+
+    await invalidate(redemptionId, session)
+
+    expect(Redemption.updateOne).toHaveBeenCalledWith(
+      { _id: redemptionId },
+      { invalidatedAt: expect.any(Date) },
+      { session }
+    )
+  })
 })
 
 describe('redemptionQr rate limiting', () => {

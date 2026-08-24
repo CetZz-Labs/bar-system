@@ -206,6 +206,20 @@ describe('consumptionQr.invalidate', () => {
       { invalidatedAt: expect.any(Date) }
     )
   })
+
+  it('forwards an optional transaction session to updateOne', async () => {
+    const consumptionId = new Types.ObjectId().toString()
+    const session = { id: 'txn-session' } as any
+    vi.mocked(Consumption.updateOne).mockResolvedValue({} as any)
+
+    await invalidate(consumptionId, session)
+
+    expect(Consumption.updateOne).toHaveBeenCalledWith(
+      { _id: consumptionId },
+      { invalidatedAt: expect.any(Date) },
+      { session }
+    )
+  })
 })
 
 describe('consumptionQr rate limiting', () => {

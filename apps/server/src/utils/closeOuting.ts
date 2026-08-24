@@ -47,18 +47,23 @@ async function buildSummary(
     outing: IOuting,
     closedAt: Date,
     abandonedCount: number,
-    disputedCount: number
+    disputedCount: number,
+    session: mongoose.ClientSession
 ): Promise<IOutingSummary> {
     const confirmed = await Consumption.find({
         outing: outing._id,
         status: ConsumptionStatus.CONFIRMED,
-    }).lean();
+    })
+        .session(session)
+        .lean();
 
     const confirmedCount = confirmed.length;
     const totalAmount = confirmed.reduce((sum, c) => sum + (c.amount ?? 0), 0);
     const consumptionPoints = confirmed.reduce((sum, c) => sum + (c.pointsAwarded ?? 0), 0);
 
-    const pointRows = await PointsTransaction.find({ outing: outing._id }).lean();
+    const pointRows = await PointsTransaction.find({ outing: outing._id })
+        .session(session)
+        .lean();
     const pointsAwarded = pointRows.reduce((sum, row) => sum + (row.amount ?? 0), 0);
     // Canjes todavía no existen en el MVP; el campo queda en el resumen para el contrato.
     const redemptionCount = 0;
@@ -154,19 +159,19 @@ export async function closeOuting(
             consumption.status = ConsumptionStatus.ABANDONED;
             consumption.invalidatedAt = closedAt;
             await consumption.save({ session });
-            await invalidate(consumption._id.toString());
+            await invalidate(consumption._id.toString(), session);
         }
 
         for (const redemption of redemptionsToAbandon) {
             redemption.status = RedemptionStatus.ABANDONED;
             redemption.invalidatedAt = closedAt;
             await redemption.save({ session });
-            await invalidateRedemption(redemption._id.toString());
+            await invalidateRedemption(redemption._id.toString(), session);
         }
 
         // Resumen con conteos ya calculados; confirmed/points se leen de DB
         // (no mutamos CONFIRMED en este cierre).
-        summary = await buildSummary(fresh, closedAt, abandonedCount, disputedCount);
+        summary = await buildSummary(fresh, closedAt, abandonedCount, disputedCount, session);
 
         fresh.status = nextStatus;
         fresh.closedAt = closedAt;
