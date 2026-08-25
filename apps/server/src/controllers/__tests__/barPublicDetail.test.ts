@@ -26,12 +26,6 @@ vi.mock('../../models/User', () => ({
   default: {
     findById: vi.fn(),
   },
-  Role: {
-    ADMIN: 'ADMIN',
-    USER: 'USER',
-    OWNER: 'OWNER',
-    WAITER: 'WAITER',
-  },
   MembershipRole: {
     ADMIN: 'ADMIN',
     MEMBER: 'MEMBER',

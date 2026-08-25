@@ -3,7 +3,6 @@ import { query } from "express-validator";
 import { BarController } from "../controllers/BarController";
 import { authenticate } from "../middleware/auth";
 import { handleInputErrors } from "../middleware/validation";
-import { Role } from "../models/User";
 
 const router: Router = Router();
 
@@ -15,7 +14,7 @@ const router: Router = Router();
 // orden interno de matching de Express (ver progress/explorers/exp_LB-79.md
 // §4/§8.5).
 router.get('/',
-    authenticate([Role.USER, Role.ADMIN]),
+    authenticate(),
     query('search').optional().isString().withMessage('search debe ser texto'),
     handleInputErrors,
     BarController.listBars

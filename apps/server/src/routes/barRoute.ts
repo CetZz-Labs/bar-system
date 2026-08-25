@@ -4,13 +4,12 @@ import { RewardController } from "../controllers/RewardController";
 import { authenticate, requireCompleteProfile } from "../middleware/auth";
 import { body, param } from "express-validator";
 import { handleInputErrors } from "../middleware/validation";
-import { Role } from "../models/User";
 import { uploadSingle } from "../middleware/upload";
 
 const router: Router = Router();
 
 router.post('/registro',
-    authenticate([Role.USER, Role.ADMIN]),
+    authenticate(),
     requireCompleteProfile,
     body('name')
         .notEmpty().withMessage('El nombre del bar es requerido')
@@ -42,29 +41,24 @@ router.post('/registro',
 );
 
 router.get('/activos',
-    authenticate([Role.USER, Role.ADMIN]),
+    authenticate(),
     BarController.getActiveBars
 );
 
 router.get('/mis-bares',
-    authenticate([Role.USER, Role.ADMIN]),
+    authenticate(),
     BarController.getMyBars
 );
 
-router.patch('/:id/activar',
-    authenticate([Role.ADMIN]),
-    BarController.activateBar
-);
-
 router.get('/:id/perfil',
-    authenticate([Role.USER, Role.ADMIN]),
+    authenticate(),
     BarController.getBarProfile
 );
 
 // LB-76: ficha pública del bar para cualquier cliente autenticado (sin
 // BarUser), distinta de `/:id/perfil` (gestión, exige verifyBarAccess).
 router.get('/:id/detail',
-    authenticate([Role.USER, Role.ADMIN]),
+    authenticate(),
     param('id').isMongoId().withMessage('El ID del bar es inválido'),
     handleInputErrors,
     BarController.getPublicBarDetail
@@ -73,14 +67,14 @@ router.get('/:id/detail',
 // LB-76: recompensas activas/disponibles del bar, resueltas directo del
 // :id (sin groupId/Outing), mismo criterio de acceso que `/:id/detail`.
 router.get('/:id/rewards/available',
-    authenticate([Role.USER, Role.ADMIN]),
+    authenticate(),
     param('id').isMongoId().withMessage('El ID del bar es inválido'),
     handleInputErrors,
     RewardController.getAvailableRewardsForBar
 );
 
 router.patch('/:id/perfil',
-    authenticate([Role.USER, Role.ADMIN]),
+    authenticate(),
     body('name')
         .optional()
         .isLength({ min: 3, max: 60 }).withMessage('El nombre debe tener entre 3 y 60 caracteres'),
@@ -122,13 +116,13 @@ router.patch('/:id/perfil',
 );
 
 router.post('/:id/logo',
-    authenticate([Role.USER, Role.ADMIN]),
+    authenticate(),
     uploadSingle(2 * 1024 * 1024),
     BarController.uploadBarLogo
 );
 
 router.post('/:id/cover',
-    authenticate([Role.USER, Role.ADMIN]),
+    authenticate(),
     uploadSingle(3 * 1024 * 1024),
     BarController.uploadBarCover
 );

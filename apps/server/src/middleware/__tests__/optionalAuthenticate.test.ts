@@ -2,14 +2,13 @@ import { vi, describe, it, expect, beforeEach } from 'vitest'
 import jwt from 'jsonwebtoken'
 import { Types } from 'mongoose'
 import { optionalAuthenticate } from '../auth'
-import User, { Role } from '../../models/User'
+import User from '../../models/User'
 import { buildMockRequest, buildMockResponse, buildMockNext } from '../../__tests__/helpers/mockHelpers'
 
 // Mock User model
 vi.mock('../../models/User', () => {
   return {
     default: { findById: vi.fn() },
-    Role: { ADMIN: 'ADMIN', USER: 'USER', OWNER: 'OWNER', WAITER: 'WAITER' },
   }
 })
 
@@ -58,7 +57,7 @@ describe('optionalAuthenticate middleware', () => {
 
   describe('when token is valid and user is active', () => {
     it('attaches req.user and calls next()', async () => {
-      const mockUser = { _id: new Types.ObjectId(), isActive: true, role: Role.USER }
+      const mockUser = { _id: new Types.ObjectId(), isActive: true }
       const mockSelect = vi.fn().mockResolvedValue(mockUser)
       vi.mocked(User.findById).mockReturnValue({ select: mockSelect } as any)
       vi.mocked(jwt.verify).mockReturnValue({ id: new Types.ObjectId().toString() } as any)
@@ -76,7 +75,7 @@ describe('optionalAuthenticate middleware', () => {
 
   describe('when token is valid but user is inactive', () => {
     it('does not attach req.user but still calls next()', async () => {
-      const mockUser = { _id: new Types.ObjectId(), isActive: false, role: Role.USER }
+      const mockUser = { _id: new Types.ObjectId(), isActive: false }
       const mockSelect = vi.fn().mockResolvedValue(mockUser)
       vi.mocked(User.findById).mockReturnValue({ select: mockSelect } as any)
       vi.mocked(jwt.verify).mockReturnValue({ id: new Types.ObjectId().toString() } as any)

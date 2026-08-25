@@ -70,6 +70,70 @@ navegador mucho antes de que el token firmado expire realmente.
 
 ---
 
+### [2026-08-25] - LB-84: Auditoría de autorización end-to-end (endpoints × roles)
+- **Dominio afectado:** Backend
+- **Subagentes involucrados:** Explorer (`progress/explorers/exp_LB-84.md`),
+  Implementer (`progress/implementers/impl_LB-84.md`), Reviewer
+  (`progress/reviewers/review_LB-84.md`).
+- **Contexto:** Sprint 5 · Hardening, prioridad CRÍTICA — devs reportaron
+  usuarios logueados con un rol viendo vistas/datos de otro rol. El usuario
+  (dueño de producto) sospechaba que `User.role` (campo legado) convivía mal
+  con `BarUser.role` (tabla intermedia usuario↔bar). El Explorer confirmó la
+  sospecha y encontró **cuatro** fuentes de rol coexistiendo: `User.role`
+  (enum `Role` ADMIN/USER/OWNER/WAITER, efectivamente muerto — nunca se
+  asigna nada más que el default), `BarUser.role` (`BarUserRole`
+  OWNER/CASHIER, fuente real a nivel bar), `Group.memberships[].role`
+  (`MembershipRole`, fuente real a nivel grupo) y `User.memberships[].role`
+  (copia denormalizada solo para mostrar, dual-write manual sin
+  transacción, nunca usada para autorizar). El JWT no da confianza ciega en
+  ningún rol firmado — todo se re-consulta fresco contra Mongo en cada
+  request, así que "rol revocado mid-sesión" ya funcionaba bien de antes.
+- **Resumen de Cambios:** dos gaps reales de seguridad corregidos: (1)
+  mass assignment en `POST /api/auth/register`
+  (`AuthController.createAccount` hacía `User.create(req.body)` sin
+  whitelist — permitía auto-asignarse `role: ADMIN`, `isActive: true`,
+  `profileComplete: true`; ahora extrae explícitamente solo los campos
+  legítimos de registro); (2) `BarController.updateBarProfile`/
+  `uploadBarLogo`/`uploadBarCover` no exigían `BarUserRole.OWNER` (un
+  CASHIER podía editar nombre/teléfono/hora de cierre/tabla de puntos y
+  subir logo/portada del bar) — ahora rechazan con 403 al mismo patrón
+  inline que `DrinkCategoryController`. **Decisión de producto (fase de
+  desarrollo, sin necesidad de compat con datos viejos):** se eliminó por
+  completo `User.role`/enum `Role` de `models/User.ts`,
+  `middleware/auth.ts` (`authenticate()` ya no toma parámetro de roles,
+  ~30 rutas actualizadas) y el endpoint huérfano
+  `PATCH /api/bars/:id/activar` + `BarController.activateBar` (confirmado
+  sin uso desde el frontend, único endpoint gateado por `Role.ADMIN`,
+  tratado como feature no construida en vez de inventar un reemplazo).
+  Tests nuevos solo donde había gaps reales (suite nueva para
+  `createAccount`, 403 CASHIER en los 3 métodos de `BarController`, JWT
+  expirado, regresión de rol/cuenta revocada mid-sesión) — no se reescribió
+  lo que ya cubría bien (doble sesión vía kick-out de `Shift`, cajero
+  desactivado). Documentado `docs/AUTHZ_MATRIX.md` (nuevo) como matriz
+  completa endpoint→rol→fuente de verdad→mecanismo, contrato para **LB-85**
+  (`AUTH-2`, Franco Espinoza, segregación de vistas por rol en frontend,
+  bloqueada por este ticket) — se dejó comentario en LB-85 con dos casos
+  concretos encontrados a pedido del usuario: `BarProfileView.tsx` sin
+  ningún guard de rol (gemelo exacto del gap #2 de backend), y `MainLayout`
+  que no valida el "modo" del JWT (nada impide que una sesión cajero/dueño
+  navegue por URL directa a `/groups`/`/bar/mis-bares`). Alcance
+  estrictamente backend — LB-85 se encarga de los guards de frontend.
+- **Hallazgos no bloqueantes, fuera de alcance (pendiente decisión del
+  usuario sobre abrir tickets de seguimiento):** `GroupController.getGroupById`/
+  `getGroupMembers` no verifican membresía del solicitante (cualquier
+  usuario autenticado ve datos de cualquier grupo por ID) — documentado en
+  `docs/AUTHZ_MATRIX.md`. Test preexistente fallando en
+  `LeaderConsumptionController.accept` (`leaderConsumption.test.ts`),
+  confirmado independientemente por el Reviewer (vía `git stash` contra
+  baseline) como ajeno al diff de LB-84 y al dominio de auth/roles.
+- **Veredicto del Reviewer:** `[APPROVED]` (primera pasada) — C1/C2/C4
+  verificados contra el código real y los comandos corridos en vivo por el
+  propio Reviewer (590/591 tests, único fallo confirmado preexistente;
+  coverage de `middleware/`+`utils/` 89.24%/94.91%, sobre el umbral 80%).
+  C3 no aplica (ticket 100% backend). Cambios sin commitear en working tree
+  al momento del veredicto (22 archivos) — commit/push pendiente de
+  decisión del usuario.
+
 ## Plantilla de registro de tickets (append-only)
 
 > Copiar este bloque para cada ticket cerrado y completarlo. Se añade

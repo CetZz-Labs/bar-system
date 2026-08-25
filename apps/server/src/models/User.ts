@@ -1,13 +1,6 @@
 import { Document, model, Schema, Types } from "mongoose";
 import { hashPassword } from "../utils/auth";
 
-export enum Role {
-    ADMIN = 'ADMIN',
-    USER = 'USER',
-    OWNER = 'OWNER',
-    WAITER = 'WAITER'
-}
-
 export enum MembershipRole {
     ADMIN = 'ADMIN',
     MEMBER = 'MEMBER',
@@ -28,7 +21,6 @@ export interface IUser extends Document {
     password: string;
     birthdate?: Date;
     phone?: string;
-    role: Role;
     avatarUrl?: string; // or string if required
     isActive: boolean;
     profileComplete: boolean;
@@ -63,11 +55,6 @@ const userSchema = new Schema<IUser>({
     phone: {
         type: String,
         trim: true,
-    },
-    role: {
-        type: String,
-        enum: Object.values(Role),
-        default: Role.USER
     },
     avatarUrl: {
         type: String,
