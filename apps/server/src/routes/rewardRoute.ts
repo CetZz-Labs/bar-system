@@ -3,14 +3,13 @@ import { body, param } from "express-validator";
 import { RewardController } from "../controllers/RewardController";
 import { authenticate } from "../middleware/auth";
 import { handleInputErrors } from "../middleware/validation";
-import { Role } from "../models/User";
 
 // mergeParams para poder leer :barId, ya que este router se monta anidado
 // bajo /api/bars/:barId/rewards (LB-67, colección nueva, ver models/Reward.ts).
 const router: Router = Router({ mergeParams: true });
 
 router.get('/',
-    authenticate([Role.USER, Role.ADMIN]),
+    authenticate(),
     param('barId')
         .isMongoId().withMessage('El ID del bar es inválido'),
     handleInputErrors,
@@ -18,7 +17,7 @@ router.get('/',
 );
 
 router.post('/',
-    authenticate([Role.USER, Role.ADMIN]),
+    authenticate(),
     param('barId')
         .isMongoId().withMessage('El ID del bar es inválido'),
     body('name')
@@ -50,7 +49,7 @@ router.post('/',
 );
 
 router.put('/:rewardId',
-    authenticate([Role.USER, Role.ADMIN]),
+    authenticate(),
     param('barId')
         .isMongoId().withMessage('El ID del bar es inválido'),
     param('rewardId')
@@ -81,7 +80,7 @@ router.put('/:rewardId',
 );
 
 router.delete('/:rewardId',
-    authenticate([Role.USER, Role.ADMIN]),
+    authenticate(),
     param('barId')
         .isMongoId().withMessage('El ID del bar es inválido'),
     param('rewardId')

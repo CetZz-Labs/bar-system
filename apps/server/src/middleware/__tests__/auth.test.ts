@@ -2,14 +2,13 @@ import { vi, describe, it, expect, beforeEach } from 'vitest'
 import jwt from 'jsonwebtoken'
 import { Types } from 'mongoose'
 import { authenticate } from '../auth'
-import User, { Role } from '../../models/User'
+import User from '../../models/User'
 import { buildMockRequest, buildMockResponse, buildMockNext } from '../../__tests__/helpers/mockHelpers'
 
 // Mock User model
 vi.mock('../../models/User', () => {
   return {
     default: { findById: vi.fn() },
-    Role: { ADMIN: 'ADMIN', USER: 'USER', OWNER: 'OWNER', WAITER: 'WAITER' },
   }
 })
 
@@ -32,7 +31,7 @@ describe('authenticate middleware', () => {
       const res = buildMockResponse()
       const next = buildMockNext()
 
-      const middleware = authenticate([Role.USER])
+      const middleware = authenticate()
       await middleware(req, res, next)
 
       expect(res.status).toHaveBeenCalledWith(401)
@@ -44,7 +43,7 @@ describe('authenticate middleware', () => {
       const res = buildMockResponse()
       const next = buildMockNext()
 
-      const middleware = authenticate([Role.USER])
+      const middleware = authenticate()
       await middleware(req, res, next)
 
       expect(next).not.toHaveBeenCalled()
@@ -53,7 +52,7 @@ describe('authenticate middleware', () => {
 
   describe('when token is valid', () => {
     it('calls next()', async () => {
-      const mockUser = { _id: new Types.ObjectId(), isActive: true, role: Role.USER }
+      const mockUser = { _id: new Types.ObjectId(), isActive: true }
       const mockSelect = vi.fn().mockResolvedValue(mockUser)
       vi.mocked(User.findById).mockReturnValue({ select: mockSelect } as any)
       vi.mocked(jwt.verify).mockReturnValue({ id: new Types.ObjectId().toString() } as any)
@@ -62,14 +61,14 @@ describe('authenticate middleware', () => {
       const res = buildMockResponse()
       const next = buildMockNext()
 
-      const middleware = authenticate([Role.USER])
+      const middleware = authenticate()
       await middleware(req, res, next)
 
       expect(next).toHaveBeenCalled()
     })
 
     it('attaches user to req.user', async () => {
-      const mockUser = { _id: new Types.ObjectId(), isActive: true, role: Role.USER }
+      const mockUser = { _id: new Types.ObjectId(), isActive: true }
       const mockSelect = vi.fn().mockResolvedValue(mockUser)
       vi.mocked(User.findById).mockReturnValue({ select: mockSelect } as any)
       vi.mocked(jwt.verify).mockReturnValue({ id: new Types.ObjectId().toString() } as any)
@@ -78,10 +77,26 @@ describe('authenticate middleware', () => {
       const res = buildMockResponse()
       const next = buildMockNext()
 
-      const middleware = authenticate([Role.USER])
+      const middleware = authenticate()
       await middleware(req, res, next)
 
       expect(req.user).toBe(mockUser)
+    })
+
+    it('queries User without selecting `role` (LB-84: el campo fue eliminado del modelo)', async () => {
+      const mockUser = { _id: new Types.ObjectId(), isActive: true }
+      const mockSelect = vi.fn().mockResolvedValue(mockUser)
+      vi.mocked(User.findById).mockReturnValue({ select: mockSelect } as any)
+      vi.mocked(jwt.verify).mockReturnValue({ id: new Types.ObjectId().toString() } as any)
+
+      const req = buildMockRequest({ cookies: { access_token: 'valid-token' } })
+      const res = buildMockResponse()
+      const next = buildMockNext()
+
+      const middleware = authenticate()
+      await middleware(req, res, next)
+
+      expect(mockSelect).toHaveBeenCalledWith('_id name lastName email isActive')
     })
   })
 
@@ -95,11 +110,32 @@ describe('authenticate middleware', () => {
       const res = buildMockResponse()
       const next = buildMockNext()
 
-      const middleware = authenticate([Role.USER])
+      const middleware = authenticate()
       await middleware(req, res, next)
 
       expect(res.status).toHaveBeenCalledWith(500)
       expect(res.json).toHaveBeenCalledWith({ message: 'Token No Válido o expirado' })
+    })
+  })
+
+  describe('when token is expired', () => {
+    it('returns 500 with "Token No Válido o expirado" (LB-84: edge case explícito de la matriz de auditoría)', async () => {
+      const expiredError = new Error('jwt expired')
+      expiredError.name = 'TokenExpiredError'
+      vi.mocked(jwt.verify).mockImplementation(() => {
+        throw expiredError
+      })
+
+      const req = buildMockRequest({ cookies: { access_token: 'expired-token' } })
+      const res = buildMockResponse()
+      const next = buildMockNext()
+
+      const middleware = authenticate()
+      await middleware(req, res, next)
+
+      expect(res.status).toHaveBeenCalledWith(500)
+      expect(res.json).toHaveBeenCalledWith({ message: 'Token No Válido o expirado' })
+      expect(next).not.toHaveBeenCalled()
     })
   })
 
@@ -113,7 +149,7 @@ describe('authenticate middleware', () => {
       const res = buildMockResponse()
       const next = buildMockNext()
 
-      const middleware = authenticate([Role.USER])
+      const middleware = authenticate()
       await middleware(req, res, next)
 
       expect(res.status).toHaveBeenCalledWith(401)
@@ -123,7 +159,7 @@ describe('authenticate middleware', () => {
 
   describe('when user is inactive', () => {
     it('returns 401 with "La cuenta está desactivada"', async () => {
-      const mockUser = { _id: new Types.ObjectId(), isActive: false, role: Role.USER }
+      const mockUser = { _id: new Types.ObjectId(), isActive: false }
       const mockSelect = vi.fn().mockResolvedValue(mockUser)
       vi.mocked(User.findById).mockReturnValue({ select: mockSelect } as any)
       vi.mocked(jwt.verify).mockReturnValue({ id: new Types.ObjectId().toString() } as any)
@@ -132,48 +168,41 @@ describe('authenticate middleware', () => {
       const res = buildMockResponse()
       const next = buildMockNext()
 
-      const middleware = authenticate([Role.USER])
+      const middleware = authenticate()
       await middleware(req, res, next)
 
       expect(res.status).toHaveBeenCalledWith(401)
       expect(res.json).toHaveBeenCalledWith({ message: 'La cuenta está desactivada' })
     })
-  })
 
-  describe('when user role not allowed', () => {
-    it('returns 403 with "Acceso Denegado"', async () => {
-      const mockUser = { _id: new Types.ObjectId(), isActive: true, role: Role.USER }
-      const mockSelect = vi.fn().mockResolvedValue(mockUser)
-      vi.mocked(User.findById).mockReturnValue({ select: mockSelect } as any)
-      vi.mocked(jwt.verify).mockReturnValue({ id: new Types.ObjectId().toString() } as any)
+    it('reflects a mid-session deactivation on the very next request (regression: re-consulta fresca a Mongo, no confía en el JWT)', async () => {
+      const userId = new Types.ObjectId()
+      const decoded = { id: userId.toString() }
+      vi.mocked(jwt.verify).mockReturnValue(decoded as any)
 
-      const req = buildMockRequest({ cookies: { access_token: 'valid-token' } })
-      const res = buildMockResponse()
-      const next = buildMockNext()
+      // Primera request: la cuenta todavía está activa.
+      const firstSelect = vi.fn().mockResolvedValue({ _id: userId, isActive: true })
+      vi.mocked(User.findById).mockReturnValueOnce({ select: firstSelect } as any)
 
-      const middleware = authenticate([Role.ADMIN])
-      await middleware(req, res, next)
+      const req1 = buildMockRequest({ cookies: { access_token: 'same-token' } })
+      const res1 = buildMockResponse()
+      const next1 = buildMockNext()
+      await authenticate()(req1, res1, next1)
+      expect(next1).toHaveBeenCalled()
 
-      expect(res.status).toHaveBeenCalledWith(403)
-      expect(res.json).toHaveBeenCalledWith({ message: 'Acceso Denegado: No tienes los permisos necesarios' })
-    })
-  })
+      // El OWNER desactiva al usuario entre una request y la siguiente —
+      // mismo token, pero ahora `isActive: false` en Mongo.
+      const secondSelect = vi.fn().mockResolvedValue({ _id: userId, isActive: false })
+      vi.mocked(User.findById).mockReturnValueOnce({ select: secondSelect } as any)
 
-  describe('when user role is allowed', () => {
-    it('calls next()', async () => {
-      const mockUser = { _id: new Types.ObjectId(), isActive: true, role: Role.ADMIN }
-      const mockSelect = vi.fn().mockResolvedValue(mockUser)
-      vi.mocked(User.findById).mockReturnValue({ select: mockSelect } as any)
-      vi.mocked(jwt.verify).mockReturnValue({ id: new Types.ObjectId().toString() } as any)
+      const req2 = buildMockRequest({ cookies: { access_token: 'same-token' } })
+      const res2 = buildMockResponse()
+      const next2 = buildMockNext()
+      await authenticate()(req2, res2, next2)
 
-      const req = buildMockRequest({ cookies: { access_token: 'valid-token' } })
-      const res = buildMockResponse()
-      const next = buildMockNext()
-
-      const middleware = authenticate([Role.ADMIN])
-      await middleware(req, res, next)
-
-      expect(next).toHaveBeenCalled()
+      expect(next2).not.toHaveBeenCalled()
+      expect(res2.status).toHaveBeenCalledWith(401)
+      expect(res2.json).toHaveBeenCalledWith({ message: 'La cuenta está desactivada' })
     })
   })
 })

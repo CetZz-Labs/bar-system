@@ -325,40 +325,6 @@ export class BarController {
         }
     };
 
-    static activateBar = async (req: Request, res: Response) => {
-        try {
-            const { id } = req.params;
-
-            const bar = await Bar.findById(id);
-
-            if (!bar) {
-                res.status(404).json({ message: 'Bar no encontrado' });
-                return;
-            }
-
-            if (bar.status === BarStatus.ACTIVE) {
-                res.status(409).json({ message: 'El bar ya está activo' });
-                return;
-            }
-
-            bar.status = BarStatus.ACTIVE;
-            await bar.save();
-
-            res.status(200).json({
-                message: 'Bar activado correctamente',
-                bar: {
-                    id: bar._id,
-                    name: bar.name,
-                    slug: bar.slug,
-                    status: bar.status,
-                },
-            });
-        } catch (error) {
-            console.error(error);
-            res.status(500).json({ message: 'Hubo un error al activar el bar' });
-        }
-    };
-
     static getBarProfile = async (req: Request, res: Response) => {
         try {
             const userId = req.user!._id.toString();
@@ -447,9 +413,17 @@ export class BarController {
             const { id } = req.params;
             const { name, description, phone, closingTime, attendancePointsByDay } = req.body;
 
-            const { hasAccess } = await verifyBarAccess(userId, id as string);
+            // LB-84: solo el OWNER puede editar el perfil del bar — antes
+            // cualquier BarUser (incluido CASHIER) pasaba este chequeo
+            // porque solo se verificaba `hasAccess` (ver
+            // progress/explorers/exp_LB-84.md §3).
+            const { hasAccess, role } = await verifyBarAccess(userId, id as string);
             if (!hasAccess) {
                 res.status(403).json({ message: 'No tienes permiso para editar este bar' });
+                return;
+            }
+            if (role !== BarUserRole.OWNER) {
+                res.status(403).json({ message: 'Solo el dueño del bar puede editar este bar' });
                 return;
             }
 
@@ -532,9 +506,15 @@ export class BarController {
             const userId = req.user!._id.toString();
             const { id } = req.params;
 
-            const { hasAccess } = await verifyBarAccess(userId, id as string);
+            // LB-84: solo el OWNER puede subir el logo (mismo gap que
+            // updateBarProfile, ver progress/explorers/exp_LB-84.md §3).
+            const { hasAccess, role } = await verifyBarAccess(userId, id as string);
             if (!hasAccess) {
                 res.status(403).json({ message: 'No tienes permiso para editar este bar' });
+                return;
+            }
+            if (role !== BarUserRole.OWNER) {
+                res.status(403).json({ message: 'Solo el dueño del bar puede editar este bar' });
                 return;
             }
 
@@ -590,9 +570,15 @@ export class BarController {
             const userId = req.user!._id.toString();
             const { id } = req.params;
 
-            const { hasAccess } = await verifyBarAccess(userId, id as string);
+            // LB-84: solo el OWNER puede subir la portada (mismo gap que
+            // updateBarProfile, ver progress/explorers/exp_LB-84.md §3).
+            const { hasAccess, role } = await verifyBarAccess(userId, id as string);
             if (!hasAccess) {
                 res.status(403).json({ message: 'No tienes permiso para editar este bar' });
+                return;
+            }
+            if (role !== BarUserRole.OWNER) {
+                res.status(403).json({ message: 'Solo el dueño del bar puede editar este bar' });
                 return;
             }
 

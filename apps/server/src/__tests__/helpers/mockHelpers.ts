@@ -1,5 +1,5 @@
 import { Types } from 'mongoose'
-import { Role, IUser } from '../../models/User'
+import { IUser } from '../../models/User'
 import { Request, Response, NextFunction } from 'express'
 import { vi } from 'vitest'
 
@@ -9,7 +9,6 @@ export const buildMockUser = (overrides: Partial<IUser> = {}): IUser => ({
   lastName: 'User',
   email: 'test@example.com',
   password: '$2b$04$hashedpassword',      // Pre-hashed bcrypt string
-  role: Role.USER,
   isActive: true,
   profileComplete: false,
   birthdate: new Date('1990-01-01'),

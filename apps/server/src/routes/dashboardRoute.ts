@@ -3,7 +3,6 @@ import { body, param, query } from "express-validator";
 import { DashboardController } from "../controllers/DashboardController";
 import { authenticate } from "../middleware/auth";
 import { handleInputErrors } from "../middleware/validation";
-import { Role } from "../models/User";
 
 // LB-74: dashboard del bar (OWNER). mergeParams para leer :barId, montado
 // anidado bajo /api/bars/:barId (server.ts), mismo patrón que rewardRoute.ts
@@ -14,7 +13,7 @@ const PERIOD_VALUES = ['today', 'week', 'month', 'custom'];
 const STATUS_VALUES = ['en_curso', 'finalizada', 'reservada', 'disputa'];
 
 router.get('/dashboard',
-    authenticate([Role.USER, Role.ADMIN]),
+    authenticate(),
     param('barId')
         .isMongoId().withMessage('El ID del bar es inválido'),
     query('period')
@@ -41,7 +40,7 @@ router.get('/dashboard',
 );
 
 router.patch('/consumptions/:consumptionId/resolve',
-    authenticate([Role.USER, Role.ADMIN]),
+    authenticate(),
     param('barId')
         .isMongoId().withMessage('El ID del bar es inválido'),
     param('consumptionId')

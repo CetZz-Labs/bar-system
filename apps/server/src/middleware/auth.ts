@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from 'jsonwebtoken';
 import { Types } from "mongoose";
-import User, { IUser, Role } from "../models/User";
+import User, { IUser } from "../models/User";
 import BarUser, { BarUserRole, IBarUser } from "../models/BarUser";
 import Bar from "../models/Bar";
 import Shift, { IShift, ShiftEndReason } from "../models/Shift";
@@ -57,7 +57,7 @@ export const optionalAuthenticate = async (req: Request, res: Response, next: Ne
         const decoded = jwt.verify(token, process.env.JWT_SECRET as string) as IDecodedToken;
 
         if (decoded && decoded.id) {
-            const user = await User.findById(decoded.id).select('_id name lastName email role isActive');
+            const user = await User.findById(decoded.id).select('_id name lastName email isActive');
 
             if (user && user.isActive) {
                 req.user = user;
@@ -95,10 +95,14 @@ export const requireCompleteProfile = async (req: Request, res: Response, next: 
 };
 
 /**
- * Middleware para autenticar y verificar roles.
- * @param allowedRoles Array de roles permitidos. Por defecto es [Role.USER]
+ * Middleware de autenticación genérico: valida el JWT, busca al usuario en
+ * Mongo (fresco en cada request) y exige que la cuenta esté activa. No
+ * distingue roles de `User` (LB-84: `User.role`/`Role` se eliminó del
+ * modelo — nunca fue una fuente real de autorización, ver
+ * `progress/explorers/exp_LB-84.md` §1/§6; la autorización por recurso vive
+ * en `BarUser.role`/`Group.memberships[].role`).
  */
-export const authenticate = (allowedRoles: Role[] = [Role.USER]) => {
+export const authenticate = () => {
     return async (req: Request, res: Response, next: NextFunction) => {
         const token = req.cookies.access_token;
 
@@ -114,7 +118,7 @@ export const authenticate = (allowedRoles: Role[] = [Role.USER]) => {
 
             if (decoded && decoded.id) {
                 // 3. Buscamos al usuario en la base de datos (Adaptado a tu Mongoose)
-                const user = await User.findById(decoded.id).select('_id name lastName email role isActive');
+                const user = await User.findById(decoded.id).select('_id name lastName email isActive');
 
                 if (!user) {
                     res.status(401).json({ message: 'Token No Válido o usuario inexistente' });
@@ -128,14 +132,7 @@ export const authenticate = (allowedRoles: Role[] = [Role.USER]) => {
                     return;
                 }
 
-                // 5. VALIDACIÓN DE ROLES
-                // Verificamos si el rol del usuario está dentro de los permitidos
-                if (!allowedRoles.includes(user.role as Role)) {
-                    res.status(403).json({ message: 'Acceso Denegado: No tienes los permisos necesarios' });
-                    return;
-                }
-
-                // 6. Asignamos el usuario al request y continuamos
+                // 5. Asignamos el usuario al request y continuamos
                 req.user = user;
                 next();
             }

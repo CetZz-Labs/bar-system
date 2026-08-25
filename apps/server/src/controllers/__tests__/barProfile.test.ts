@@ -316,6 +316,58 @@ describe('BarController.updateBarProfile', () => {
     expect(res.status).toHaveBeenCalledWith(403)
   })
 
+  it('LB-84: returns 403 when the BarUser is CASHIER (only OWNER may edit the bar profile)', async () => {
+    const userId = new Types.ObjectId()
+    const barId = new Types.ObjectId()
+    const mockBar = buildMockBar({ _id: barId })
+
+    vi.mocked(BarUser.findOne).mockResolvedValue({ role: BarUserRole.CASHIER } as any)
+    vi.mocked(Bar.findById).mockResolvedValue(mockBar as any)
+
+    const req = buildMockRequest({
+      user: { _id: userId } as any,
+      params: { id: barId.toString() },
+      body: { name: 'Nombre hackeado' },
+    })
+    const res = buildMockResponse()
+
+    await BarController.updateBarProfile(req, res)
+
+    expect(res.status).toHaveBeenCalledWith(403)
+    expect(mockBar.save).not.toHaveBeenCalled()
+  })
+
+  it('LB-84 regression: a role downgrade from OWNER to CASHIER applied mid-session is enforced on the very next request (BarUser is re-read fresh from Mongo, not cached)', async () => {
+    const userId = new Types.ObjectId()
+    const barId = new Types.ObjectId()
+    const mockBar = buildMockBar({ _id: barId })
+
+    // Request 1: todavía es OWNER — la edición pasa.
+    vi.mocked(BarUser.findOne).mockResolvedValueOnce({ role: BarUserRole.OWNER } as any)
+    vi.mocked(Bar.findById).mockResolvedValueOnce(mockBar as any)
+    const req1 = buildMockRequest({
+      user: { _id: userId } as any,
+      params: { id: barId.toString() },
+      body: { name: 'Nombre legítimo' },
+    })
+    const res1 = buildMockResponse()
+    await BarController.updateBarProfile(req1, res1)
+    expect(res1.status).toHaveBeenCalledWith(200)
+
+    // El OWNER degrada al usuario a CASHIER entre una request y la
+    // siguiente — mismo endpoint, sin volver a loguearse.
+    vi.mocked(BarUser.findOne).mockResolvedValueOnce({ role: BarUserRole.CASHIER } as any)
+    const req2 = buildMockRequest({
+      user: { _id: userId } as any,
+      params: { id: barId.toString() },
+      body: { name: 'Nombre hackeado' },
+    })
+    const res2 = buildMockResponse()
+    await BarController.updateBarProfile(req2, res2)
+
+    expect(res2.status).toHaveBeenCalledWith(403)
+  })
+
   it('returns 404 when bar not found', async () => {
     const userId = new Types.ObjectId()
     const barId = new Types.ObjectId()
@@ -642,6 +694,32 @@ describe('BarController.uploadBarLogo', () => {
     expect(res.status).toHaveBeenCalledWith(403)
   })
 
+  it('LB-84: returns 403 when the BarUser is CASHIER (only OWNER may upload the logo)', async () => {
+    const userId = new Types.ObjectId()
+    const barId = new Types.ObjectId()
+    const mockBar = buildMockBar({ _id: barId })
+
+    vi.mocked(BarUser.findOne).mockResolvedValue({ role: BarUserRole.CASHIER } as any)
+    vi.mocked(Bar.findById).mockResolvedValue(mockBar as any)
+
+    const req = buildMockRequest({
+      user: { _id: userId } as any,
+      params: { id: barId.toString() },
+      file: {
+        buffer: Buffer.from('fake-image-data'),
+        originalname: 'logo.jpg',
+        mimetype: 'image/jpeg',
+        size: 1024,
+      } as any,
+    })
+    const res = buildMockResponse()
+
+    await BarController.uploadBarLogo(req, res)
+
+    expect(res.status).toHaveBeenCalledWith(403)
+    expect(mockBar.save).not.toHaveBeenCalled()
+  })
+
   it('returns 404 when bar not found', async () => {
     const userId = new Types.ObjectId()
     const barId = new Types.ObjectId()
@@ -798,6 +876,32 @@ describe('BarController.uploadBarCover', () => {
     await BarController.uploadBarCover(req, res)
 
     expect(res.status).toHaveBeenCalledWith(403)
+  })
+
+  it('LB-84: returns 403 when the BarUser is CASHIER (only OWNER may upload the cover)', async () => {
+    const userId = new Types.ObjectId()
+    const barId = new Types.ObjectId()
+    const mockBar = buildMockBar({ _id: barId })
+
+    vi.mocked(BarUser.findOne).mockResolvedValue({ role: BarUserRole.CASHIER } as any)
+    vi.mocked(Bar.findById).mockResolvedValue(mockBar as any)
+
+    const req = buildMockRequest({
+      user: { _id: userId } as any,
+      params: { id: barId.toString() },
+      file: {
+        buffer: Buffer.from('fake-image-data'),
+        originalname: 'cover.jpg',
+        mimetype: 'image/jpeg',
+        size: 1024,
+      } as any,
+    })
+    const res = buildMockResponse()
+
+    await BarController.uploadBarCover(req, res)
+
+    expect(res.status).toHaveBeenCalledWith(403)
+    expect(mockBar.save).not.toHaveBeenCalled()
   })
 
   it('returns 404 when bar not found', async () => {

@@ -3,7 +3,6 @@ import { param, query } from "express-validator";
 import { AuditLogController } from "../controllers/AuditLogController";
 import { authenticate } from "../middleware/auth";
 import { handleInputErrors } from "../middleware/validation";
-import { Role } from "../models/User";
 import { ACTOR_TYPES, AUDIT_EVENT_TYPES } from "../models/AuditLog";
 
 // LB-77: lectura del log de auditoría (OWNER-only, inmutable). mergeParams
@@ -12,7 +11,7 @@ import { ACTOR_TYPES, AUDIT_EVENT_TYPES } from "../models/AuditLog";
 const router: Router = Router({ mergeParams: true });
 
 router.get('/',
-    authenticate([Role.USER, Role.ADMIN]),
+    authenticate(),
     param('barId')
         .isMongoId().withMessage('El ID del bar es inválido'),
     query('from')

@@ -10,7 +10,7 @@ export class AuthController {
 
     static createAccount = async (req: Request, res: Response) => {
         try {
-            const { email, password, confirmPassword } = req.body
+            const { name, lastName, email, password, confirmPassword, birthdate } = req.body
 
             const userExists = await User.findOne({ email })
 
@@ -22,7 +22,12 @@ export class AuthController {
                 return res.status(400).json({ message: "Las contraseñas no coinciden" })
             }
 
-            const user = await User.create(req.body)
+            // LB-84: whitelist explícita de campos de registro — nunca pasar
+            // req.body completo a User.create. `role`/`isActive`/
+            // `profileComplete`/`memberships` no son campos de registro y no
+            // deben poder setearse desde el body (mass assignment /
+            // escalación de privilegios, ver progress/explorers/exp_LB-84.md §2).
+            const user = await User.create({ name, lastName, email, password, birthdate })
 
             const token = new Token()
             token.token = generateToken()
@@ -239,7 +244,7 @@ export class AuthController {
     }
 
     static session = async (req: Request, res: Response) => {
-        const user = await User.findById(req.user!._id).select('_id name lastName email role isActive profileComplete birthdate avatarUrl')
+        const user = await User.findById(req.user!._id).select('_id name lastName email isActive profileComplete birthdate avatarUrl')
         res.json(user)
     }
 

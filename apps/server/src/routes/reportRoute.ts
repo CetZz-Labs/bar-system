@@ -3,7 +3,6 @@ import { param, query } from "express-validator";
 import { ReportController } from "../controllers/ReportController";
 import { authenticate } from "../middleware/auth";
 import { handleInputErrors } from "../middleware/validation";
-import { Role } from "../models/User";
 import { REPORT_KINDS } from "../utils/barReports";
 
 // LB-78: reportes exportables del bar (OWNER). mergeParams para leer :barId,
@@ -24,7 +23,7 @@ const FORMAT_VALUES = ['csv', 'pdf'];
 const router: Router = Router({ mergeParams: true });
 
 router.get('/',
-    authenticate([Role.USER, Role.ADMIN]),
+    authenticate(),
     param('barId')
         .isMongoId().withMessage('El ID del bar es inválido'),
     query('kind')

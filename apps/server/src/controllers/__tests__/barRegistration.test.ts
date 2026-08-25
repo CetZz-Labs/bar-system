@@ -510,70 +510,8 @@ describe('BarController.getMyBars', () => {
   })
 })
 
-describe('BarController.activateBar', () => {
-  beforeEach(() => {
-    vi.mocked(Bar.findById).mockReset()
-  })
-
-  it('activates a pending bar', async () => {
-    const barId = new Types.ObjectId()
-    const mockBar = {
-      _id: barId,
-      name: 'El Bar de Juan',
-      slug: 'el-bar-de-juan-ab12',
-      status: BarStatus.PENDING,
-      save: vi.fn().mockResolvedValue(true),
-    }
-    vi.mocked(Bar.findById).mockResolvedValue(mockBar as any)
-
-    const req = buildMockRequest({
-      params: { id: barId.toString() },
-    })
-    const res = buildMockResponse()
-
-    await BarController.activateBar(req, res)
-
-    expect(mockBar.save).toHaveBeenCalled()
-    expect(res.status).toHaveBeenCalledWith(200)
-    expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({
-        message: expect.stringContaining('activado'),
-        bar: expect.objectContaining({
-          status: BarStatus.ACTIVE,
-        }),
-      })
-    )
-  })
-
-  it('returns 404 when bar not found', async () => {
-    vi.mocked(Bar.findById).mockResolvedValue(null)
-
-    const req = buildMockRequest({
-      params: { id: new Types.ObjectId().toString() },
-    })
-    const res = buildMockResponse()
-
-    await BarController.activateBar(req, res)
-
-    expect(res.status).toHaveBeenCalledWith(404)
-  })
-
-  it('returns 409 when bar is already active', async () => {
-    const barId = new Types.ObjectId()
-    const mockBar = {
-      _id: barId,
-      status: BarStatus.ACTIVE,
-      save: vi.fn().mockResolvedValue(true),
-    }
-    vi.mocked(Bar.findById).mockResolvedValue(mockBar as any)
-
-    const req = buildMockRequest({
-      params: { id: barId.toString() },
-    })
-    const res = buildMockResponse()
-
-    await BarController.activateBar(req, res)
-
-    expect(res.status).toHaveBeenCalledWith(409)
-  })
-})
+// LB-84: `PATCH /api/bars/:id/activar` y `BarController.activateBar` fueron
+// eliminados por completo — endpoint huérfano (gateado por `Role.ADMIN`, un
+// rol que ningún flujo legítimo asignaba) solo alcanzable explotando el
+// mass-assignment de `createAccount`, sin uso real desde el frontend ni un
+// panel admin construido (ver progress/explorers/exp_LB-84.md §4).

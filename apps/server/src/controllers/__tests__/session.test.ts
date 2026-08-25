@@ -23,7 +23,6 @@ describe('AuthController.session', () => {
         name: 'Juan',
         lastName: 'Perez',
         email: 'juan@example.com',
-        role: 'USER',
         isActive: true,
         profileComplete: true,
         birthdate: new Date('1990-01-15'),
@@ -40,7 +39,7 @@ describe('AuthController.session', () => {
       await AuthController.session(req, res)
 
       expect(res.json).toHaveBeenCalledWith(mockUser)
-      expect(mockSelect).toHaveBeenCalledWith('_id name lastName email role isActive profileComplete birthdate avatarUrl')
+      expect(mockSelect).toHaveBeenCalledWith('_id name lastName email isActive profileComplete birthdate avatarUrl')
     })
   })
 
@@ -51,7 +50,6 @@ describe('AuthController.session', () => {
         name: 'Juan',
         lastName: 'Perez',
         email: 'juan@example.com',
-        role: 'USER',
         isActive: true,
         profileComplete: false,
         birthdate: undefined,

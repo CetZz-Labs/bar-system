@@ -3,13 +3,12 @@ import { DrinkCategoryController } from "../controllers/DrinkCategoryController"
 import { authenticate } from "../middleware/auth";
 import { handleInputErrors } from "../middleware/validation";
 import { body, param } from "express-validator";
-import { Role } from "../models/User";
 
 const router: Router = Router({ mergeParams: true });
 
 // POST /api/bar/:barId/categories — Create category (OWNER)
 router.post('/',
-    authenticate([Role.USER, Role.ADMIN]),
+    authenticate(),
     param('barId').isMongoId().withMessage('ID de bar inválido'),
     body('name')
         .notEmpty().withMessage('El nombre es requerido')
@@ -23,7 +22,7 @@ router.post('/',
 
 // GET /api/bar/:barId/categories — List categories (JWT required)
 router.get('/',
-    authenticate([Role.USER, Role.ADMIN]),
+    authenticate(),
     param('barId').isMongoId().withMessage('ID de bar inválido'),
     handleInputErrors,
     DrinkCategoryController.listCategories
@@ -31,7 +30,7 @@ router.get('/',
 
 // PUT /api/bar/:barId/categories/:categoryId — Update category (OWNER)
 router.put('/:categoryId',
-    authenticate([Role.USER, Role.ADMIN]),
+    authenticate(),
     param('barId').isMongoId().withMessage('ID de bar inválido'),
     param('categoryId').isMongoId().withMessage('ID de categoría inválido'),
     body('name')
@@ -46,7 +45,7 @@ router.put('/:categoryId',
 
 // PATCH /api/bar/:barId/categories/:categoryId/status — Toggle status (OWNER)
 router.patch('/:categoryId/status',
-    authenticate([Role.USER, Role.ADMIN]),
+    authenticate(),
     param('barId').isMongoId().withMessage('ID de bar inválido'),
     param('categoryId').isMongoId().withMessage('ID de categoría inválido'),
     body('status')
@@ -58,7 +57,7 @@ router.patch('/:categoryId/status',
 
 // DELETE /api/bar/:barId/categories/:categoryId — Soft-delete (OWNER)
 router.delete('/:categoryId',
-    authenticate([Role.USER, Role.ADMIN]),
+    authenticate(),
     param('barId').isMongoId().withMessage('ID de bar inválido'),
     param('categoryId').isMongoId().withMessage('ID de categoría inválido'),
     handleInputErrors,
