@@ -39,7 +39,7 @@ const renderGroupsList = () =>
   renderWithProviders(
     <Routes>
       <Route path="/groups" element={<GroupsListView />} />
-      <Route path="/groups/:slug" element={<div data-testid="group-detail" />} />
+      <Route path="/groups/:slug/home" element={<div data-testid="group-detail" />} />
     </Routes>,
     { route: '/groups' }
   );

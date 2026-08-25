@@ -207,12 +207,6 @@ export default function GroupRewardsView() {
     refetchOnWindowFocus: false,
   });
 
-  const onBalance = useCallback(() => {
-    // El saldo GLOBAL del grupo (points_balance_updated) no es el mismo
-    // dato que el saldo por bar que se muestra acá — se ignora acá, solo
-    // se usa el evento por-bar (onAvailablePoints) para refrescar el header.
-  }, []);
-
   const onAvailablePoints = useCallback(
     (payload: { groupId: string; barId: string; availablePoints: number }) => {
       if (activeOuting?.bar._id && payload.barId === activeOuting.bar._id) {
@@ -222,7 +216,8 @@ export default function GroupRewardsView() {
     [activeOuting]
   );
 
-  useGroupPointsSocket(groupId, onBalance, onAvailablePoints);
+  // Saldo global (points_balance_updated) no aplica al header por-bar; se ignora.
+  useGroupPointsSocket(groupId, () => {}, onAvailablePoints);
 
   const createRedemptionMutation = useMutation({
     mutationFn: (rewardId: string) => createRedemption(groupId!, rewardId),

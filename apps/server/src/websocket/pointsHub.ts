@@ -4,22 +4,44 @@ import jwt from 'jsonwebtoken';
 import Group from '../models/Group';
 
 /**
- * Contrato WebSocket de saldo de grupo (LB-61 → LB-74; ampliado por LB-68).
+ * Contrato WebSocket de saldo de grupo (LB-61 → LB-70/LB-74; ampliado por LB-68).
  *
  * Cliente:
  *   1. Conecta a mismo origin con credentials (cookie `access_token`).
  *   2. Emite `join_group` con `{ groupId }`.
- *   3. Escucha `points_balance_updated` → `{ groupId, pointsBalance }`
- *      (saldo GLOBAL del grupo, sin desglose por bar).
+ *   3. Escucha `points_balance_updated` →
+ *      `{ groupId, pointsBalance, barId?, newBalance?, delta?, reason? }`
+ *      (saldo GLOBAL + metadatos opcionales del movimiento, LB-70).
  *   4. Escucha `available_points_updated` → `{ groupId, barId, availablePoints }`
- *      (LB-68: saldo disponible del grupo EN UN BAR puntual — acreditado
- *      menos lo reservado por canjes HELD vigentes, ver
- *      utils/redemptionAvailability.ts. Se emite tras generar/cancelar/
- *      expirar un canje).
+ *      (LB-68: saldo disponible del grupo EN UN BAR puntual).
+ *   5. Escucha `points_movement` → item de historial (LB-71, inserción en vivo).
  *
  * Auth: JWT de usuario (cookie access_token). Solo miembros del grupo pueden join.
  */
 let io: Server | null = null;
+
+export type PointsBalanceReason = "consumo" | "asistencia" | "canje";
+
+export type PointsBalanceUpdatedPayload = {
+    groupId: string;
+    pointsBalance: number;
+    barId?: string;
+    /** Saldo del bar tras el movimiento (si aplica). */
+    newBalance?: number;
+    delta?: number;
+    reason?: PointsBalanceReason;
+};
+
+export type PointsMovementPayload = {
+    id: string;
+    groupId: string;
+    barId: string;
+    barName: string;
+    type: PointsBalanceReason;
+    points: number;
+    createdAt: string;
+    metadata?: Record<string, unknown>;
+};
 
 interface DecodedUserToken {
     id: string;
@@ -80,12 +102,26 @@ export function initPointsHub(httpServer: HttpServer): Server {
     return io;
 }
 
-export function emitGroupPointsBalance(groupId: string, pointsBalance: number): void {
+export function emitGroupPointsBalance(
+    groupId: string,
+    pointsBalance: number,
+    meta?: Omit<PointsBalanceUpdatedPayload, "groupId" | "pointsBalance">
+): void {
     if (!io) return;
-    io.to(roomForGroup(groupId)).emit('points_balance_updated', {
+    const payload: PointsBalanceUpdatedPayload = {
         groupId,
         pointsBalance,
-    });
+        ...meta,
+    };
+    io.to(roomForGroup(groupId)).emit("points_balance_updated", payload);
+}
+
+/**
+ * LB-71: inserta un movimiento al tope del historial en clientes suscriptos.
+ */
+export function emitPointsMovement(payload: PointsMovementPayload): void {
+    if (!io) return;
+    io.to(roomForGroup(payload.groupId)).emit("points_movement", payload);
 }
 
 /**

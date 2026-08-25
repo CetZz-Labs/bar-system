@@ -17,7 +17,7 @@ import {
 } from "../utils/consumptionQr";
 import { pointsFromAmount } from "../utils/consumptionPoints";
 import { awardAttendancePointsIfFirst } from "../utils/attendancePoints";
-import { emitGroupPointsBalance } from "../websocket/pointsHub";
+import { emitGroupPointsBalance, emitPointsMovement } from "../websocket/pointsHub";
 
 const MAX_REJECTS = 4;
 
@@ -250,7 +250,37 @@ export class LeaderConsumptionController {
                 ip: req.ip,
             });
 
-            emitGroupPointsBalance(outing.group.toString(), pointsBalance);
+            const barDoc = await Bar.findById(consumption.bar).select("name").lean();
+            const barPoints = await PointsTransaction.aggregate<{ points: number }>([
+                {
+                    $match: {
+                        group: outing.group,
+                        bar: consumption.bar,
+                    },
+                },
+                { $group: { _id: null, points: { $sum: "$amount" } } },
+            ]);
+            const newBarBalance = barPoints[0]?.points ?? points;
+
+            emitGroupPointsBalance(outing.group.toString(), pointsBalance, {
+                barId: consumption.bar.toString(),
+                newBalance: newBarBalance,
+                delta: points,
+                reason: "consumo",
+            });
+
+            if (points > 0) {
+                emitPointsMovement({
+                    id: consumption._id.toString(),
+                    groupId: outing.group.toString(),
+                    barId: consumption.bar.toString(),
+                    barName: barDoc?.name ?? "Bar",
+                    type: "consumo",
+                    points,
+                    createdAt: new Date().toISOString(),
+                    metadata: { amount: consumption.amount },
+                });
+            }
 
             res.status(200).json({
                 consumptionId: consumption._id,

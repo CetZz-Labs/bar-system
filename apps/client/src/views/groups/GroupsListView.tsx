@@ -163,7 +163,7 @@ export default function GroupsListView() {
           {groups.map((group) => (
             <button
               key={group.groupId}
-              onClick={() => navigate(`/groups/${group.slug}`)}
+              onClick={() => navigate(`/groups/${group.slug}/home`)}
               className="flex items-center gap-4 p-4 bg-surface-2 rounded-xl border border-border transition-colors hover:border-border-hover hover:bg-surface-3 text-left w-full"
             >
               <Avatar

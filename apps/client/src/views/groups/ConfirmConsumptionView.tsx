@@ -33,8 +33,8 @@ export default function ConfirmConsumptionView() {
   const streamRef = useRef<MediaStream | null>(null);
   const scanTimer = useRef<number | null>(null);
 
-  const onBalance = useCallback((balance: number) => {
-    setPointsBalance(balance);
+  const onBalance = useCallback((payload: { pointsBalance: number }) => {
+    setPointsBalance(payload.pointsBalance);
   }, []);
 
   useGroupPointsSocket(preview?.groupId, onBalance);
