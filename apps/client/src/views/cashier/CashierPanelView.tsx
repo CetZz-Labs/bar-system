@@ -2,7 +2,7 @@ import { useState } from "react"
 import { Link, useNavigate, useParams } from "react-router"
 import { motion } from "motion/react"
 import { AlertTriangle, Clock, Search, Store, UserCog, Gift } from "lucide-react"
-import { useMutation, useQueryClient } from "@tanstack/react-query"
+import { useMutation } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/Button"
 import { Modal } from "@/components/ui/Modal"
@@ -13,7 +13,6 @@ import { toastApiError } from "@/utils/apiError"
 export default function CashierPanelView() {
     const { barId } = useParams<{ barId: string }>()
     const navigate = useNavigate()
-    const queryClient = useQueryClient()
     const { data } = useCashierAuth()
     const [isCloseModalOpen, setIsCloseModalOpen] = useState(false)
 
@@ -21,7 +20,6 @@ export default function CashierPanelView() {
         mutationFn: closeCashierShift,
         onSuccess: (result) => {
             if (!result || !barId) return
-            queryClient.setQueryData(['cashier-session'], null)
             toast.success('Turno cerrado correctamente')
             navigate(`/bar/${barId}/cajero/cierre/${result.shiftId}`, {
                 state: { summary: result.summary },

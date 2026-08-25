@@ -1,9 +1,11 @@
 import { Request, Response } from "express";
+import { Types } from "mongoose";
 import Bar, { BarStatus } from "../models/Bar";
 import Group from "../models/Group";
 import Outing, { OutingStatus } from "../models/Outing";
 import Reward, { IReward, RewardStatus } from "../models/Reward";
 import { verifyBarAccess, resolveOwnerAccess } from "../utils/barAccess";
+import { writeAuditLog } from "../utils/auditLogService";
 
 // LB-67: ABM de recompensas del bar. No existe middleware OWNER-only
 // reusable en el repo (ver progress/explorers/exp_LB-67.md §3) — el
@@ -94,6 +96,18 @@ export class RewardController {
                 unlimitedStock: unlimited,
                 stock: unlimited ? undefined : stock,
             });
+
+            // LB-77: LB-67 no auditaba la creación de recompensas.
+            writeAuditLog({
+                bar: new Types.ObjectId(barId),
+                actorType: 'OWNER',
+                actorId: req.user!._id,
+                eventType: 'reward.created',
+                entityType: 'Recompensa',
+                entityId: reward._id,
+                metadata: { rewardId: reward._id, name: reward.name },
+            });
+
             res.status(201).json(toRewardDTO(reward));
         } catch (error) {
             if (isMongoDuplicateKeyError(error) && error.code === 11000) {
@@ -157,6 +171,17 @@ export class RewardController {
             throw error;
         }
 
+        // LB-77: LB-67 no auditaba la edición de recompensas.
+        writeAuditLog({
+            bar: new Types.ObjectId(barId),
+            actorType: 'OWNER',
+            actorId: req.user!._id,
+            eventType: 'reward.edited',
+            entityType: 'Recompensa',
+            entityId: reward._id,
+            metadata: { rewardId: reward._id, name: reward.name },
+        });
+
         res.status(200).json(toRewardDTO(reward));
     };
 
@@ -187,6 +212,17 @@ export class RewardController {
             reward.deletedAt = new Date();
             await reward.save();
         }
+
+        // LB-77: LB-67 no auditaba el borrado de recompensas.
+        writeAuditLog({
+            bar: new Types.ObjectId(barId),
+            actorType: 'OWNER',
+            actorId: req.user!._id,
+            eventType: 'reward.deleted',
+            entityType: 'Recompensa',
+            entityId: reward._id,
+            metadata: { rewardId: reward._id, name: reward.name },
+        });
 
         res.status(200).json({ message: 'Recompensa eliminada correctamente' });
     };

@@ -5,10 +5,10 @@ import Consumption, { ConsumptionStatus, ConsumptionResolutionOutcome } from "..
 import Outing from "../models/Outing";
 import Group from "../models/Group";
 import PointsTransaction, { PointsTransactionType } from "../models/PointsTransaction";
-import AuditLog, { AuditAction } from "../models/AuditLog";
 import { resolveOwnerAccess } from "../utils/barAccess";
 import { pointsFromAmount } from "../utils/consumptionPoints";
 import { emitGroupPointsBalance } from "../websocket/pointsHub";
+import { writeAuditLog } from "../utils/auditLogService";
 import {
     ActivityRowStatus,
     DashboardFilters,
@@ -207,13 +207,14 @@ export class DashboardController {
             await consumption.save();
         }
 
-        await AuditLog.create({
+        writeAuditLog({
             bar: consumption.bar,
-            user: req.user!._id,
-            action: AuditAction.CONSUMPTION_RESOLVED_BY_OWNER,
-            amount: consumption.amount,
-            outing: outing._id,
-            group: outing.group,
+            actorType: 'OWNER',
+            actorId: req.user!._id,
+            eventType: 'dispute.resolved',
+            entityType: 'Consumo',
+            entityId: consumption._id,
+            metadata: { consumptionId: consumption._id, resolution: outcome },
             ip: req.ip,
         });
 

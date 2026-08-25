@@ -4,6 +4,7 @@ import Outing from '../../models/Outing'
 import Notification from '../../models/Notification'
 import Group from '../../models/Group'
 import Bar from '../../models/Bar'
+import { writeAuditLog } from '../../utils/auditLogService'
 import { buildMockRequest, buildMockResponse } from '../../__tests__/helpers/mockHelpers'
 import { Types } from 'mongoose'
 import mongoose from 'mongoose'
@@ -57,6 +58,10 @@ vi.mock('../../models/User', () => ({
     LEADER: 'LEADER',
     CO_LEADER: 'CO_LEADER',
   },
+}))
+
+vi.mock('../../utils/auditLogService', () => ({
+  writeAuditLog: vi.fn(),
 }))
 
 vi.mock('mongoose', async (importOriginal) => {
@@ -163,6 +168,7 @@ describe('OutingController.confirmCheckIn', () => {
     vi.mocked(Group.findById).mockReset().mockReturnValue(buildSelectLeanQuery(mockGroup) as any)
     vi.mocked(Bar.findById).mockReset().mockReturnValue(buildSelectLeanQuery(mockBar) as any)
     vi.mocked(Notification.insertMany).mockReset().mockResolvedValue(true as any)
+    vi.mocked(writeAuditLog).mockReset()
   })
 
   function buildRequest(overrides: any = {}) {
@@ -196,6 +202,18 @@ describe('OutingController.confirmCheckIn', () => {
       expect(recipients).toContain(leaderId.toString())
       expect(recipients).toContain(coLeaderId.toString())
       expect(recipients).not.toContain(memberId1.toString())
+
+      // LB-77: el check-in confirmado emite el evento de auditoría.
+      expect(writeAuditLog).toHaveBeenCalledWith(
+        expect.objectContaining({
+          bar: barId,
+          actorType: 'CASHIER',
+          actorId: cashierUserId,
+          eventType: 'checkin.confirmed',
+          entityType: 'Checkin',
+          entityId: outingId,
+        })
+      )
     })
   })
 

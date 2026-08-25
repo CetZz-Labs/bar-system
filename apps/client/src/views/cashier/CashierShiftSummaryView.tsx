@@ -175,7 +175,7 @@ export default function CashierShiftSummaryView() {
 
         {!summary.redemptionsAvailable && (
           <p className="text-text-muted text-sm mb-5">
-            El backend actual no expone datos de canjes para este resumen.
+            Los datos de canjes estarán disponibles próximamente.
           </p>
         )}
 

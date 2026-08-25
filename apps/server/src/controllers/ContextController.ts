@@ -2,9 +2,9 @@ import { Request, Response } from "express";
 import { Types } from "mongoose";
 import BarUser, { BarUserRole, IBarUser } from "../models/BarUser";
 import Shift, { ShiftEndReason } from "../models/Shift";
-import AuditLog, { AuditAction } from "../models/AuditLog";
 import { generateJWT } from "../utils/jwt";
 import { closeBar } from "../utils/closeBar";
+import { writeAuditLog } from "../utils/auditLogService";
 
 const ACCESS_TOKEN_COOKIE = 'access_token';
 // Consistente con AuthController.login (deuda preexistente documentada,
@@ -139,10 +139,14 @@ export class ContextController {
                 previousShift.endReason = ShiftEndReason.KICKED_OUT;
                 await previousShift.save();
 
-                await AuditLog.create({
-                    bar: barId,
-                    user: userId,
-                    action: AuditAction.CASHIER_KICKED_OUT,
+                writeAuditLog({
+                    bar: new Types.ObjectId(barId),
+                    actorType: barUser.role === BarUserRole.OWNER ? 'OWNER' : 'CASHIER',
+                    actorId: userId,
+                    eventType: 'shift.kicked_out',
+                    entityType: 'Turno',
+                    entityId: previousShift._id,
+                    metadata: { shiftId: previousShift._id, endReason: ShiftEndReason.KICKED_OUT },
                     deviceInfo: previousShift.deviceInfo,
                     ip: req.ip,
                 });
@@ -157,10 +161,14 @@ export class ContextController {
                 startedAt: new Date(),
             });
 
-            await AuditLog.create({
-                bar: barId,
-                user: userId,
-                action: AuditAction.CASHIER_LOGIN,
+            writeAuditLog({
+                bar: new Types.ObjectId(barId),
+                actorType: barUser.role === BarUserRole.OWNER ? 'OWNER' : 'CASHIER',
+                actorId: userId,
+                eventType: 'shift.opened',
+                entityType: 'Turno',
+                entityId: shift._id,
+                metadata: { shiftId: shift._id, deviceInfo },
                 deviceInfo,
                 ip: req.ip,
             });

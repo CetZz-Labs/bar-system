@@ -5,7 +5,7 @@ import Redemption, { RedemptionStatus } from '../../models/Redemption'
 import Reward, { RewardStatus } from '../../models/Reward'
 import Outing, { OutingStatus } from '../../models/Outing'
 import Group from '../../models/Group'
-import AuditLog from '../../models/AuditLog'
+import { writeAuditLog } from '../../utils/auditLogService'
 import * as redemptionQr from '../../utils/redemptionQr'
 import * as redemptionAvailability from '../../utils/redemptionAvailability'
 import * as redemptionExpiry from '../../utils/redemptionExpiry'
@@ -63,15 +63,8 @@ vi.mock('../../models/Group', () => ({
   },
 }))
 
-vi.mock('../../models/AuditLog', () => ({
-  default: {
-    create: vi.fn(),
-  },
-  AuditAction: {
-    REDEMPTION_GENERATED: 'REDEMPTION_GENERATED',
-    REDEMPTION_CANCELLED: 'REDEMPTION_CANCELLED',
-    REDEMPTION_EXPIRED: 'REDEMPTION_EXPIRED',
-  },
+vi.mock('../../utils/auditLogService', () => ({
+  writeAuditLog: vi.fn(),
 }))
 
 vi.mock('../../utils/redemptionQr', () => ({
@@ -101,7 +94,7 @@ function mockGroupMemberships(memberships: Array<{ user: string; role: Membershi
 
 beforeEach(() => {
   vi.clearAllMocks()
-  vi.mocked(AuditLog.create).mockResolvedValue({} as any)
+  vi.mocked(writeAuditLog).mockReset()
   vi.mocked(pointsHub.emitAvailablePointsForBar).mockImplementation(() => {})
   // Credenciales por default para los tests de `create` que llegan a
   // llamar `generate()` (antes de abrir la transacción) pero no verifican
@@ -331,8 +324,8 @@ describe('RedemptionController.create', () => {
       [expect.objectContaining({ group: groupId, status: RedemptionStatus.HELD, manualCode: '123456' })],
       { session }
     )
-    expect(AuditLog.create).toHaveBeenCalledWith(
-      expect.objectContaining({ action: 'REDEMPTION_GENERATED' })
+    expect(writeAuditLog).toHaveBeenCalledWith(
+      expect.objectContaining({ eventType: 'redemption.generated' })
     )
     expect(pointsHub.emitAvailablePointsForBar).toHaveBeenCalledWith(groupId, barId.toString(), 100)
     expect(res.status).toHaveBeenCalledWith(201)
@@ -399,8 +392,8 @@ describe('RedemptionController.cancel', () => {
 
     expect(redemption.status).toBe(RedemptionStatus.CANCELLED)
     expect(save).toHaveBeenCalled()
-    expect(AuditLog.create).toHaveBeenCalledWith(
-      expect.objectContaining({ action: 'REDEMPTION_CANCELLED', user: cancelerId })
+    expect(writeAuditLog).toHaveBeenCalledWith(
+      expect.objectContaining({ eventType: 'redemption.cancelled' })
     )
     expect(pointsHub.emitAvailablePointsForBar).toHaveBeenCalledWith(groupId, barId.toString(), 150)
     expect(res.status).toHaveBeenCalledWith(200)
@@ -433,7 +426,7 @@ describe('RedemptionController.cancel', () => {
     await RedemptionController.cancel(req, res)
 
     expect(save).not.toHaveBeenCalled()
-    expect(AuditLog.create).not.toHaveBeenCalled()
+    expect(writeAuditLog).not.toHaveBeenCalled()
     expect(res.status).toHaveBeenCalledWith(200)
   })
 
@@ -468,8 +461,8 @@ describe('RedemptionController.cancel', () => {
     await RedemptionController.cancel(req, res)
 
     expect(redemption.status).toBe(RedemptionStatus.EXPIRED)
-    expect(AuditLog.create).toHaveBeenCalledWith(
-      expect.objectContaining({ action: 'REDEMPTION_EXPIRED' })
+    expect(writeAuditLog).toHaveBeenCalledWith(
+      expect.objectContaining({ eventType: 'redemption.expired' })
     )
     expect(res.status).toHaveBeenCalledWith(409)
   })

@@ -24,6 +24,8 @@ import drinkCategoryRouter from './routes/drinkCategoryRoute'
 import barsRouter from './routes/barsRoute'
 import cashierRedemptionRouter from './routes/cashierRedemptionRoute'
 import dashboardRouter from './routes/dashboardRoute'
+import auditLogRouter from './routes/auditLogRoute'
+import reportRouter from './routes/reportRoute'
 
 if (process.env.NODE_ENV !== 'production') {
     process.loadEnvFile()
@@ -60,6 +62,8 @@ app.use('/api/outings/:outingId/close', outingCloseRouter)
 app.use('/api/cashier', cashierRouter)
 app.use('/api/context', contextRouter)
 app.use('/api/bars/:barId/rewards', rewardRouter)
+app.use('/api/bars/:barId/audit-logs', auditLogRouter)
+app.use('/api/bars/:barId/reports', reportRouter)
 app.use('/api/bars/:barId', dashboardRouter)
 // LB-79: registrado DESPUÉS del mount de rewards de arriba a propósito (ver
 // routes/barsRoute.ts) — orden de app.use() importa en Express 5.

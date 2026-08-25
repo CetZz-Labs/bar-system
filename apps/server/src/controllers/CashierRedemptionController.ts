@@ -6,12 +6,12 @@ import Outing, { OutingStatus, IOuting } from "../models/Outing";
 import Group from "../models/Group";
 import User, { MembershipRole } from "../models/User";
 import Notification, { NotificationType } from "../models/Notification";
-import AuditLog, { AuditAction } from "../models/AuditLog";
 import PointsTransaction, { PointsTransactionType } from "../models/PointsTransaction";
 import { validate, isBlocked, registerFailedAttempt, resetAttempts } from "../utils/redemptionQr";
 import { expireStaleRedemptions } from "../utils/redemptionExpiry";
 import { getAvailablePointsForBar } from "../utils/redemptionAvailability";
 import { emitAvailablePointsForBar } from "../websocket/pointsHub";
+import { writeAuditLog } from "../utils/auditLogService";
 
 // LB-69: validación/entrega de un canje de recompensa (LB-68) por el
 // CAJERO. Dirección inversa a LeaderConsumptionController (LB-61): ahí el
@@ -270,14 +270,14 @@ export class CashierRedemptionController {
             session.endSession();
         }
 
-        await AuditLog.create({
+        writeAuditLog({
             bar: doc.bar,
-            user: cashierContext.user._id,
-            action: AuditAction.REDEMPTION_VALIDATED,
-            amount: doc.pointsRequiredSnapshot,
-            outing: doc.outing,
-            group: doc.group,
-            redemption: doc._id,
+            actorType: 'CASHIER',
+            actorId: cashierContext.user._id,
+            eventType: 'redemption.delivered',
+            entityType: 'Canje',
+            entityId: doc._id,
+            metadata: { redemptionId: doc._id, rewardId: doc.reward },
             deviceInfo: cashierContext.shift.deviceInfo,
             ip: req.ip,
         });
@@ -348,14 +348,14 @@ export class CashierRedemptionController {
             session.endSession();
         }
 
-        await AuditLog.create({
+        writeAuditLog({
             bar: doc.bar,
-            user: cashierContext.user._id,
-            action: AuditAction.REDEMPTION_REJECTED,
-            amount: doc.pointsRequiredSnapshot,
-            outing: doc.outing,
-            group: doc.group,
-            redemption: doc._id,
+            actorType: 'CASHIER',
+            actorId: cashierContext.user._id,
+            eventType: 'redemption.rejected',
+            entityType: 'Canje',
+            entityId: doc._id,
+            metadata: { redemptionId: doc._id, rewardId: doc.reward },
             deviceInfo: cashierContext.shift.deviceInfo,
             ip: req.ip,
         });

@@ -1,9 +1,9 @@
 import { Types } from 'mongoose';
 import Bar from '../models/Bar';
 import Shift, { ShiftEndReason } from '../models/Shift';
-import AuditLog, { AuditAction } from '../models/AuditLog';
 import { getLastClosingBoundary } from './shift';
 import { closeOutingsForBar, ClosureReason } from './closeOuting';
+import { writeAuditLog } from './auditLogService';
 
 export type CloseBarOptions = {
     /** Cajero/dueño cuya acción disparó el cierre (auditoría). */
@@ -54,10 +54,13 @@ export async function closeBar(barId: string, options: CloseBarOptions = {}): Pr
         shift.endReason = ShiftEndReason.BAR_CLOSED;
         await shift.save();
 
-        await AuditLog.create({
-            bar: barId,
-            user: shift.user,
-            action: AuditAction.SHIFT_AUTO_CLOSED,
+        writeAuditLog({
+            bar: new Types.ObjectId(barId),
+            actorType: 'SYSTEM',
+            eventType: 'shift.closed',
+            entityType: 'Turno',
+            entityId: shift._id,
+            metadata: { shiftId: shift._id, endReason: ShiftEndReason.BAR_CLOSED },
             deviceInfo: shift.deviceInfo,
         });
     }

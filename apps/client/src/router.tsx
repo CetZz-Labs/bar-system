@@ -24,6 +24,8 @@ import BarDetailView from './views/bar/BarDetailView'
 import BarRewardsView from './views/bar/BarRewardsView'
 import ExploreBarsView from './views/bar/ExploreBarsView'
 import BarDashboardView from './views/bar/BarDashboardView'
+import BarAuditLogView from './views/bar/BarAuditLogView'
+import BarReportsView from './views/bar/BarReportsView'
 import BarCategoriesView from './views/bar/BarCategoriesView'
 import CashierPanelView from './views/cashier/CashierPanelView'
 import CashierSearchView from './views/cashier/CashierSearchView'
@@ -69,6 +71,8 @@ export default function Router() {
                     <Route path="/bar/:id/categorias" element={<BarCategoriesView />} />
                     <Route path="/bar/:id" element={<BarDetailView />} />
                     <Route path="/bar/:barId/dashboard" element={<BarDashboardView />} />
+                    <Route path="/bar/:barId/auditoria" element={<BarAuditLogView />} />
+                    <Route path="/bar/:barId/reportes" element={<BarReportsView />} />
                 </Route>
                 <Route path="/unirse/:inviteCode" element={<JoinGroupView />} />
 

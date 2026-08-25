@@ -7,8 +7,8 @@ import Outing, { OutingStatus } from '../../models/Outing'
 import Group from '../../models/Group'
 import User from '../../models/User'
 import Notification from '../../models/Notification'
-import AuditLog from '../../models/AuditLog'
 import PointsTransaction from '../../models/PointsTransaction'
+import { writeAuditLog } from '../../utils/auditLogService'
 import * as redemptionQr from '../../utils/redemptionQr'
 import * as redemptionExpiry from '../../utils/redemptionExpiry'
 import * as redemptionAvailability from '../../utils/redemptionAvailability'
@@ -82,14 +82,8 @@ vi.mock('../../models/Notification', () => ({
   },
 }))
 
-vi.mock('../../models/AuditLog', () => ({
-  default: {
-    create: vi.fn(),
-  },
-  AuditAction: {
-    REDEMPTION_VALIDATED: 'REDEMPTION_VALIDATED',
-    REDEMPTION_REJECTED: 'REDEMPTION_REJECTED',
-  },
+vi.mock('../../utils/auditLogService', () => ({
+  writeAuditLog: vi.fn(),
 }))
 
 vi.mock('../../models/PointsTransaction', () => ({
@@ -157,7 +151,7 @@ beforeEach(() => {
   vi.mocked(redemptionExpiry.expireStaleRedemptions).mockResolvedValue(undefined)
   vi.mocked(redemptionAvailability.getAvailablePointsForBar).mockResolvedValue(50)
   vi.mocked(pointsHub.emitAvailablePointsForBar).mockImplementation(() => {})
-  vi.mocked(AuditLog.create).mockResolvedValue({} as any)
+  vi.mocked(writeAuditLog).mockReset()
   vi.mocked(Notification.insertMany).mockResolvedValue([] as any)
   vi.mocked(Group.findById).mockReturnValue({
     select: vi.fn().mockReturnValue({ lean: vi.fn().mockResolvedValue({ memberships: [] }) }),
@@ -369,8 +363,8 @@ describe('CashierRedemptionController.validate (deliver)', () => {
       { $inc: { stock: -1 } },
       { new: true, session }
     )
-    expect(AuditLog.create).toHaveBeenCalledWith(
-      expect.objectContaining({ action: 'REDEMPTION_VALIDATED' })
+    expect(writeAuditLog).toHaveBeenCalledWith(
+      expect.objectContaining({ eventType: 'redemption.delivered' })
     )
     expect(Notification.insertMany).toHaveBeenCalled()
     expect(pointsHub.emitAvailablePointsForBar).toHaveBeenCalledWith(groupId.toString(), barId.toString(), 50)
@@ -454,8 +448,8 @@ describe('CashierRedemptionController.validate (reject)', () => {
     expect((redemption as any).rejectionReason).toBe('Sin stock físico')
     expect(PointsTransaction.create).not.toHaveBeenCalled()
     expect(Reward.findByIdAndUpdate).not.toHaveBeenCalled()
-    expect(AuditLog.create).toHaveBeenCalledWith(
-      expect.objectContaining({ action: 'REDEMPTION_REJECTED' })
+    expect(writeAuditLog).toHaveBeenCalledWith(
+      expect.objectContaining({ eventType: 'redemption.rejected' })
     )
     expect(res.status).toHaveBeenCalledWith(200)
     expect(res.json).toHaveBeenCalledWith(

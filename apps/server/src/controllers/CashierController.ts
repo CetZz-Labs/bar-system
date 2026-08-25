@@ -1,9 +1,9 @@
 import { Request, Response } from "express";
 import Bar from "../models/Bar";
 import { ShiftEndReason } from "../models/Shift";
-import AuditLog, { AuditAction } from "../models/AuditLog";
 import { searchGroupsForCashier } from "../utils/cashierSearch";
 import { generateShiftSummary } from "../utils/shiftSummary";
+import { writeAuditLog } from "../utils/auditLogService";
 
 // LB-66: cookie única compartida con el login normal de usuario (ver
 // ContextController). El viejo login separado de cajero (POST
@@ -66,10 +66,14 @@ export class CashierController {
             const summary = await generateShiftSummary(shift._id.toString());
 
             if (!alreadyClosed) {
-                await AuditLog.create({
+                writeAuditLog({
                     bar: barId,
-                    user: user._id,
-                    action: AuditAction.CASHIER_LOGOUT,
+                    actorType: 'CASHIER',
+                    actorId: user._id,
+                    eventType: 'shift.closed',
+                    entityType: 'Turno',
+                    entityId: shift._id,
+                    metadata: { shiftId: shift._id, endReason: shift.endReason ?? ShiftEndReason.MANUAL },
                     deviceInfo: shift.deviceInfo,
                     ip: req.ip,
                 });

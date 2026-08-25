@@ -9,7 +9,7 @@ import Redemption, { RedemptionStatus } from '../../models/Redemption'
 import Group from '../../models/Group'
 import Bar from '../../models/Bar'
 import Notification from '../../models/Notification'
-import AuditLog from '../../models/AuditLog'
+import { writeAuditLog } from '../auditLogService'
 import * as consumptionQr from '../consumptionQr'
 import * as redemptionQr from '../redemptionQr'
 
@@ -62,15 +62,9 @@ vi.mock('../../models/Notification', async () => {
     default: { insertMany: vi.fn() },
   }
 })
-vi.mock('../../models/AuditLog', async () => {
-  const actual = await vi.importActual<typeof import('../../models/AuditLog')>(
-    '../../models/AuditLog'
-  )
-  return {
-    ...actual,
-    default: { create: vi.fn() },
-  }
-})
+vi.mock('../auditLogService', () => ({
+  writeAuditLog: vi.fn(),
+}))
 vi.mock('../consumptionQr', () => ({
   invalidate: vi.fn(),
 }))
@@ -90,7 +84,7 @@ describe('closeOuting', () => {
       session: vi.fn().mockResolvedValue([]),
     } as any)
     vi.mocked(Notification.insertMany).mockResolvedValue([] as any)
-    vi.mocked(AuditLog.create).mockResolvedValue([] as any)
+    vi.mocked(writeAuditLog).mockReset()
     vi.mocked(consumptionQr.invalidate).mockResolvedValue(undefined)
     vi.mocked(redemptionQr.invalidate).mockResolvedValue(undefined)
   })

@@ -15,6 +15,7 @@ import {
   AlertTriangle,
   ScrollText,
   UserRound,
+  FileBarChart,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
@@ -432,12 +433,28 @@ export default function BarDashboardView() {
             />
           </div>
 
-          {/* LB-77 (log de auditoría) no está implementado todavía — botón
-              deshabilitado, mismo patrón que LB-72 dejó "Canjear"
-              deshabilitado hasta que LB-68 estuvo listo. */}
-          <Button variant="surface" size="md" fullWidth disabled title="Próximamente (LB-77)">
+          {/* LB-77: log de auditoría (OWNER) — link desde el dashboard del bar
+              para que no quede solo por URL directa (como pasó con LB-67). */}
+          <Button
+            variant="surface"
+            size="md"
+            fullWidth
+            onClick={() => navigate(`/bar/${barId}/auditoria`)}
+          >
             <ScrollText size={18} />
-            VER REGISTROS (PRÓXIMAMENTE)
+            VER REGISTROS DE AUDITORÍA
+          </Button>
+
+          {/* LB-78: reportes exportables (OWNER) — entrada real desde el
+              dashboard del bar, mismo criterio que el botón de auditoría. */}
+          <Button
+            variant="surface"
+            size="md"
+            fullWidth
+            onClick={() => navigate(`/bar/${barId}/reportes`)}
+          >
+            <FileBarChart size={18} />
+            VER REPORTES
           </Button>
 
           {/* Panel de disputas */}

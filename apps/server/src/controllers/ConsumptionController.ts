@@ -2,8 +2,8 @@ import { Request, Response } from "express";
 import { Types } from "mongoose";
 import Consumption, { ConsumptionStatus } from "../models/Consumption";
 import Outing, { OutingStatus } from "../models/Outing";
-import AuditLog, { AuditAction } from "../models/AuditLog";
 import { generate } from "../utils/consumptionQr";
+import { writeAuditLog } from "../utils/auditLogService";
 
 function getOutingStatusError(status: OutingStatus): string | null {
     if (status === OutingStatus.ACTIVE) return null;
@@ -72,15 +72,16 @@ export class ConsumptionController {
 
             // Auditoría (cajero, hora, monto, grupo, salida) en la colección
             // real de LB-53, no un console.log ad hoc.
-            await AuditLog.create({
+            writeAuditLog({
                 bar: cashierContext.bar,
-                user: cashierContext.user._id,
-                action: AuditAction.CONSUMPTION_CREATED,
+                actorType: 'CASHIER',
+                actorId: cashierContext.user._id,
+                eventType: 'consumo.registered',
+                entityType: 'Consumo',
+                entityId: consumptionId,
+                metadata: { consumptionId, amount, outingId, groupId: outing.group },
                 deviceInfo: cashierContext.shift.deviceInfo,
                 ip: req.ip,
-                amount,
-                outing: outingId,
-                group: outing.group,
             });
 
             res.status(201).json({
@@ -146,15 +147,21 @@ export class ConsumptionController {
 
             const relatedOuting = await Outing.findById(consumption.outing).select('group').lean();
 
-            await AuditLog.create({
+            writeAuditLog({
                 bar: cashierContext.bar,
-                user: cashierContext.user._id,
-                action: AuditAction.CONSUMPTION_REGENERATED,
+                actorType: 'CASHIER',
+                actorId: cashierContext.user._id,
+                eventType: 'consumo.regenerated',
+                entityType: 'Consumo',
+                entityId: consumption._id,
+                metadata: {
+                    consumptionId: consumption._id,
+                    amount: consumption.amount,
+                    outingId: consumption.outing,
+                    groupId: relatedOuting?.group,
+                },
                 deviceInfo: cashierContext.shift.deviceInfo,
                 ip: req.ip,
-                amount: consumption.amount,
-                outing: consumption.outing,
-                group: relatedOuting?.group,
             });
 
             res.status(200).json({

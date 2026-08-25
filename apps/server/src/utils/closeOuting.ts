@@ -13,9 +13,9 @@ import Redemption, { RedemptionStatus } from '../models/Redemption';
 import Group from '../models/Group';
 import Bar from '../models/Bar';
 import Notification, { NotificationType } from '../models/Notification';
-import AuditLog, { AuditAction } from '../models/AuditLog';
 import { invalidate } from './consumptionQr';
 import { invalidate as invalidateRedemption } from './redemptionQr';
+import { writeAuditLog } from './auditLogService';
 
 const ABANDONABLE: ConsumptionStatus[] = [
     ConsumptionStatus.PENDING_LEADER_CONFIRMATION,
@@ -200,27 +200,34 @@ export async function closeOuting(
             }
         }
 
+        await session.commitTransaction();
+
+        // LB-77: el log de auditoría NUNCA participa de la transacción.
+        // Antes vivía dentro (AuditLog.create([...], { session })), con el
+        // riesgo de abortar TODO el cierre de salida si la escritura del log
+        // fallaba. Se emite DESPUÉS del commit, fire-and-forget, y un fallo
+        // aquí no afecta el resultado del cierre.
         if (options.actorUserId) {
-            await AuditLog.create(
-                [
-                    {
-                        bar: fresh.bar,
-                        user: options.actorUserId,
-                        action:
-                            options.reason === ClosureReason.BAR_CLOSED
-                                ? AuditAction.OUTING_AUTO_CLOSED
-                                : AuditAction.OUTING_CLOSED,
-                        outing: fresh._id,
-                        group: fresh.group,
-                        deviceInfo: options.deviceInfo,
-                        ip: options.ip,
-                    },
-                ],
-                { session }
-            );
+            const isAutoClose = options.reason === ClosureReason.BAR_CLOSED;
+            writeAuditLog({
+                bar: fresh.bar,
+                actorType: isAutoClose ? 'SYSTEM' : 'CASHIER',
+                ...(isAutoClose
+                    ? {}
+                    : { actorId: new Types.ObjectId(String(options.actorUserId)) }),
+                eventType: 'salida.closed',
+                entityType: 'Salida',
+                entityId: fresh._id,
+                metadata: {
+                    outingId: fresh._id,
+                    groupId: fresh.group,
+                    closureReason: options.reason,
+                },
+                deviceInfo: options.deviceInfo,
+                ip: options.ip,
+            });
         }
 
-        await session.commitTransaction();
         return { outing: fresh, alreadyClosed: false, summary };
     } catch (err) {
         if (session.inTransaction()) {

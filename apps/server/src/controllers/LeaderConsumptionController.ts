@@ -5,9 +5,9 @@ import Outing, { OutingStatus } from "../models/Outing";
 import Group from "../models/Group";
 import Bar from "../models/Bar";
 import Notification, { NotificationType } from "../models/Notification";
-import AuditLog, { AuditAction } from "../models/AuditLog";
 import PointsTransaction, { PointsTransactionType } from "../models/PointsTransaction";
 import { MembershipRole } from "../models/User";
+import { writeAuditLog } from "../utils/auditLogService";
 import {
     validate,
     invalidate,
@@ -235,13 +235,18 @@ export class LeaderConsumptionController {
             const groupAfter = await Group.findById(outing.group).select('pointsBalance').lean();
             pointsBalance = groupAfter?.pointsBalance ?? pointsBalance;
 
-            await AuditLog.create({
+            writeAuditLog({
                 bar: consumption.bar,
-                user: req.user!._id,
-                action: AuditAction.CONSUMPTION_CONFIRMED,
-                amount: consumption.amount,
-                outing: outing._id,
-                group: outing.group,
+                actorType: 'LEADER',
+                actorId: req.user!._id,
+                eventType: 'consumo.confirmed',
+                entityType: 'Consumo',
+                entityId: consumption._id,
+                metadata: {
+                    consumptionId: consumption._id,
+                    amount: consumption.amount,
+                    pointsAwarded: points,
+                },
                 ip: req.ip,
             });
 
@@ -331,13 +336,14 @@ export class LeaderConsumptionController {
                     );
                 }
 
-                await AuditLog.create({
+                writeAuditLog({
                     bar: consumption.bar,
-                    user: req.user!._id,
-                    action: AuditAction.CONSUMPTION_DISPUTED,
-                    amount: consumption.amount,
-                    outing: outing._id,
-                    group: outing.group,
+                    actorType: 'LEADER',
+                    actorId: req.user!._id,
+                    eventType: 'dispute.opened',
+                    entityType: 'Consumo',
+                    entityId: consumption._id,
+                    metadata: { consumptionId: consumption._id, amount: consumption.amount },
                     ip: req.ip,
                 });
 
@@ -352,13 +358,14 @@ export class LeaderConsumptionController {
             consumption.status = ConsumptionStatus.REJECTED;
             await consumption.save();
 
-            await AuditLog.create({
+            writeAuditLog({
                 bar: consumption.bar,
-                user: req.user!._id,
-                action: AuditAction.CONSUMPTION_REJECTED,
-                amount: consumption.amount,
-                outing: outing._id,
-                group: outing.group,
+                actorType: 'LEADER',
+                actorId: req.user!._id,
+                eventType: 'consumo.rejected',
+                entityType: 'Consumo',
+                entityId: consumption._id,
+                metadata: { consumptionId: consumption._id, amount: consumption.amount },
                 ip: req.ip,
             });
 

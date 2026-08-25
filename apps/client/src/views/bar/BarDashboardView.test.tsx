@@ -84,6 +84,8 @@ const renderDashboard = (route = '/bar/bar-1/dashboard') =>
   renderWithProviders(
     <Routes>
       <Route path="/bar/:barId/dashboard" element={<BarDashboardView />} />
+      <Route path="/bar/:barId/auditoria" element={<div>Página de auditoría</div>} />
+      <Route path="/bar/:barId/reportes" element={<div>Página de reportes</div>} />
     </Routes>,
     { route }
   );
@@ -144,14 +146,38 @@ describe('BarDashboardView (LB-74)', () => {
     });
   });
 
-  it('disables the "Ver registros" button (LB-77 not implemented yet)', async () => {
+  it('navigates to the audit log view from the "Ver registros" button (LB-77)', async () => {
+    const user = userEvent.setup();
     renderDashboard();
 
     await waitFor(() => {
       expect(screen.getByText('Los Pibes')).toBeInTheDocument();
     });
 
-    expect(screen.getByRole('button', { name: /ver registros/i })).toBeDisabled();
+    const button = screen.getByRole('button', { name: /ver registros de auditoría/i });
+    expect(button).toBeEnabled();
+    await user.click(button);
+
+    await waitFor(() => {
+      expect(screen.getByText('Página de auditoría')).toBeInTheDocument();
+    });
+  });
+
+  it('navigates to the reports view from the "Ver reportes" button (LB-78)', async () => {
+    const user = userEvent.setup();
+    renderDashboard();
+
+    await waitFor(() => {
+      expect(screen.getByText('Los Pibes')).toBeInTheDocument();
+    });
+
+    const button = screen.getByRole('button', { name: /ver reportes/i });
+    expect(button).toBeEnabled();
+    await user.click(button);
+
+    await waitFor(() => {
+      expect(screen.getByText('Página de reportes')).toBeInTheDocument();
+    });
   });
 
   it('shows the disputes panel and resolves a dispute with the chosen outcome and note', async () => {

@@ -48,11 +48,26 @@ describe('ShiftSummaryController', () => {
     endedAt: new Date('2026-08-19T04:00:00.000Z'),
     endReason: 'MANUAL',
     summary,
+    populated: vi.fn((field: string) => field === 'bar' || field === 'user' ? {} : undefined),
+    get: vi.fn((field: string) => {
+      if (field === 'bar') return { name: 'Bar Test' }
+      if (field === 'user') return { name: 'Cashier', lastName: 'User' }
+      return undefined
+    }),
+  }
+
+  function mockFindByIdResolved(doc: any) {
+    const populateFinal = vi.fn().mockResolvedValue(doc)
+    const populateChain = vi.fn().mockReturnValue({ populate: populateFinal })
+    vi.mocked(Shift.findById).mockReturnValue({
+      ...doc,
+      populate: populateChain,
+    } as any)
   }
 
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.mocked(Shift.findById).mockResolvedValue(shift as any)
+    mockFindByIdResolved(shift)
     vi.mocked(BarUser.findOne).mockResolvedValue({
       role: BarUserRole.OWNER,
       isActive: true,
@@ -100,7 +115,7 @@ describe('ShiftSummaryController', () => {
       bar: cashierBarId,
       user: cashierId,
     }
-    vi.mocked(Shift.findById).mockResolvedValue(cashierShift as any)
+    mockFindByIdResolved(cashierShift)
     vi.mocked(BarUser.findOne).mockResolvedValue({
       role: BarUserRole.CASHIER,
       isActive: true,
@@ -196,8 +211,10 @@ describe('ShiftSummaryController', () => {
       user: cashierId,
       endReason: ShiftEndReason.BAR_CLOSED,
     }
+    const populate2 = vi.fn().mockResolvedValue(cashierShift)
+    const populate1 = vi.fn().mockReturnValue({ populate: populate2 })
     vi.mocked(Shift.findOne).mockReturnValue({
-      sort: vi.fn().mockResolvedValue(cashierShift),
+      sort: vi.fn().mockReturnValue({ populate: populate1 }),
     } as any)
     const req = buildMockRequest({
       cashierSummaryContext: {

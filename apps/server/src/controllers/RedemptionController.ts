@@ -4,8 +4,8 @@ import Redemption, { RedemptionStatus, IRedemption } from "../models/Redemption"
 import Reward, { RewardStatus } from "../models/Reward";
 import Outing, { OutingStatus } from "../models/Outing";
 import Group from "../models/Group";
-import AuditLog, { AuditAction } from "../models/AuditLog";
 import { MembershipRole } from "../models/User";
+import { writeAuditLog } from "../utils/auditLogService";
 import { generate } from "../utils/redemptionQr";
 import { getAvailablePointsForBar, getAvailableStock } from "../utils/redemptionAvailability";
 import { expireStaleRedemptions } from "../utils/redemptionExpiry";
@@ -170,14 +170,19 @@ export class RedemptionController {
                 session.endSession();
             }
 
-            await AuditLog.create({
+            writeAuditLog({
                 bar: redemption.bar,
-                user: userId,
-                action: AuditAction.REDEMPTION_GENERATED,
-                amount: redemption.pointsRequiredSnapshot,
-                outing: outing._id,
-                group: groupId,
-                redemption: redemption._id,
+                actorType: 'LEADER',
+                actorId: req.user!._id,
+                eventType: 'redemption.generated',
+                entityType: 'Canje',
+                entityId: redemption._id,
+                metadata: {
+                    redemptionId: redemption._id,
+                    rewardId: redemption.reward,
+                    pointsSpent: redemption.pointsRequiredSnapshot,
+                    outingId: outing._id,
+                },
                 ip: req.ip,
             });
 
@@ -240,14 +245,14 @@ export class RedemptionController {
                 redemption.invalidatedAt = new Date();
                 await redemption.save();
 
-                await AuditLog.create({
+                writeAuditLog({
                     bar: redemption.bar,
-                    user: userId,
-                    action: AuditAction.REDEMPTION_EXPIRED,
-                    amount: redemption.pointsRequiredSnapshot,
-                    outing: redemption.outing,
-                    group: redemption.group,
-                    redemption: redemption._id,
+                    actorType: 'LEADER',
+                    actorId: req.user!._id,
+                    eventType: 'redemption.expired',
+                    entityType: 'Canje',
+                    entityId: redemption._id,
+                    metadata: { redemptionId: redemption._id, rewardId: redemption.reward },
                     ip: req.ip,
                 });
 
@@ -265,14 +270,14 @@ export class RedemptionController {
             redemption.invalidatedAt = new Date();
             await redemption.save();
 
-            await AuditLog.create({
+            writeAuditLog({
                 bar: redemption.bar,
-                user: userId,
-                action: AuditAction.REDEMPTION_CANCELLED,
-                amount: redemption.pointsRequiredSnapshot,
-                outing: redemption.outing,
-                group: redemption.group,
-                redemption: redemption._id,
+                actorType: 'LEADER',
+                actorId: req.user!._id,
+                eventType: 'redemption.cancelled',
+                entityType: 'Canje',
+                entityId: redemption._id,
+                metadata: { redemptionId: redemption._id, rewardId: redemption.reward },
                 ip: req.ip,
             });
 

@@ -3,9 +3,9 @@ import { Types } from 'mongoose'
 import { ContextController, ContextMode } from '../ContextController'
 import BarUser, { BarUserRole } from '../../models/BarUser'
 import Shift, { ShiftEndReason } from '../../models/Shift'
-import AuditLog, { AuditAction } from '../../models/AuditLog'
 import { generateJWT } from '../../utils/jwt'
 import { closeBar } from '../../utils/closeBar'
+import { writeAuditLog } from '../../utils/auditLogService'
 import { buildMockRequest, buildMockResponse } from '../../__tests__/helpers/mockHelpers'
 
 vi.mock('../../models/BarUser', () => ({
@@ -18,14 +18,8 @@ vi.mock('../../models/Shift', () => ({
   ShiftEndReason: { MANUAL: 'MANUAL', KICKED_OUT: 'KICKED_OUT', BAR_CLOSED: 'BAR_CLOSED' },
 }))
 
-vi.mock('../../models/AuditLog', () => ({
-  default: { create: vi.fn() },
-  AuditAction: {
-    CASHIER_LOGIN: 'CASHIER_LOGIN',
-    CASHIER_LOGOUT: 'CASHIER_LOGOUT',
-    CASHIER_KICKED_OUT: 'CASHIER_KICKED_OUT',
-    SHIFT_AUTO_CLOSED: 'SHIFT_AUTO_CLOSED',
-  },
+vi.mock('../../utils/auditLogService', () => ({
+  writeAuditLog: vi.fn(),
 }))
 
 vi.mock('../../utils/jwt', () => ({
@@ -49,12 +43,11 @@ describe('ContextController.select', () => {
     vi.mocked(BarUser.findOne).mockReset()
     vi.mocked(Shift.findOne).mockReset()
     vi.mocked(Shift.create).mockReset()
-    vi.mocked(AuditLog.create).mockReset()
+    vi.mocked(writeAuditLog).mockReset()
     vi.mocked(generateJWT).mockReset()
     vi.mocked(closeBar).mockReset()
 
     vi.mocked(Shift.create).mockResolvedValue({ startedAt: new Date() } as any)
-    vi.mocked(AuditLog.create).mockResolvedValue({} as any)
     vi.mocked(generateJWT).mockReturnValue('mock-token' as any)
     vi.mocked(closeBar).mockResolvedValue({ closedShifts: 0, closedOutings: 0 })
   })
@@ -177,8 +170,8 @@ describe('ContextController.select', () => {
     expect(previousShift.endReason).toBe(ShiftEndReason.KICKED_OUT)
     expect(previousShift.endedAt).toBeInstanceOf(Date)
     expect(previousShift.save).toHaveBeenCalled()
-    expect(AuditLog.create).toHaveBeenCalledWith(
-      expect.objectContaining({ action: AuditAction.CASHIER_KICKED_OUT })
+    expect(writeAuditLog).toHaveBeenCalledWith(
+      expect.objectContaining({ eventType: 'shift.kicked_out' })
     )
     expect(Shift.create).toHaveBeenCalled()
     expect(res.status).toHaveBeenCalledWith(200)

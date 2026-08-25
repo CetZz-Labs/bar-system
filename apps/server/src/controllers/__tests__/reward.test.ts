@@ -5,6 +5,7 @@ import Reward, { RewardStatus } from '../../models/Reward'
 import BarUser, { BarUserRole } from '../../models/BarUser'
 import Group from '../../models/Group'
 import Outing, { OutingStatus } from '../../models/Outing'
+import { writeAuditLog } from '../../utils/auditLogService'
 import { buildMockRequest, buildMockResponse } from '../../__tests__/helpers/mockHelpers'
 
 vi.mock('../../models/Reward', () => ({
@@ -48,6 +49,10 @@ vi.mock('../../models/Outing', () => ({
   },
 }))
 
+vi.mock('../../utils/auditLogService', () => ({
+  writeAuditLog: vi.fn(),
+}))
+
 function buildSelectLeanQuery(data: unknown) {
   const query: Record<string, unknown> = {}
   query.select = vi.fn().mockReturnValue(query)
@@ -84,6 +89,7 @@ beforeEach(() => {
   vi.mocked(Reward.create).mockReset()
   vi.mocked(Group.findById).mockReset()
   vi.mocked(Outing.findOne).mockReset()
+  vi.mocked(writeAuditLog).mockReset()
 })
 
 describe('RewardController.listRewards', () => {
@@ -139,6 +145,9 @@ describe('RewardController.createReward', () => {
 
     await RewardController.createReward(req, res)
 
+    expect(writeAuditLog).toHaveBeenCalledWith(
+      expect.objectContaining({ eventType: 'reward.created', actorType: 'OWNER', entityId: created._id })
+    )
     expect(res.status).toHaveBeenCalledWith(201)
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ name: 'Chopp gratis' }))
   })
@@ -247,6 +256,9 @@ describe('RewardController.updateReward', () => {
 
     expect(mockReward.status).toBe('inactive')
     expect(mockReward.save).toHaveBeenCalled()
+    expect(writeAuditLog).toHaveBeenCalledWith(
+      expect.objectContaining({ eventType: 'reward.edited', actorType: 'OWNER' })
+    )
     expect(res.status).toHaveBeenCalledWith(200)
   })
 
@@ -377,6 +389,9 @@ describe('RewardController.deleteReward', () => {
 
     expect(mockReward.deletedAt).toBeInstanceOf(Date)
     expect(mockReward.save).toHaveBeenCalled()
+    expect(writeAuditLog).toHaveBeenCalledWith(
+      expect.objectContaining({ eventType: 'reward.deleted', actorType: 'OWNER' })
+    )
     expect(res.status).toHaveBeenCalledWith(200)
   })
 

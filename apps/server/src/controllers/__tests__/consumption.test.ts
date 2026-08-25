@@ -2,7 +2,7 @@ import { vi, describe, it, expect, beforeEach } from 'vitest'
 import { ConsumptionController } from '../../controllers/ConsumptionController'
 import Consumption from '../../models/Consumption'
 import Outing from '../../models/Outing'
-import AuditLog from '../../models/AuditLog'
+import { writeAuditLog } from '../../utils/auditLogService'
 import { generate } from '../../utils/consumptionQr'
 import { buildMockRequest, buildMockResponse } from '../../__tests__/helpers/mockHelpers'
 import { Types } from 'mongoose'
@@ -33,14 +33,8 @@ vi.mock('../../models/Outing', () => ({
   },
 }))
 
-vi.mock('../../models/AuditLog', () => ({
-  default: {
-    create: vi.fn(),
-  },
-  AuditAction: {
-    CONSUMPTION_CREATED: 'CONSUMPTION_CREATED',
-    CONSUMPTION_REGENERATED: 'CONSUMPTION_REGENERATED',
-  },
+vi.mock('../../utils/auditLogService', () => ({
+  writeAuditLog: vi.fn(),
 }))
 
 vi.mock('../../utils/consumptionQr', () => ({
@@ -110,7 +104,7 @@ describe('ConsumptionController.createConsumption', () => {
     vi.mocked(Outing.findById).mockReset().mockReturnValue(buildLeanQuery(mockOuting) as any)
     vi.mocked(generate).mockReset().mockResolvedValue(mockGeneratedQr)
     vi.mocked(Consumption.create).mockReset()
-    vi.mocked(AuditLog.create).mockReset().mockResolvedValue({} as any)
+    vi.mocked(writeAuditLog).mockReset()
   })
 
   function buildRequest(overrides: any = {}) {
@@ -149,11 +143,12 @@ describe('ConsumptionController.createConsumption', () => {
           manualCode: '123456',
         })
       )
-      expect(AuditLog.create).toHaveBeenCalledWith(
+      expect(writeAuditLog).toHaveBeenCalledWith(
         expect.objectContaining({
           bar: barId,
-          user: cashierContext.user._id,
-          action: 'CONSUMPTION_CREATED',
+          actorType: 'CASHIER',
+          actorId: cashierContext.user._id,
+          eventType: 'consumo.registered',
           deviceInfo: 'test-device',
         })
       )
@@ -181,11 +176,14 @@ describe('ConsumptionController.createConsumption', () => {
 
       await ConsumptionController.createConsumption(req, res)
 
-      expect(AuditLog.create).toHaveBeenCalledWith(
+      expect(writeAuditLog).toHaveBeenCalledWith(
         expect.objectContaining({
-          amount: 12000,
-          outing: outingId.toString(),
-          group: groupId,
+          eventType: 'consumo.registered',
+          metadata: expect.objectContaining({
+            amount: 12000,
+            outingId: outingId.toString(),
+            groupId,
+          }),
         })
       )
     })
@@ -352,7 +350,7 @@ describe('ConsumptionController.regenerateConsumption', () => {
     vi.mocked(Consumption.findOne).mockReset().mockResolvedValue(mockConsumption)
     vi.mocked(generate).mockReset().mockResolvedValue(mockGeneratedQr)
     vi.mocked(Outing.findById).mockReset().mockReturnValue(buildSelectLeanQuery({ group: groupId }) as any)
-    vi.mocked(AuditLog.create).mockReset().mockResolvedValue({} as any)
+    vi.mocked(writeAuditLog).mockReset()
   })
 
   function buildRequest(overrides: any = {}) {
@@ -387,15 +385,18 @@ describe('ConsumptionController.regenerateConsumption', () => {
 
       await ConsumptionController.regenerateConsumption(req, res)
 
-      expect(AuditLog.create).toHaveBeenCalledWith(
+      expect(writeAuditLog).toHaveBeenCalledWith(
         expect.objectContaining({
           bar: barId,
-          user: cashierContext.user._id,
-          action: 'CONSUMPTION_REGENERATED',
+          actorType: 'CASHIER',
+          actorId: cashierContext.user._id,
+          eventType: 'consumo.regenerated',
           deviceInfo: 'test-device',
-          amount: mockConsumption.amount,
-          outing: outingId,
-          group: groupId,
+          metadata: expect.objectContaining({
+            amount: mockConsumption.amount,
+            outingId: outingId,
+            groupId,
+          }),
         })
       )
     })

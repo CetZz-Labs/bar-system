@@ -1,0 +1,57 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "default_agent": "leader",
+  "instructions": [
+    "AGENTS.md"
+  ],
+  "mcp": {
+    "cetzz-knowledge": {
+      "type": "local",
+      "command": [
+        "node",
+        "D:/Juanjo/CETTZLAB/obsidian-config/knowledge-mcp/dist/mcp/main.js"
+      ],
+      "enabled": true,
+      "environment": {
+        "OBSIDIAN_VAULT_PATH": "D:/Juanjo/CETTZLAB/obsidian-config/obsidian",
+        "JIRA_URL": "https://sistgestion4y5sprint.atlassian.net",
+        "JIRA_EMAIL": "boydojj@gmail.com",
+        "JIRA_API_TOKEN": "ATATT3xFfGF01Ng2JIhsPXmSkYsqcWG4xIcl6GRq_H3RnGerltK5YaJB_4iTqMVaZZH7PdeH9HIholwBXhPr4L25yZjOjykcI1fYmLMYCSy2fgobRKLsNjC8BjYaZPxwX1Vdld-eAO6s4Pe-0kwhhgVwQ7KWQnpnyr2ztYv9puwgVPkbMOj28TQ=2A960F39"
+      }
+    }
+  },
+  "agent": {
+    "leader": {
+      "description": "Tech Lead y Orquestador del monorepo La Banda. Interactúa con Jira vía MCP, planifica y delega en subagentes. JAMÁS escribe código.",
+      "mode": "primary",
+      "permission": {
+        "edit": "deny",
+        "bash": "allow"
+      }
+    },
+    "implementer": {
+      "description": "Desarrollador técnico. Único agente autorizado para escribir y modificar código fuente.",
+      "mode": "subagent",
+      "permission": {
+        "edit": "allow",
+        "bash": "allow"
+      }
+    },
+    "reviewer": {
+      "description": "Auditor de calidad técnico. Verifica código contra CHECKPOINTS.md. NO escribe código.",
+      "mode": "subagent",
+      "permission": {
+        "edit": "deny",
+        "bash": "allow"
+      }
+    },
+    "explorer": {
+      "description": "Analista de código estático. Investiga el repositorio. NUNCA escribe ni edita código.",
+      "mode": "subagent",
+      "permission": {
+        "edit": "deny",
+        "bash": "deny"
+      }
+    }
+  }
+}

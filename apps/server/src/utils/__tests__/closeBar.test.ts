@@ -3,7 +3,7 @@ import { Types } from 'mongoose'
 import { closeBar } from '../closeBar'
 import Bar from '../../models/Bar'
 import Shift, { ShiftEndReason } from '../../models/Shift'
-import AuditLog, { AuditAction } from '../../models/AuditLog'
+import { writeAuditLog } from '../auditLogService'
 import { getLastClosingBoundary } from '../shift'
 import { closeOutingsForBar, ClosureReason } from '../closeOuting'
 
@@ -16,14 +16,8 @@ vi.mock('../../models/Shift', () => ({
   ShiftEndReason: { MANUAL: 'MANUAL', KICKED_OUT: 'KICKED_OUT', BAR_CLOSED: 'BAR_CLOSED' },
 }))
 
-vi.mock('../../models/AuditLog', () => ({
-  default: { create: vi.fn() },
-  AuditAction: {
-    CASHIER_LOGIN: 'CASHIER_LOGIN',
-    CASHIER_LOGOUT: 'CASHIER_LOGOUT',
-    CASHIER_KICKED_OUT: 'CASHIER_KICKED_OUT',
-    SHIFT_AUTO_CLOSED: 'SHIFT_AUTO_CLOSED',
-  },
+vi.mock('../auditLogService', () => ({
+  writeAuditLog: vi.fn(),
 }))
 
 vi.mock('../shift', () => ({
@@ -41,7 +35,7 @@ describe('closeBar', () => {
   beforeEach(() => {
     vi.mocked(Bar.findById).mockReset()
     vi.mocked(Shift.find).mockReset()
-    vi.mocked(AuditLog.create).mockReset()
+    vi.mocked(writeAuditLog).mockReset()
     vi.mocked(getLastClosingBoundary).mockReset()
     vi.mocked(closeOutingsForBar).mockReset()
     vi.mocked(closeOutingsForBar).mockResolvedValue(0)
@@ -89,12 +83,12 @@ describe('closeBar', () => {
     expect(staleShiftB.endReason).toBe(ShiftEndReason.BAR_CLOSED)
     expect(staleShiftB.save).toHaveBeenCalled()
 
-    expect(AuditLog.create).toHaveBeenCalledTimes(2)
-    expect(AuditLog.create).toHaveBeenCalledWith(
-      expect.objectContaining({ bar: barId, user: staleShiftA.user, action: AuditAction.SHIFT_AUTO_CLOSED })
+    expect(writeAuditLog).toHaveBeenCalledTimes(2)
+    expect(writeAuditLog).toHaveBeenCalledWith(
+      expect.objectContaining({ actorType: 'SYSTEM', eventType: 'shift.closed', deviceInfo: 'POS-1' })
     )
-    expect(AuditLog.create).toHaveBeenCalledWith(
-      expect.objectContaining({ bar: barId, user: staleShiftB.user, action: AuditAction.SHIFT_AUTO_CLOSED })
+    expect(writeAuditLog).toHaveBeenCalledWith(
+      expect.objectContaining({ actorType: 'SYSTEM', eventType: 'shift.closed', deviceInfo: 'POS-2' })
     )
 
     expect(closeOutingsForBar).toHaveBeenCalledWith(
@@ -114,7 +108,7 @@ describe('closeBar', () => {
 
     const result = await closeBar(barId)
 
-    expect(AuditLog.create).not.toHaveBeenCalled()
+    expect(writeAuditLog).not.toHaveBeenCalled()
     expect(closeOutingsForBar).toHaveBeenCalled()
     expect(result).toEqual({ closedShifts: 0, closedOutings: 1 })
   })

@@ -6,11 +6,28 @@ import { buildCsv, buildPdf, ShiftSummaryExportData } from '../utils/shiftSummar
 
 type ShiftSummaryResponse = ShiftSummaryExportData;
 
-function mapSummary(shift: IShift, summary: IShiftSummary): ShiftSummaryResponse {
+async function resolveNames(
+    shift: IShift,
+): Promise<{ barName: string; cashierName: string }> {
+    const [bar, user] = await Promise.all([
+        shift.populated('bar') ? shift.get('bar') as { name?: string } : null,
+        shift.populated('user') ? shift.get('user') as { name?: string; lastName?: string } : null,
+    ]);
+
+    return {
+        barName: bar?.name ?? 'Bar',
+        cashierName: user ? [user.name, user.lastName].filter(Boolean).join(' ') : 'Cajero',
+    };
+}
+
+async function mapSummary(shift: IShift, summary: IShiftSummary): Promise<ShiftSummaryResponse> {
+    const { barName, cashierName } = await resolveNames(shift);
     return {
         shiftId: shift._id,
         barId: shift.bar,
         cashierId: shift.user,
+        barName,
+        cashierName,
         role: shift.role,
         deviceInfo: shift.deviceInfo,
         startedAt: shift.startedAt,
@@ -73,8 +90,11 @@ export class ShiftSummaryController {
             return;
         }
 
+        const populatedShift = await Shift.findById(result.shift._id)
+            .populate('bar', 'name')
+            .populate('user', 'name lastName');
         const summary = await getSummary(result.shift);
-        res.status(200).json(mapSummary(result.shift, summary));
+        res.status(200).json(await mapSummary(populatedShift ?? result.shift, summary));
     };
 
     static downloadCsv = async (req: Request, res: Response) => {
@@ -84,13 +104,16 @@ export class ShiftSummaryController {
             return;
         }
 
+        const populatedShift = await Shift.findById(result.shift._id)
+            .populate('bar', 'name')
+            .populate('user', 'name lastName');
         const summary = await getSummary(result.shift);
         res.setHeader('Content-Type', 'text/csv; charset=utf-8');
         res.setHeader(
             'Content-Disposition',
             `attachment; filename="shift-${result.shift._id.toString()}.csv"`,
         );
-        res.send(buildCsv(mapSummary(result.shift, summary)));
+        res.send(buildCsv(await mapSummary(populatedShift ?? result.shift, summary)));
     };
 
     static downloadPdf = async (req: Request, res: Response) => {
@@ -100,13 +123,16 @@ export class ShiftSummaryController {
             return;
         }
 
+        const populatedShift = await Shift.findById(result.shift._id)
+            .populate('bar', 'name')
+            .populate('user', 'name lastName');
         const summary = await getSummary(result.shift);
         res.setHeader('Content-Type', 'application/pdf');
         res.setHeader(
             'Content-Disposition',
             `attachment; filename="shift-${result.shift._id.toString()}.pdf"`,
         );
-        res.send(buildPdf(mapSummary(result.shift, summary)));
+        res.send(buildPdf(await mapSummary(populatedShift ?? result.shift, summary)));
     };
 
     static pendingSummary = async (req: Request, res: Response) => {
@@ -122,7 +148,10 @@ export class ShiftSummaryController {
             endedAt: { $ne: null },
             endReason: ShiftEndReason.BAR_CLOSED,
             'summary.status': ShiftSummaryStatus.PENDING,
-        }).sort({ endedAt: -1 });
+        })
+            .sort({ endedAt: -1 })
+            .populate('bar', 'name')
+            .populate('user', 'name lastName');
 
         if (!shift) {
             res.status(404).json({
@@ -133,7 +162,7 @@ export class ShiftSummaryController {
         }
 
         const summary = await getSummary(shift);
-        res.status(200).json(mapSummary(shift, summary));
+        res.status(200).json(await mapSummary(shift, summary));
     };
 
     static history = async (req: Request, res: Response) => {
@@ -157,9 +186,12 @@ export class ShiftSummaryController {
         if (req.query.to) startedAt.$lte = new Date(String(req.query.to));
         if (Object.keys(startedAt).length > 0) filter.startedAt = startedAt;
 
-        const shifts = await Shift.find(filter).sort({ startedAt: -1 }).lean();
+        const shifts = await Shift.find(filter)
+            .sort({ startedAt: -1 })
+            .populate('bar', 'name')
+            .populate('user', 'name lastName');
         const history = await Promise.all(shifts.map(async (shift) => ({
-            ...mapSummary(shift as IShift, shift.summary ?? await generateShiftSummary(shift._id.toString())),
+            ...await mapSummary(shift, shift.summary ?? await generateShiftSummary(shift._id.toString())),
         })));
 
         res.status(200).json(history);

@@ -6,6 +6,8 @@ const data = {
   shiftId: 'shift-1',
   barId: 'bar-1',
   cashierId: 'cashier-1',
+  barName: 'Bar Test',
+  cashierName: 'Juan Pérez',
   role: 'CASHIER',
   deviceInfo: 'POS, 1',
   startedAt: new Date('2026-08-18T20:00:00.000Z'),
@@ -31,9 +33,10 @@ describe('shift summary exports', () => {
     const csv = buildCsv(data)
 
     expect(csv).toContain('field,value')
-    expect(csv).toContain('deviceInfo,"POS, 1"')
-    expect(csv).toContain('redemptionsAvailable,false')
-    expect(csv).toContain('pointsAwarded,3')
+    expect(csv).toContain('Dispositivo,"POS, 1"')
+    expect(csv).toContain('Bar,Bar Test')
+    expect(csv).toContain('Cajero,Juan Pérez')
+    expect(csv).toContain('Puntos otorgados,3')
   })
 
   it('builds a PDF buffer with a valid header and trailer', () => {

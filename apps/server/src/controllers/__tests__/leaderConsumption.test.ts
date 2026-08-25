@@ -5,8 +5,8 @@ import Outing, { OutingStatus } from '../../models/Outing'
 import Group from '../../models/Group'
 import Bar from '../../models/Bar'
 import Notification from '../../models/Notification'
-import AuditLog from '../../models/AuditLog'
 import PointsTransaction from '../../models/PointsTransaction'
+import { writeAuditLog } from '../../utils/auditLogService'
 import * as consumptionQr from '../../utils/consumptionQr'
 import * as attendancePoints from '../../utils/attendancePoints'
 import * as pointsHub from '../../websocket/pointsHub'
@@ -18,7 +18,7 @@ vi.mock('../../models/Outing')
 vi.mock('../../models/Group')
 vi.mock('../../models/Bar')
 vi.mock('../../models/Notification')
-vi.mock('../../models/AuditLog')
+vi.mock('../../utils/auditLogService', () => ({ writeAuditLog: vi.fn() }))
 vi.mock('../../models/PointsTransaction')
 vi.mock('../../utils/consumptionQr')
 vi.mock('../../utils/attendancePoints')
@@ -47,7 +47,7 @@ describe('LeaderConsumptionController', () => {
     vi.mocked(consumptionQr.registerFailedAttempt).mockImplementation(() => {})
     vi.mocked(pointsHub.emitGroupPointsBalance).mockImplementation(() => {})
     vi.mocked(attendancePoints.awardAttendancePointsIfFirst).mockResolvedValue({ awarded: false })
-    vi.mocked(AuditLog.create).mockResolvedValue({} as any)
+    vi.mocked(writeAuditLog).mockReset()
     vi.mocked(Notification.insertMany).mockResolvedValue([] as any)
   })
 

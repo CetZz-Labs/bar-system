@@ -7,7 +7,7 @@ import Consumption, { ConsumptionStatus } from '../../models/Consumption'
 import Outing from '../../models/Outing'
 import Group from '../../models/Group'
 import PointsTransaction from '../../models/PointsTransaction'
-import AuditLog, { AuditAction } from '../../models/AuditLog'
+import { writeAuditLog } from '../../utils/auditLogService'
 import * as barDashboard from '../../utils/barDashboard'
 import * as pointsHub from '../../websocket/pointsHub'
 import { buildMockRequest, buildMockResponse } from '../../__tests__/helpers/mockHelpers'
@@ -35,10 +35,9 @@ vi.mock('../../models/PointsTransaction', async () => {
   const actual = await vi.importActual<typeof import('../../models/PointsTransaction')>('../../models/PointsTransaction')
   return { ...actual, default: { create: vi.fn() } }
 })
-vi.mock('../../models/AuditLog', async () => {
-  const actual = await vi.importActual<typeof import('../../models/AuditLog')>('../../models/AuditLog')
-  return { ...actual, default: { create: vi.fn() } }
-})
+vi.mock('../../utils/auditLogService', () => ({
+  writeAuditLog: vi.fn(),
+}))
 vi.mock('../../utils/barDashboard', async () => {
   const actual = await vi.importActual<typeof import('../../utils/barDashboard')>('../../utils/barDashboard')
   return {
@@ -178,7 +177,7 @@ describe('DashboardController.getDashboard', () => {
 describe('DashboardController.resolveConsumptionDispute', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.mocked(AuditLog.create).mockResolvedValue({} as any)
+    vi.mocked(writeAuditLog).mockReset()
   })
 
   it('returns 403 when the requester is a CASHIER, not the OWNER', async () => {
@@ -307,8 +306,8 @@ describe('DashboardController.resolveConsumptionDispute', () => {
     )
     expect(session.commitTransaction).toHaveBeenCalled()
     expect(pointsHub.emitGroupPointsBalance).toHaveBeenCalledWith(groupId.toString(), 99)
-    expect(AuditLog.create).toHaveBeenCalledWith(
-      expect.objectContaining({ action: AuditAction.CONSUMPTION_RESOLVED_BY_OWNER })
+    expect(writeAuditLog).toHaveBeenCalledWith(
+      expect.objectContaining({ eventType: 'dispute.resolved' })
     )
     expect(res.status).toHaveBeenCalledWith(200)
     expect(res.json).toHaveBeenCalledWith(
@@ -355,7 +354,7 @@ describe('DashboardController.resolveConsumptionDispute', () => {
 
     expect(session.abortTransaction).toHaveBeenCalled()
     expect(res.status).toHaveBeenCalledWith(409)
-    expect(AuditLog.create).not.toHaveBeenCalled()
+    expect(writeAuditLog).not.toHaveBeenCalled()
     expect(PointsTransaction.create).not.toHaveBeenCalled()
   })
 
@@ -393,8 +392,8 @@ describe('DashboardController.resolveConsumptionDispute', () => {
     expect(save).toHaveBeenCalled()
     expect(Group.findByIdAndUpdate).not.toHaveBeenCalled()
     expect(PointsTransaction.create).not.toHaveBeenCalled()
-    expect(AuditLog.create).toHaveBeenCalledWith(
-      expect.objectContaining({ action: AuditAction.CONSUMPTION_RESOLVED_BY_OWNER })
+    expect(writeAuditLog).toHaveBeenCalledWith(
+      expect.objectContaining({ eventType: 'dispute.resolved' })
     )
     expect(res.status).toHaveBeenCalledWith(200)
     expect(res.json).toHaveBeenCalledWith(

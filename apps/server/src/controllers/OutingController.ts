@@ -6,6 +6,7 @@ import Group, { IGroupMembership } from "../models/Group";
 import Bar, { BarStatus, IAttendancePointsByDay, IBar } from "../models/Bar";
 import { MembershipRole } from "../models/User";
 import { closeOuting as closeOutingUtil } from "../utils/closeOuting";
+import { writeAuditLog } from "../utils/auditLogService";
 
 // Bares registrados antes de LB-59 no tienen `attendancePointsByDay`
 // persistido en Mongo (ver comentario en models/Bar.ts). Al congelar el
@@ -549,6 +550,23 @@ export class OutingController {
             }
 
             await session.commitTransaction();
+
+            // LB-77: evento checkin.confirmed (LB-55 no auditaba).
+            writeAuditLog({
+                bar: outing.bar,
+                actorType: 'CASHIER',
+                actorId: cashierContext.user._id,
+                eventType: 'checkin.confirmed',
+                entityType: 'Checkin',
+                entityId: outing._id,
+                metadata: {
+                    outingId: outing._id,
+                    groupId: outing.group,
+                    scheduledFor: outing.scheduledFor,
+                },
+                deviceInfo: cashierContext.shift.deviceInfo,
+                ip: req.ip,
+            });
 
             const populated = await Outing.findById(outing._id)
                 .populate('bar', 'name slug logoUrl address')

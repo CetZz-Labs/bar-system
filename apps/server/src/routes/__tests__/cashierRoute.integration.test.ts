@@ -16,7 +16,7 @@ const modelMocks = vi.hoisted(() => ({
   shiftFindById: vi.fn(),
   shiftFindOne: vi.fn(),
   shiftFindOneAndUpdate: vi.fn(),
-  auditCreate: vi.fn(),
+  writeAuditLog: vi.fn(),
 }))
 
 const summaryMocks = vi.hoisted(() => ({
@@ -71,14 +71,8 @@ vi.mock('../../models/Shift', () => ({
   ShiftSummaryStatus: { PENDING: 'PENDING', VIEWED: 'VIEWED' },
 }))
 
-vi.mock('../../models/AuditLog', () => ({
-  default: { create: modelMocks.auditCreate },
-  AuditAction: {
-    CASHIER_LOGIN: 'CASHIER_LOGIN',
-    CASHIER_LOGOUT: 'CASHIER_LOGOUT',
-    CASHIER_KICKED_OUT: 'CASHIER_KICKED_OUT',
-    SHIFT_AUTO_CLOSED: 'SHIFT_AUTO_CLOSED',
-  },
+vi.mock('../../utils/auditLogService', () => ({
+  writeAuditLog: modelMocks.writeAuditLog,
 }))
 
 vi.mock('../../utils/shiftSummary', () => ({
@@ -96,13 +90,15 @@ type Query<T> = Promise<T> & {
   select: ReturnType<typeof vi.fn>
   lean: ReturnType<typeof vi.fn>
   sort: ReturnType<typeof vi.fn>
+  populate: ReturnType<typeof vi.fn>
 }
 
 function makeQuery<T>(value: T): Query<T> {
   const query = Promise.resolve(value) as Query<T>
   query.select = vi.fn().mockReturnValue(query)
   query.lean = vi.fn().mockResolvedValue(value)
-  query.sort = vi.fn().mockResolvedValue(value)
+  query.sort = vi.fn().mockResolvedValue(query)
+  query.populate = vi.fn().mockReturnValue(query)
   return query
 }
 
@@ -144,6 +140,8 @@ type TestShift = {
   endReason?: ShiftEndReason
   summary?: TestSummary
   save: ReturnType<typeof vi.fn>
+  populated: ReturnType<typeof vi.fn>
+  get: ReturnType<typeof vi.fn>
 }
 
 const barA = new Types.ObjectId()
@@ -193,6 +191,8 @@ function buildShift(
   user: Types.ObjectId,
   overrides: Partial<TestShift> = {},
 ): TestShift {
+  const barData = { name: 'Bar Test' }
+  const userData = { name: 'Cashier', lastName: 'User' }
   const shift: TestShift = {
     _id: new Types.ObjectId(),
     bar,
@@ -204,6 +204,12 @@ function buildShift(
     endReason: ShiftEndReason.MANUAL,
     summary: buildSummary(),
     save: vi.fn().mockResolvedValue(true),
+    populated: vi.fn((field: string) => field === 'bar' || field === 'user' ? barData : undefined),
+    get: vi.fn((field: string) => {
+      if (field === 'bar') return barData
+      if (field === 'user') return userData
+      return undefined
+    }),
     ...overrides,
   }
   shifts.set(shift._id.toString(), shift)
@@ -325,7 +331,7 @@ beforeEach(() => {
     }
     return makeQuery(null)
   })
-  modelMocks.auditCreate.mockResolvedValue({})
+  modelMocks.writeAuditLog.mockReset()
   summaryMocks.generateShiftSummary.mockImplementation(async (shiftId: string) => {
     const shift = shifts.get(shiftId)
     if (!shift) throw new Error('Shift not found')
@@ -487,7 +493,7 @@ describe('cashierRoute real HTTP session integration', () => {
     }))
     expect(shift.endReason).toBe(ShiftEndReason.MANUAL)
     expect(shift.save).toHaveBeenCalledTimes(1)
-    expect(modelMocks.auditCreate).toHaveBeenCalledTimes(1)
+    expect(modelMocks.writeAuditLog).toHaveBeenCalledTimes(1)
 
     const otherCashierResponse = await post(
       '/api/cashier/shift/close',
@@ -500,6 +506,6 @@ describe('cashierRoute real HTTP session integration', () => {
 
     expect(otherCashierResponse.status).toBe(403)
     expect(otherBarResponse.status).toBe(403)
-    expect(modelMocks.auditCreate).toHaveBeenCalledTimes(1)
+    expect(modelMocks.writeAuditLog).toHaveBeenCalledTimes(1)
   })
 })

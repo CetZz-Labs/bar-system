@@ -1,5 +1,5 @@
 import Redemption, { RedemptionStatus } from "../models/Redemption";
-import AuditLog, { AuditAction } from "../models/AuditLog";
+import { writeAuditLog } from "./auditLogService";
 
 /**
  * Expiración LAZY del TTL de 20 min de un canje (LB-68). Único patrón
@@ -33,14 +33,13 @@ export async function expireStaleRedemptions(filter: { group?: string; reward?: 
         redemption.invalidatedAt = now;
         await redemption.save();
 
-        await AuditLog.create({
+        writeAuditLog({
             bar: redemption.bar,
-            user: redemption.leader,
-            action: AuditAction.REDEMPTION_EXPIRED,
-            amount: redemption.pointsRequiredSnapshot,
-            outing: redemption.outing,
-            group: redemption.group,
-            redemption: redemption._id,
+            actorType: 'SYSTEM',
+            eventType: 'redemption.expired',
+            entityType: 'Canje',
+            entityId: redemption._id,
+            metadata: { redemptionId: redemption._id, rewardId: redemption.reward },
         });
     }
 }

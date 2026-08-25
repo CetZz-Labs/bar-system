@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Types } from 'mongoose'
 import { expireStaleRedemptions } from '../redemptionExpiry'
 import Redemption, { RedemptionStatus } from '../../models/Redemption'
-import AuditLog, { AuditAction } from '../../models/AuditLog'
+import { writeAuditLog } from '../auditLogService'
 
 // Test directo de la implementación real de expireStaleRedemptions
 // (mockeando solo los modelos, no la función bajo test) — pedido explícito
@@ -20,20 +20,14 @@ vi.mock('../../models/Redemption', async () => {
   }
 })
 
-vi.mock('../../models/AuditLog', async () => {
-  const actual = await vi.importActual<typeof import('../../models/AuditLog')>(
-    '../../models/AuditLog'
-  )
-  return {
-    ...actual,
-    default: { create: vi.fn() },
-  }
-})
+vi.mock('../auditLogService', () => ({
+  writeAuditLog: vi.fn(),
+}))
 
 describe('expireStaleRedemptions', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.mocked(AuditLog.create).mockResolvedValue([] as any)
+    vi.mocked(writeAuditLog).mockReset()
   })
 
   it('flips a stale HELD redemption to EXPIRED, sets invalidatedAt and writes the audit log', async () => {
@@ -69,15 +63,15 @@ describe('expireStaleRedemptions', () => {
     expect(staleRedemption.invalidatedAt).toBeInstanceOf(Date)
     expect(staleRedemption.save).toHaveBeenCalledTimes(1)
 
-    expect(AuditLog.create).toHaveBeenCalledWith({
-      bar: barId,
-      user: leaderId,
-      action: AuditAction.REDEMPTION_EXPIRED,
-      amount: 50,
-      outing: outingId,
-      group: groupId,
-      redemption: redemptionId,
-    })
+    expect(writeAuditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        bar: barId,
+        actorType: 'SYSTEM',
+        eventType: 'redemption.expired',
+        entityType: 'Canje',
+        entityId: redemptionId,
+      })
+    )
   })
 
   it('does not touch a redemption that is still within its TTL', async () => {
@@ -89,6 +83,6 @@ describe('expireStaleRedemptions', () => {
 
     await expireStaleRedemptions({ group: new Types.ObjectId().toString() })
 
-    expect(AuditLog.create).not.toHaveBeenCalled()
+    expect(writeAuditLog).not.toHaveBeenCalled()
   })
 })
