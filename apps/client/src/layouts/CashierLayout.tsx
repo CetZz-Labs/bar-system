@@ -1,5 +1,6 @@
 import { useCashierAuth } from "@/hooks/useCashierAuth";
 import { Outlet, Navigate, useParams } from "react-router";
+import { Spinner } from "@/components/ui/Spinner";
 
 // LB-66: ya no existe un login separado de cajero
 // (/bar/:barId/cajero/login) — la sesión de cajero se obtiene eligiendo
@@ -12,7 +13,13 @@ export default function CashierLayout() {
     const { barId } = useParams<{ barId: string }>()
     const { data, isLoading, autoClosedRecovery } = useCashierAuth()
 
-    if (isLoading) return <div>Loading...</div>
+    if (isLoading) {
+        return (
+            <div className="flex min-h-[100dvh] items-center justify-center">
+                <Spinner size="lg" />
+            </div>
+        )
+    }
 
     // LB-73: el turno se cerró automáticamente al horario de cierre del bar.
     // En vez de expulsar al cajero, lo llevamos a la pantalla de resumen del

@@ -249,7 +249,7 @@ export default function BarAuditLogView() {
         </div>
 
         {isCustomIncomplete && (
-          <p className="text-sm text-amber-400 m-0">Elegí una fecha "desde" y "hasta" para filtrar por rango.</p>
+          <p className="text-sm text-warning m-0">Elegí una fecha "desde" y "hasta" para filtrar por rango.</p>
         )}
       </div>
 

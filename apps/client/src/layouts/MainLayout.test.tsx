@@ -36,7 +36,7 @@ describe('MainLayout', () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByText('Loading...')).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'Cargando' })).toBeInTheDocument();
   });
 
   it('should redirect to /login when session data is null', () => {

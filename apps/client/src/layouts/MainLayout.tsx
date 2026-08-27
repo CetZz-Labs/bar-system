@@ -1,12 +1,19 @@
 import { useAuth } from "@/hooks/useAuth";
 import { Outlet, Navigate, useLocation, Link } from "react-router";
 import { Home, Users, User, Store } from "lucide-react";
+import { Spinner } from "@/components/ui/Spinner";
 
 export default function MainLayout() {
     const { data, isLoading, isProfileComplete } = useAuth()
     const location = useLocation()
 
-    if (isLoading) return <div>Loading...</div>
+    if (isLoading) {
+        return (
+            <div className="flex min-h-[100dvh] items-center justify-center">
+                <Spinner size="lg" />
+            </div>
+        )
+    }
 
     if (!data) return <Navigate to="/login" />
 

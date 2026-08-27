@@ -42,7 +42,19 @@ import NotFound from './views/NotFound'
 export default function Router() {
     return (
         <BrowserRouter>
-            <Toaster position="top-center" />
+            <Toaster
+                position="top-center"
+                theme="dark"
+                toastOptions={{
+                    style: {
+                        background: "var(--color-surface-2)",
+                        border: "1px solid var(--color-border)",
+                        color: "var(--color-text-primary)",
+                        fontFamily: "var(--font-ui)",
+                        borderRadius: "var(--radius-md)",
+                    },
+                }}
+            />
 
             <Routes>
                 <Route element={<AuthLayout />}>

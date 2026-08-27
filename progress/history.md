@@ -1203,3 +1203,97 @@ navegador mucho antes de que el token firmado expire realmente.
 - **Tests:** backend — `pushService.test.ts` (11 casos: filtrado por preferencias, borrado 404/410, nunca lanza, `canjes` no consulta User, no-op sin env vars, de-dup), `PushSubscription.test.ts` (9: required, `endpoint` unique), `pushSubscription.test.ts` controller (9: upsert idempotente, delete body/query, `updatePreferences` ignora `canjes:false`), + asserts nuevos en `outingCheckIn`/`leaderConsumption`/`cashierRedemption` (categoría correcta, post-commit, recipients sin members). Frontend — `usePushNotifications.test.tsx` (6), `PushNotificationsSection.test.tsx` (8).
 - **Veredicto del Reviewer:** `[APPROVED]` (primera pasada, sin cambios requeridos) — C1–C4 verificados contra el código real en disco y los 6 comandos de C4 corridos en vivo por el propio Reviewer. server lint EXIT 0; client lint EXIT 0 (10 warnings preexistentes, ninguno en archivos de LB-80); client build EXIT 0 (emite `dist/sw.js`); client test 245/245; server test **622/623** — único rojo `leaderConsumption.test.ts > accept > awards floor(amount/1000)...`, **confirmado preexistente y ajeno de forma independiente** por el Reviewer vía `git stash -u` + run sobre el árbol base `42af3fe` (falla idéntico; `LeaderConsumptionController.accept` no fue tocado por LB-80, que solo toca `reject`) — ya documentado como rojo ajeno en la entrada de LB-84. `test:coverage` da exit 1 por ese mismo rojo; excluyendo ese archivo, utils/middleware 93.87%/85.98% y `pushService.ts` 93.47%/90%/90%/97.36% — sobre el umbral 80%. Observaciones no bloqueantes: `API/pushApi.ts` y `src/sw.ts` sin test dedicado (consistente con la convención del repo: 13/15 archivos de `src/API` no lo tienen, y no hay precedente de testear SW; la lógica de UI —hook y componente— sí tiene test); `test:coverage` como comando único seguirá en exit 1 hasta que se arregle el rojo preexistente de `leaderConsumption` (candidato a ticket propio).
 - **Estado en Jira:** LB-80 → "Listo". LB-57 → "Listo" (entregado vía LB-80, linkeado como duplicado). Working tree **sin commitear** en `feat/push-notification` (34 archivos) — commit/merge queda a decisión del usuario. `apps/server/.env` / `apps/client/.env` locales (gitignored) recibieron las vars VAPID de dev.
+
+### [2026-08-27] - LB-89: [S5][UX-1] Design system unificado (tokens + componentes)
+- **Dominio afectado:** Frontend (`apps/client`). Sin backend → C2 de `CHECKPOINTS.md` N/A.
+- **Subagentes involucrados:** Explorer (`progress/explorers/exp_LB-89.md`), Implementer
+  (`progress/implementers/impl_LB-89.md` — pasada 1: fundación + barrido parcial; pasada 2:
+  consolidación de docs), Reviewer (`progress/reviewers/review_LB-89.md`).
+- **Contexto / reencuadre del Explorer:** el ticket pedía "unificar la UI" como si hubiera que
+  diseñar tokens de cero, pero **`docs/design.md` ya existía como guía inmutable del design
+  system** (auditada por el `reviewer`) y `apps/client/src/index.css` ya tenía un `@theme`
+  completo (paleta lima `#C8FF00`/negro, 2 fuentes Space Grotesk + Plus Jakarta Sans, spacing,
+  radius, sombras, `@layer components` con `.card`/`.chip`). El trabajo real era: completar
+  primitivos faltantes, agregar el `cn()` que `frontend.md §1` referencia pero nunca se
+  implementó, tematizar el `<Toaster>`, corregir drift de tokens y migrar las vistas. El
+  Explorer cuantificó el drift: `<button>` inline en ~27 archivos, cards `rounded-lg` (dominio
+  `bar/`) vs `rounded-xl` (`groups/`), 3 mapas de color de estado duplicados, color `amber-*`
+  fuera de paleta en 8 archivos, 3 patrones de loader, ≥6 modales de formulario hand-rolled,
+  copy de vacíos/errores inconsistente ("Todavía no"/"Aún no"/"Sin… aún", 3 wordings para el
+  error de cámara), nombre de producto "NightOut" conviviendo con "La Banda".
+- **Decisiones de producto (vía `AskUserQuestion`, dos rondas):** (1ª ronda) barrido completo de
+  las ~27 vistas + docs unificadas + primitivos "nombrados + habilitadores"; `clsx` +
+  `tailwind-merge` autorizados para `cn()`, **`class-variance-authority` prohibido**. (2ª ronda,
+  tras ver el tamaño real) → **cerrar LB-89 con la fundación + barrido PARCIAL** y mover el resto
+  del barrido a ticket de seguimiento; además **eliminar `docs/DESIGN_SYSTEM.md`** (que el ticket
+  pedía crear) y consolidar TODO en `docs/design.md` como **única fuente de verdad** de diseño
+  UX/UI del proyecto.
+- **Resumen de Cambios (entregado):**
+  - **Tokens** (`@theme` de `index.css`): `--text-md: 1.0625rem` (la clase `text-md` que `Button`
+    size `lg` ya usaba era un no-op); `--color-warning #FBBF24` + `-dim` + `-border` (espejo de
+    `--color-error`), 8 archivos `amber-*` migrados (grep `amber-` → 0); `--color-overlay
+    rgba(0,0,0,0.6)` → utilidad `bg-overlay`, 6 backdrops de modal migrados (`bg-black/60` y
+    `style` inline → 0). Radius de cards unificado a **`rounded-xl`** (20px), aplicado vía el
+    primitivo `Card`; clase CSS `.card` marcada deprecada y alineada.
+  - **Helper `cn()`**: `apps/client/src/utils/cn.ts` = `twMerge(clsx(inputs))`, import `@/utils/cn`.
+    Deps nuevas `clsx ^2.1.1` + `tailwind-merge ^3.3.1` (autorizadas por `frontend.md §1`).
+  - **8 primitivos nuevos** en `components/ui/`, cada uno con `*.test.tsx` co-ubicado: `Card`
+    (`padding` none/md/lg, `interactive`), `Badge` (variantes success/warning/error/neutral) +
+    `badgeStatus.ts` con `statusBadgeVariant(status)` que **reemplaza los 3 mapas de estado
+    duplicados** (`BarDashboardView` `STATUS_BADGE_CLASSES`, `MyBarsView` `config`,
+    `BarCategoriesView`), `Spinner` (`size`, `center`, `label`→`role="status"`), `EmptyState`
+    (icono lucide + título + descripción + slot CTA), `ErrorState` (`role="alert"`, sin
+    animación de entrada por `design.md §3`), `IconButton` (`aria-label` obligatorio por tipos,
+    unifica las 3 variantes del botón "volver"), `Select` + `Textarea` (label auto vía `useId`,
+    cadena de clases = la duplicada en `BarDashboardView`/`BarAuditLogView`/`BarReportsView`).
+  - **`Modal.tsx`** extendido a modo formulario retrocompatible (`onConfirm` opcional, `footer?`,
+    `hideFooter?`, `size?`, `confirmVariant?`; `Modal.test.tsx` pasa sin tocar). **`Button.tsx`**
+    refactor a `cn()` + mapas de variante (sin cambio de clases; `Button.test.tsx` pasa sin
+    tocar). **`<Toaster>`** de `router.tsx` tematizado (`theme="dark"`, `toastOptions.style` con
+    tokens, `closeButton`; **sin `richColors`** — mete verdes/rojos ajenos a la paleta).
+  - Tests nuevos para `Input.tsx` y `SegmentedControl.tsx` (antes sin test).
+  - **Barrido parcial (Fase C):** nombre "NightOut" → "La Banda" (`LoginView`,
+    `SelectContextView`; grep → 0); `<div>Loading...</div>` → `<Spinner size="lg">` en
+    `MainLayout`/`AuthLayout`/`CashierLayout`/`SelectContextView` (+ 2 tests de layout
+    actualizados de `getByText('Loading...')` a `getByRole('status',{name:'Cargando'})`); los 3
+    mapas de estado → `Badge` + `statusBadgeVariant`; `MyBarsView` migrada entera (IconButton +
+    Spinner + EmptyState + Card).
+  - **Docs (Fase D):** `docs/design.md` ampliado — **§6** tabla de tokens completa (incl.
+    `--text-md`, `--color-warning*`, `--color-overlay`), **§7** referencia de API + ejemplo JSX
+    de cada componente de `components/ui/`, **§8** catálogo de copy de estados vacíos ("Todavía
+    no …") y de error ("No pudimos cargar …" + "Reintentar"/"Volver", wording único para el
+    error de cámara). §1–§5 normativas **intactas** (`git diff` sin líneas removidas); solo se
+    reforzó la nota de cabecera declarando `design.md` como única fuente de verdad y que
+    `DESIGN_SYSTEM.md` no debe volver a existir. **`docs/DESIGN_SYSTEM.md` eliminado** (nunca
+    llegó a estar trackeado).
+- **Pendiente → LB-99** (`[S5][UX-1b] Barrido de vistas al design system`, Tarea, Medium, Lautaro):
+  9 ítems de migración de markup ya mapeados `file:line` en `impl_LB-89.md` §Pendiente —
+  `<button>` inline en ~27 archivos, cards inline, ≥6 modales-form hand-rolled, inputs nativos,
+  `Loader2` suelto en ~31 vistas, bloques empty/error inline en ~35 vistas, aplicar el copy
+  unificado a las vistas, `cn()` en vistas, sombras no-token, + fix de la tilde faltante en el
+  `title` default de `ErrorState`. Motivo de diferirlo: mantener el PR acotado y bajar el
+  riesgo de merge-conflict con la fase de "polish" que los demás devs harían sobre esas mismas
+  vistas.
+- **Veredicto del Reviewer:** `[APPROVED]` (primera pasada, sin cambios requeridos). C1
+  verificado (`git diff --stat` solo `apps/client/**` + `docs/design.md` + `pnpm-lock.yaml`;
+  sin imports cruzados a `apps/server`), C3 verificado (`<Toaster>` único en `router.tsx`, sin
+  CVA, deps solo `clsx`+`tailwind-merge`, primitivos resuelven color contra tokens sin
+  `bg-[#...]`, a11y de `IconButton`/`Select`/`Textarea`), C2 N/A. **C4 corrido en vivo por el
+  Reviewer:** `pnpm --filter @bar/client lint` exit 0 (10 warnings `react-hooks/incompatible-
+  library` **preexistentes** — `GroupCreateView`/`OnboardingView` ni siquiera tocados; en
+  `OutingFormModal` el único cambio es el backdrop), `build` exit 0 (`tsc -b` strict), `test`
+  **308/308** (49 test files, +10 nuevos). 4 hallazgos no bloqueantes: tilde en el default de
+  `ErrorState` (→ LB-99), `badgeStatus.ts` sin test propio (cubierto vía `Badge.test.tsx`),
+  loading inline en `SelectContextView` que no usa el helper `center`, y el badge "inactiva" que
+  pasa de ámbar a `neutral` (intencional, coincide con `design.md §7`).
+- **Estado en Jira:** LB-89 → "Finalizada". LB-99 creada en "Tareas por hacer" (linkeada
+  `Relates` a LB-89). Working tree de `feat/design-system` **sin commitear** (22 archivos nuevos
+  + 25 modificados + 1 borrado) — commit/push a decisión del desarrollador. `pnpm install`
+  corrido (lockfile actualizado por `clsx`/`tailwind-merge`).
+- **Fixup post-cierre (2026-08-27, misma sesión):** el dueño de producto reportó la "x" de
+  cerrar en cada toast. Implementer pasada 3 — quitada la prop `closeButton` del `<Toaster>`
+  (`apps/client/src/router.tsx`); en `docs/design.md §7` la mención de `closeButton` se
+  removió por completo a pedido del usuario (es config puntual del componente, no una regla de
+  sistema — la nota de `richColors` sí se mantiene por ser regla de paleta). Cambio cosmético
+  dentro del alcance ya aprobado; sin transición de Jira ni ciclo de review formal. `lint`/
+  `build`/`test` de `@bar/client` en verde (test 308/308).

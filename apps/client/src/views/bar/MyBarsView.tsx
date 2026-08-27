@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router";
 import { motion } from "motion/react";
@@ -13,38 +14,27 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { IconButton } from "@/components/ui/IconButton";
+import { Badge } from "@/components/ui/Badge";
+import { statusBadgeVariant } from "@/components/ui/badgeStatus";
+import { Spinner } from "@/components/ui/Spinner";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { getMyBars } from "@/API/BarAPI";
 import type { BarStatus, MyBar, BarScheduleSlot } from "@/types/bar";
 import { DAY_NAMES } from "@/types/bar";
 
+const STATUS_META: Record<BarStatus, { label: string; icon: ReactNode }> = {
+  pending: { label: "Pendiente", icon: <ClockAlert size={14} /> },
+  active: { label: "Activo", icon: <CheckCircle2 size={14} /> },
+  rejected: { label: "Rechazado", icon: <ClockAlert size={14} /> },
+};
+
 function StatusBadge({ status }: { status: BarStatus }) {
-  const config = {
-    pending: {
-      label: "Pendiente",
-      icon: <ClockAlert size={14} />,
-      className: "bg-amber-500/10 text-amber-400 border-amber-500/20",
-    },
-    active: {
-      label: "Activo",
-      icon: <CheckCircle2 size={14} />,
-      className: "bg-lime/10 text-lime border-lime/20",
-    },
-    rejected: {
-      label: "Rechazado",
-      icon: <ClockAlert size={14} />,
-      className: "bg-error-dim text-error border-error-border",
-    },
-  };
-
-  const c = config[status];
-
+  const meta = STATUS_META[status];
   return (
-    <span
-      className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium border ${c.className}`}
-    >
-      {c.icon}
-      {c.label}
-    </span>
+    <Badge variant={statusBadgeVariant(status)} icon={meta.icon}>
+      {meta.label}
+    </Badge>
   );
 }
 
@@ -69,7 +59,7 @@ function BarCard({ bar }: { bar: MyBar }) {
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       onClick={() => navigate(`/bar/${bar.id}/perfil`)}
-      className="flex flex-col gap-3 p-4 rounded-lg bg-surface-2 border border-border cursor-pointer transition-colors hover:border-border-hover active:bg-surface-3"
+      className="flex flex-col gap-3 p-4 rounded-xl bg-surface-2 border border-border cursor-pointer transition-colors hover:border-border-hover active:bg-surface-3"
       role="button"
       tabIndex={0}
       onKeyDown={(e) => {
@@ -135,48 +125,33 @@ export default function MyBarsView() {
     >
       {/* Header */}
       <header className="flex items-center gap-4 mb-6">
-        <button
-          onClick={() => navigate(-1)}
-          className="flex justify-center items-center w-10 h-10 rounded-full bg-surface-2 border border-border transition-colors hover:bg-surface-3"
-          aria-label="Volver"
-        >
+        <IconButton onClick={() => navigate(-1)} aria-label="Volver">
           <ArrowLeft size={20} className="text-text-secondary" />
-        </button>
+        </IconButton>
         <h1 className="text-2xl font-display font-bold tracking-tight m-0">
           Mis bares
         </h1>
       </header>
 
-      {isLoading && (
-        <div className="flex flex-col items-center justify-center flex-1 gap-4 text-text-secondary">
-          <div className="w-8 h-8 border-2 border-border border-t-lime rounded-full animate-spin" />
-          <p className="text-sm">Cargando bares...</p>
-        </div>
-      )}
+      {isLoading && <Spinner center size="lg" label="Cargando bares" />}
 
       {!isLoading && bars && bars.length === 0 && (
-        <div className="flex flex-col items-center justify-center flex-1 gap-6 text-center">
-          <div className="flex items-center justify-center w-16 h-16 rounded-full bg-surface-2 border border-border">
-            <Store size={28} className="text-text-secondary" />
-          </div>
-          <div className="flex flex-col gap-1">
-            <p className="text-text-secondary text-base">
-              Todavía no registraste ningún bar.
-            </p>
-            <p className="text-text-secondary text-sm">
-              Sumá tu local al programa de fidelización.
-            </p>
-          </div>
-          <Button
-            variant="primary"
-            size="lg"
-            fullWidth
-            onClick={() => navigate("/bar/registro")}
-          >
-            <Plus size={20} />
-            REGISTRAR MI BAR
-          </Button>
-        </div>
+        <EmptyState
+          icon={Store}
+          title="Todavía no registraste ningún bar."
+          description="Sumá tu local al programa de fidelización."
+          action={
+            <Button
+              variant="primary"
+              size="lg"
+              fullWidth
+              onClick={() => navigate("/bar/registro")}
+            >
+              <Plus size={20} />
+              REGISTRAR MI BAR
+            </Button>
+          }
+        />
       )}
 
       {!isLoading && bars && bars.length > 0 && (

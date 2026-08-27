@@ -3,6 +3,7 @@ import { Navigate, useLocation, useNavigate } from "react-router"
 import { motion } from "motion/react"
 import { ArrowRight, Store, User as UserIcon, Zap } from "lucide-react"
 import { Button } from "@/components/ui/Button"
+import { Spinner } from "@/components/ui/Spinner"
 import { useAuth } from "@/hooks/useAuth"
 import { getContextOptions, selectContext } from "@/API/ContextAPI"
 import { cashierSession } from "@/API/CashierAPI"
@@ -53,10 +54,10 @@ export default function SelectContextView() {
         onError: toastApiError,
     })
 
-    if (isAuthLoading) return <div>Loading...</div>
+    if (isAuthLoading) return <div className="flex min-h-[100dvh] items-center justify-center"><Spinner size="lg" /></div>
     if (!user) return <Navigate to="/login" replace />
     if (!isProfileComplete) return <Navigate to="/onboarding" replace />
-    if (isOptionsLoading) return <div>Loading...</div>
+    if (isOptionsLoading) return <div className="flex min-h-[100dvh] items-center justify-center"><Spinner size="lg" /></div>
 
     const hasBarRoles = !!options && (options.cashier.length > 0 || options.owner.length > 0)
     if (!hasBarRoles) {
@@ -94,7 +95,7 @@ export default function SelectContextView() {
                 <div className="flex items-center justify-center p-1 rounded-md bg-lime">
                     <Zap size={24} className="text-bg fill-bg" strokeWidth={2.5} />
                 </div>
-                <span className="font-display font-bold text-[20px]">NightOut</span>
+                <span className="font-display font-bold text-[20px]">La Banda</span>
             </header>
 
             <div className="mb-10">

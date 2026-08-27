@@ -19,6 +19,8 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
+import { Badge } from "@/components/ui/Badge";
+import { statusBadgeVariant } from "@/components/ui/badgeStatus";
 import { getBarDashboard, resolveConsumptionDispute } from "@/API/BarDashboardAPI";
 import {
   ACTIVITY_STATUS_LABELS,
@@ -38,13 +40,6 @@ const STATUS_OPTIONS: { label: string; value: ActivityRowStatus }[] = [
   { label: "Reservada", value: "reservada" },
   { label: "Disputa", value: "disputa" },
 ];
-
-const STATUS_BADGE_CLASSES: Record<ActivityRowStatus, string> = {
-  en_curso: "bg-lime/10 text-lime border-lime/20",
-  finalizada: "bg-surface-3 text-text-secondary border-border",
-  reservada: "bg-amber-500/10 text-amber-400 border-amber-500/20",
-  disputa: "bg-error-dim text-error border-error-border",
-};
 
 function formatArs(amount: number): string {
   return `$${Math.round(amount).toLocaleString("es-AR")}`;
@@ -134,7 +129,7 @@ function ResolveDisputeModal({
           aria-modal="true"
           aria-labelledby="resolve-dispute-title"
         >
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+          <div className="absolute inset-0 bg-overlay backdrop-blur-sm" onClick={onClose} />
           <motion.form
             initial={{ scale: 0.95, opacity: 0, y: 10 }}
             animate={{ scale: 1, opacity: 1, y: 0 }}
@@ -407,9 +402,9 @@ export default function BarDashboardView() {
       </div>
 
       {isCustomIncomplete && (
-        <div className="flex items-center gap-3 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
-          <AlertTriangle size={20} className="text-amber-400 shrink-0" />
-          <p className="text-sm text-amber-400 m-0">Elegí una fecha "desde" y "hasta" para ver el período personalizado.</p>
+        <div className="flex items-center gap-3 p-3 rounded-lg bg-warning-dim border border-warning-border">
+          <AlertTriangle size={20} className="text-warning shrink-0" />
+          <p className="text-sm text-warning m-0">Elegí una fecha "desde" y "hasta" para ver el período personalizado.</p>
         </div>
       )}
 
@@ -507,9 +502,9 @@ export default function BarDashboardView() {
                   <div key={row.outingId} className="flex flex-col gap-2 p-4 rounded-lg bg-surface-2 border border-border">
                     <div className="flex items-start justify-between gap-3">
                       <h3 className="text-base font-display font-bold tracking-tight leading-tight m-0">{row.groupName}</h3>
-                      <span className={`inline-flex items-center px-2 py-1 rounded-md text-xs font-medium border ${STATUS_BADGE_CLASSES[row.status]}`}>
+                      <Badge variant={statusBadgeVariant(row.status)}>
                         {ACTIVITY_STATUS_LABELS[row.status]}
-                      </span>
+                      </Badge>
                     </div>
                     <div className="flex flex-wrap items-center gap-4 text-sm text-text-secondary">
                       <span>{formatDateTime(row.checkedInAt)}</span>

@@ -1,5 +1,6 @@
 import { useAuth } from "@/hooks/useAuth";
 import { Outlet, Navigate, useLocation } from "react-router";
+import { Spinner } from "@/components/ui/Spinner";
 
 function getPostLoginRedirect(location: ReturnType<typeof useLocation>): string | null {
     const fromState = (location.state as { from?: string } | null)?.from
@@ -11,7 +12,13 @@ export default function AuthLayout() {
     const { data, isLoading, isProfileComplete } = useAuth()
     const location = useLocation()
 
-    if (isLoading) return <div>Loading...</div>
+    if (isLoading) {
+        return (
+            <div className="flex min-h-screen items-center justify-center">
+                <Spinner size="lg" />
+            </div>
+        )
+    }
 
     if (data) {
         const redirectTo = getPostLoginRedirect(location)

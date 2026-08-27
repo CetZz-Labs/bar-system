@@ -1,18 +1,39 @@
 import React from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Button } from "./Button";
+import { Button, type ButtonProps } from "./Button";
+import { cn } from "@/utils/cn";
 
 export interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onConfirm: () => void;
   title: string;
   description?: string;
+  /** Contenido del cuerpo (form, lista, etc.). */
+  children?: React.ReactNode;
+  isPending?: boolean;
+  /** Ancho maximo del panel. Default `sm`. */
+  size?: "sm" | "md" | "lg";
+
+  /* ── Modo confirm-dialog (retrocompatible) ── */
+  /** Si se pasa, se renderiza el footer por defecto Cancelar / Confirmar. */
+  onConfirm?: () => void;
   confirmText?: string;
   cancelText?: string;
-  isPending?: boolean;
-  children?: React.ReactNode;
+  /** Variante del boton de confirmacion. Default `danger`. */
+  confirmVariant?: ButtonProps["variant"];
+
+  /* ── Modo formulario / contenido libre ── */
+  /** Footer custom (ej. botones de submit de un form). Anula el footer default. */
+  footer?: React.ReactNode;
+  /** Oculta cualquier footer (el children provee sus propias acciones). */
+  hideFooter?: boolean;
 }
+
+const SIZE_CLASSES: Record<NonNullable<ModalProps["size"]>, string> = {
+  sm: "max-w-sm",
+  md: "max-w-md",
+  lg: "max-w-lg",
+};
 
 export function Modal({
   isOpen,
@@ -22,7 +43,11 @@ export function Modal({
   description,
   confirmText = "Confirmar",
   cancelText = "Cancelar",
+  confirmVariant = "danger",
   isPending = false,
+  size = "sm",
+  footer,
+  hideFooter = false,
   children,
 }: ModalProps) {
   const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -30,6 +55,8 @@ export function Modal({
       onClose();
     }
   };
+
+  const showDefaultFooter = !hideFooter && !footer && typeof onConfirm === "function";
 
   return (
     <AnimatePresence>
@@ -46,7 +73,7 @@ export function Modal({
           aria-labelledby="modal-title"
         >
           {/* Backdrop */}
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div className="absolute inset-0 bg-overlay backdrop-blur-sm" />
 
           {/* Modal content */}
           <motion.div
@@ -54,7 +81,10 @@ export function Modal({
             animate={{ scale: 1, opacity: 1, y: 0 }}
             exit={{ scale: 0.95, opacity: 0, y: 10 }}
             transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
-            className="relative w-full max-w-sm bg-surface rounded-xl border border-border p-6 shadow-modal"
+            className={cn(
+              "relative w-full bg-surface rounded-xl border border-border p-6 shadow-modal max-h-[85vh] overflow-y-auto",
+              SIZE_CLASSES[size],
+            )}
           >
             <h2
               id="modal-title"
@@ -67,26 +97,30 @@ export function Modal({
             )}
             {children}
 
-            <div className="flex gap-3 mt-6">
-              <Button
-                variant="surface"
-                size="md"
-                fullWidth
-                onClick={onClose}
-                disabled={isPending}
-              >
-                {cancelText}
-              </Button>
-              <Button
-                variant="danger"
-                size="md"
-                fullWidth
-                onClick={onConfirm}
-                disabled={isPending}
-              >
-                {confirmText}
-              </Button>
-            </div>
+            {showDefaultFooter && (
+              <div className="flex gap-3 mt-6">
+                <Button
+                  variant="surface"
+                  size="md"
+                  fullWidth
+                  onClick={onClose}
+                  disabled={isPending}
+                >
+                  {cancelText}
+                </Button>
+                <Button
+                  variant={confirmVariant}
+                  size="md"
+                  fullWidth
+                  onClick={onConfirm}
+                  disabled={isPending}
+                >
+                  {confirmText}
+                </Button>
+              </div>
+            )}
+
+            {!hideFooter && footer && <div className="mt-6">{footer}</div>}
           </motion.div>
         </motion.div>
       )}

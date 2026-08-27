@@ -83,7 +83,7 @@ export default function PendingRequestsList({ slug, onRefetch }: PendingRequests
     return (
       <div className="w-full">
         <div className="flex items-center gap-2 mb-3">
-          <UserPlus size={18} className="text-amber-400" />
+          <UserPlus size={18} className="text-warning" />
           <h3 className="text-base font-semibold text-text-primary">
             Solicitudes pendientes
           </h3>
@@ -103,11 +103,11 @@ export default function PendingRequestsList({ slug, onRefetch }: PendingRequests
   return (
     <div className="w-full">
       <div className="flex items-center gap-2 mb-3">
-        <UserPlus size={18} className="text-amber-400" />
+        <UserPlus size={18} className="text-warning" />
         <h3 className="text-base font-semibold text-text-primary">
           Solicitudes pendientes
         </h3>
-        <span className="ml-auto px-2 py-0.5 rounded-full bg-amber-400/10 text-amber-400 text-xs font-medium">
+        <span className="ml-auto px-2 py-0.5 rounded-full bg-warning-dim text-warning text-xs font-medium">
           {requests.length}
         </span>
       </div>

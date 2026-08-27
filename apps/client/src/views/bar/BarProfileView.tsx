@@ -352,9 +352,9 @@ export default function BarProfileView() {
         {/* Logo Section */}
         <div className="flex flex-col gap-2">
           {showLogoWarning && (
-            <div className="flex items-center gap-3 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
-              <AlertTriangle size={20} className="text-amber-400 shrink-0" />
-              <p className="text-sm text-amber-400">
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-warning-dim border border-warning-border">
+              <AlertTriangle size={20} className="text-warning shrink-0" />
+              <p className="text-sm text-warning">
                 Completar el logo para que tu bar sea visible para los usuarios
               </p>
             </div>

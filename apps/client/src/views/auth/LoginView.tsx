@@ -70,7 +70,7 @@ export default function LoginView() {
                 <div className="flex items-center justify-center p-1 rounded-md bg-lime">
                     <Zap size={24} className="text-bg fill-bg" strokeWidth={2.5} />
                 </div>
-                <span className="font-display font-bold text-[20px]">NightOut</span>
+                <span className="font-display font-bold text-[20px]">La Banda</span>
             </header>
 
             {/* Titles */}

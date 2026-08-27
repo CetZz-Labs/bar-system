@@ -38,7 +38,7 @@ describe('CashierLayout', () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByText('Loading...')).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'Cargando' })).toBeInTheDocument();
   });
 
   it('should redirect to /login when there is no cashier session (LB-66: no more per-bar login route)', () => {

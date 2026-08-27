@@ -81,7 +81,7 @@ function RejectRedemptionModal({
           aria-modal="true"
           aria-labelledby="reject-modal-title"
         >
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+          <div className="absolute inset-0 bg-overlay backdrop-blur-sm" onClick={onClose} />
           <motion.form
             initial={{ scale: 0.95, opacity: 0, y: 10 }}
             animate={{ scale: 1, opacity: 1, y: 0 }}

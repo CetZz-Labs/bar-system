@@ -278,7 +278,7 @@ export default function GroupDetailView() {
           {group.unseenDepartedMembers && group.unseenDepartedMembers.length > 0 && (
             <div className="w-full bg-surface-2 border border-border rounded-xl p-4">
               <div className="flex items-start gap-3">
-                <UserMinus size={20} className="text-amber-400 mt-0.5" />
+                <UserMinus size={20} className="text-warning mt-0.5" />
                 <div className="flex-1">
                   <p className="text-text-primary text-sm font-medium">
                     {group.unseenDepartedMembers.length === 1
@@ -305,7 +305,7 @@ export default function GroupDetailView() {
           {group.unseenSuccessions && group.unseenSuccessions.length > 0 && (
             <div className="w-full bg-surface-2 border border-border rounded-xl p-4">
               <div className="flex items-start gap-3">
-                <Crown size={20} className="text-amber-400 mt-0.5" />
+                <Crown size={20} className="text-warning mt-0.5" />
                 <div className="flex-1">
                   <p className="text-text-primary text-sm font-medium">
                     {group.unseenSuccessions[0].newLeaderName} es el nuevo líder

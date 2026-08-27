@@ -21,8 +21,8 @@ const ROLE_CONFIG: Record<
 > = {
   LEADER: {
     label: "Líder",
-    icon: <Crown size={14} className="text-amber-400" />,
-    className: "text-amber-400 font-semibold",
+    icon: <Crown size={14} className="text-warning" />,
+    className: "text-warning font-semibold",
   },
   CO_LEADER: {
     label: "Co-líder",

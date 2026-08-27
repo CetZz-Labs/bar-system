@@ -30,6 +30,12 @@
   --color-error:          #FF4455;
   --color-error-dim:      rgba(255, 68, 85, 0.15);
   --color-error-border:   rgba(255, 68, 85, 0.30);
+  --color-warning:        #FBBF24;
+  --color-warning-dim:    rgba(251, 191, 36, 0.12);
+  --color-warning-border: rgba(251, 191, 36, 0.24);
+
+  /* ── Overlay (backdrop de modales) ── */
+  --color-overlay:        rgba(0, 0, 0, 0.6);
 
   /* ── Grupo / acento secundario ── */
   --color-group-accent:   #C8FF00;
@@ -76,6 +82,7 @@
   --text-xs:   0.75rem;
   --text-sm:   0.875rem;
   --text-base: 1rem;
+  --text-md:   1.0625rem;
   --text-lg:   1.2rem;
   --text-xl:   1.6rem;
   --text-2xl:  2.4rem;
@@ -247,6 +254,9 @@
     border: 1px solid var(--color-lime-border);
   }
 
+  /* DEPRECADO: usar el primitivo <Card> de @/components/ui/Card.
+     Se mantiene alineado (radius-xl, surface, spacing-5) para las vistas
+     que todavia no migraron. No agregar nuevos usos de esta clase. */
   .card {
     background: var(--color-surface);
     border: 1px solid var(--color-border);

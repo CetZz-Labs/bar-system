@@ -18,6 +18,8 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { Badge } from "@/components/ui/Badge";
+import { statusBadgeVariant } from "@/components/ui/badgeStatus";
 import {
   listDrinkCategories,
   createDrinkCategory,
@@ -224,9 +226,9 @@ export default function BarCategoriesView() {
 
       {/* Warning */}
       {warning && (
-        <div className="flex items-center gap-3 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 mb-4">
-          <AlertTriangle size={20} className="text-amber-400 shrink-0" />
-          <p className="text-sm text-amber-400">{warning}</p>
+        <div className="flex items-center gap-3 p-3 rounded-lg bg-warning-dim border border-warning-border mb-4">
+          <AlertTriangle size={20} className="text-warning shrink-0" />
+          <p className="text-sm text-warning">{warning}</p>
         </div>
       )}
 
@@ -239,8 +241,7 @@ export default function BarCategoriesView() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4"
-            style={{ backgroundColor: "rgba(0, 0, 0, 0.6)" }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-overlay"
             onClick={(e) => {
               if (e.target === e.currentTarget) handleCancelCreate();
             }}
@@ -351,14 +352,9 @@ export default function BarCategoriesView() {
                     <span>${category.price.toFixed(2)}</span>
                   )}
                   {/* Badge de estado en español */}
-                  <span
-                    className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${category.status === "active"
-                      ? "bg-lime/10 text-lime border border-lime/20"
-                      : "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-                      }`}
-                  >
+                  <Badge variant={statusBadgeVariant(category.status)}>
                     {category.status === "active" ? "Activa" : "Inactiva"}
-                  </span>
+                  </Badge>
                 </div>
               </div>
 
@@ -419,8 +415,7 @@ export default function BarCategoriesView() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4"
-            style={{ backgroundColor: "rgba(0, 0, 0, 0.6)" }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-overlay"
             onClick={(e) => {
               if (e.target === e.currentTarget) handleCancelEdit();
             }}
