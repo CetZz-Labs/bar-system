@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { Auth } from "./auth";
+import type { PushPreferences } from "./push";
 
 export const updateProfileSchema = z.object({
     name: z.string().min(2, "Mínimo 2 caracteres"),
@@ -50,4 +51,6 @@ export interface UserProfile extends Auth {
     createdAt: string;
     updatedAt: string;
     memberships?: GroupMembership[];
+    // LB-80: preferencias de notificación push (espejo manual del backend).
+    notificationPreferences?: PushPreferences;
 }

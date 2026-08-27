@@ -9,6 +9,7 @@ import User from '../../models/User'
 import Notification from '../../models/Notification'
 import PointsTransaction from '../../models/PointsTransaction'
 import { writeAuditLog } from '../../utils/auditLogService'
+import { sendPushToUsers } from '../../utils/pushService'
 import * as redemptionQr from '../../utils/redemptionQr'
 import * as redemptionExpiry from '../../utils/redemptionExpiry'
 import * as redemptionAvailability from '../../utils/redemptionAvailability'
@@ -84,6 +85,10 @@ vi.mock('../../models/Notification', () => ({
 
 vi.mock('../../utils/auditLogService', () => ({
   writeAuditLog: vi.fn(),
+}))
+
+vi.mock('../../utils/pushService', () => ({
+  sendPushToUsers: vi.fn(),
 }))
 
 vi.mock('../../models/PointsTransaction', () => ({
@@ -367,6 +372,15 @@ describe('CashierRedemptionController.validate (deliver)', () => {
       expect.objectContaining({ eventType: 'redemption.delivered' })
     )
     expect(Notification.insertMany).toHaveBeenCalled()
+
+    // LB-80: push "canjes" a los mismos LEADER/CO_LEADER, post-commit.
+    expect(sendPushToUsers).toHaveBeenCalledTimes(1)
+    const [pushRecipients, pushPayload] = vi.mocked(sendPushToUsers).mock.calls[0]
+    expect((pushRecipients as unknown[]).length).toBe(1)
+    expect(pushPayload).toEqual(
+      expect.objectContaining({ category: 'canjes', relatedOuting: outingId.toString() })
+    )
+
     expect(pointsHub.emitAvailablePointsForBar).toHaveBeenCalledWith(groupId.toString(), barId.toString(), 50)
     expect(res.status).toHaveBeenCalledWith(200)
     expect(res.json).toHaveBeenCalledWith(

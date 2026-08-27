@@ -27,6 +27,7 @@ import dashboardRouter from './routes/dashboardRoute'
 import auditLogRouter from './routes/auditLogRoute'
 import reportRouter from './routes/reportRoute'
 import groupBalanceRouter from './routes/groupBalanceRoute'
+import pushRouter from './routes/pushRoute'
 
 if (process.env.NODE_ENV !== 'production') {
     process.loadEnvFile()
@@ -63,6 +64,7 @@ app.use('/api/outings/:outingId/check-in', outingCheckInRouter)
 app.use('/api/outings/:outingId/close', outingCloseRouter)
 app.use('/api/cashier', cashierRouter)
 app.use('/api/context', contextRouter)
+app.use('/api/push', pushRouter)
 app.use('/api/bars/:barId/rewards', rewardRouter)
 app.use('/api/bars/:barId/audit-logs', auditLogRouter)
 app.use('/api/bars/:barId/reports', reportRouter)

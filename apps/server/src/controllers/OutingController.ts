@@ -7,6 +7,7 @@ import Bar, { BarStatus, IAttendancePointsByDay, IBar } from "../models/Bar";
 import { MembershipRole } from "../models/User";
 import { closeOuting as closeOutingUtil } from "../utils/closeOuting";
 import { writeAuditLog } from "../utils/auditLogService";
+import { sendPushToUsers } from "../utils/pushService";
 
 // Bares registrados antes de LB-59 no tienen `attendancePointsByDay`
 // persistido en Mongo (ver comentario en models/Bar.ts). Al congelar el
@@ -567,6 +568,20 @@ export class OutingController {
                 deviceInfo: cashierContext.shift.deviceInfo,
                 ip: req.ip,
             });
+
+            // LB-80: push a los mismos LEADER/CO_LEADER que reciben la
+            // notificación in-app. Fire-and-forget, SIN await, y fuera del
+            // bloque transaccional (ya se hizo commit) — I/O de red no debe
+            // colgar el commit.
+            sendPushToUsers(
+                leadersAndCoLeaders.map((membership) => membership.user),
+                {
+                    category: 'salidas',
+                    title: 'Check-in confirmado',
+                    body: 'Se confirmó el check-in de la salida del grupo',
+                    relatedOuting: outing._id.toString(),
+                },
+            );
 
             const populated = await Outing.findById(outing._id)
                 .populate('bar', 'name slug logoUrl address')

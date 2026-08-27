@@ -7,6 +7,7 @@ import Bar from '../../models/Bar'
 import Notification from '../../models/Notification'
 import PointsTransaction from '../../models/PointsTransaction'
 import { writeAuditLog } from '../../utils/auditLogService'
+import { sendPushToUsers } from '../../utils/pushService'
 import * as consumptionQr from '../../utils/consumptionQr'
 import * as attendancePoints from '../../utils/attendancePoints'
 import * as pointsHub from '../../websocket/pointsHub'
@@ -19,6 +20,7 @@ vi.mock('../../models/Group')
 vi.mock('../../models/Bar')
 vi.mock('../../models/Notification')
 vi.mock('../../utils/auditLogService', () => ({ writeAuditLog: vi.fn() }))
+vi.mock('../../utils/pushService', () => ({ sendPushToUsers: vi.fn() }))
 vi.mock('../../models/PointsTransaction')
 vi.mock('../../utils/consumptionQr')
 vi.mock('../../utils/attendancePoints')
@@ -172,6 +174,41 @@ describe('LeaderConsumptionController', () => {
         expect.objectContaining({ status: ConsumptionStatus.DISPUTED, rejectCount: 4 })
       )
       expect(Notification.insertMany).toHaveBeenCalled()
+
+      // LB-80: push "consumos" a los mismos LEADER/CO_LEADER de la
+      // notificación in-app.
+      expect(sendPushToUsers).toHaveBeenCalledTimes(1)
+      const [recipients, payload] = vi.mocked(sendPushToUsers).mock.calls[0]
+      expect((recipients as any[]).map((r) => r.toString())).toEqual(['u1', 'u2'])
+      expect(payload).toEqual(
+        expect.objectContaining({ category: 'consumos', relatedOuting: 'o1' })
+      )
+    })
+
+    it('LB-80: does not push on a simple reject that stays below the dispute threshold', async () => {
+      const save = vi.fn().mockResolvedValue(undefined)
+      vi.mocked(Consumption.findById).mockResolvedValue({
+        _id: 'c1',
+        status: ConsumptionStatus.PENDING_LEADER_CONFIRMATION,
+        rejectCount: 0,
+        amount: 5000,
+        bar: 'b1',
+        outing: 'o1',
+        save,
+      } as any)
+      vi.mocked(Outing.findById).mockReturnValue({
+        lean: vi.fn().mockResolvedValue({ _id: 'o1', group: 'g1' }),
+      } as any)
+      vi.mocked(Group.findById).mockReturnValue(
+        mockGroupMemberships([{ user: 'u1', role: MembershipRole.LEADER }]) as any
+      )
+      vi.mocked(consumptionQr.invalidate).mockResolvedValue(undefined)
+
+      const req: any = { user: { _id: 'u1' }, params: { consumptionId: 'c1' }, ip: '1.1.1.1' }
+      const res = mockRes()
+      await LeaderConsumptionController.reject(req, res)
+
+      expect(sendPushToUsers).not.toHaveBeenCalled()
     })
   })
 

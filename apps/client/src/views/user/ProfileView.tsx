@@ -13,6 +13,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { Modal } from "@/components/ui/Modal";
 import { FileUpload } from "@/components/ui/FileUpload";
 import { useNavigate } from "react-router";
+import PushNotificationsSection from "./PushNotificationsSection";
 
 function getFullName(profile: { name?: string; lastName?: string; fullName?: string }): string {
   if (profile.fullName) return profile.fullName;
@@ -306,6 +307,9 @@ export default function ProfileView() {
           </div>
         )}
       </div>
+
+      {/* Push Notifications Section (LB-80) */}
+      <PushNotificationsSection preferences={profile.notificationPreferences} />
 
       {/* Groups Section */}
       <div className="mb-8">

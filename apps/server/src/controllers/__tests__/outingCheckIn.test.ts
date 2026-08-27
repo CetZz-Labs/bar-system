@@ -5,6 +5,7 @@ import Notification from '../../models/Notification'
 import Group from '../../models/Group'
 import Bar from '../../models/Bar'
 import { writeAuditLog } from '../../utils/auditLogService'
+import { sendPushToUsers } from '../../utils/pushService'
 import { buildMockRequest, buildMockResponse } from '../../__tests__/helpers/mockHelpers'
 import { Types } from 'mongoose'
 import mongoose from 'mongoose'
@@ -62,6 +63,10 @@ vi.mock('../../models/User', () => ({
 
 vi.mock('../../utils/auditLogService', () => ({
   writeAuditLog: vi.fn(),
+}))
+
+vi.mock('../../utils/pushService', () => ({
+  sendPushToUsers: vi.fn(),
 }))
 
 vi.mock('mongoose', async (importOriginal) => {
@@ -169,6 +174,7 @@ describe('OutingController.confirmCheckIn', () => {
     vi.mocked(Bar.findById).mockReset().mockReturnValue(buildSelectLeanQuery(mockBar) as any)
     vi.mocked(Notification.insertMany).mockReset().mockResolvedValue(true as any)
     vi.mocked(writeAuditLog).mockReset()
+    vi.mocked(sendPushToUsers).mockReset()
   })
 
   function buildRequest(overrides: any = {}) {
@@ -214,6 +220,42 @@ describe('OutingController.confirmCheckIn', () => {
           entityId: outingId,
         })
       )
+    })
+
+    it('LB-80: fires a "salidas" push to the same leader + co-leader after commit', async () => {
+      const req = buildRequest()
+      const res = buildMockResponse()
+
+      await OutingController.confirmCheckIn(req, res)
+
+      expect(sendPushToUsers).toHaveBeenCalledTimes(1)
+      const [recipients, payload] = vi.mocked(sendPushToUsers).mock.calls[0]
+      const recipientIds = (recipients as any[]).map((r) => r.toString())
+      expect(recipientIds).toContain(leaderId.toString())
+      expect(recipientIds).toContain(coLeaderId.toString())
+      expect(recipientIds).not.toContain(memberId1.toString())
+      expect(payload).toEqual(
+        expect.objectContaining({
+          category: 'salidas',
+          relatedOuting: outingId.toString(),
+        })
+      )
+      // se envía después del commit de la transacción
+      expect(mockSession.commitTransaction).toHaveBeenCalled()
+    })
+
+    it('LB-80: does not push on an idempotent second confirmation (already ACTIVE)', async () => {
+      const activeOuting = { ...mockOuting, status: 'ACTIVE' }
+      vi.mocked(Outing.findOne).mockResolvedValue(activeOuting)
+      vi.mocked(Outing.findById).mockReturnValue(buildPopulateQuery(activeOuting) as any)
+
+      const req = buildRequest()
+      const res = buildMockResponse()
+
+      await OutingController.confirmCheckIn(req, res)
+
+      expect(res.status).toHaveBeenCalledWith(200)
+      expect(sendPushToUsers).not.toHaveBeenCalled()
     })
   })
 

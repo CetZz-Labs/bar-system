@@ -12,6 +12,7 @@ import { expireStaleRedemptions } from "../utils/redemptionExpiry";
 import { getAvailablePointsForBar } from "../utils/redemptionAvailability";
 import { emitAvailablePointsForBar } from "../websocket/pointsHub";
 import { writeAuditLog } from "../utils/auditLogService";
+import { sendPushToUsers } from "../utils/pushService";
 
 // LB-69: validación/entrega de un canje de recompensa (LB-68) por el
 // CAJERO. Dirección inversa a LeaderConsumptionController (LB-61): ahí el
@@ -294,6 +295,16 @@ export class CashierRedemptionController {
                 }))
             );
         }
+
+        // LB-80: push a los mismos LEADER/CO_LEADER de la notificación
+        // in-app. Fire-and-forget, SIN await, post-commit (ya se hizo
+        // commitTransaction arriba). Categoría `canjes`: no-desactivable.
+        sendPushToUsers(leaderIds, {
+            category: 'canjes',
+            title: 'Canje entregado',
+            body: `Tu canje de "${doc.rewardNameSnapshot}" fue entregado en el bar`,
+            relatedOuting: doc.outing.toString(),
+        });
 
         const availablePoints = await getAvailablePointsForBar(doc.group.toString(), doc.bar.toString());
         emitAvailablePointsForBar(doc.group.toString(), doc.bar.toString(), availablePoints);

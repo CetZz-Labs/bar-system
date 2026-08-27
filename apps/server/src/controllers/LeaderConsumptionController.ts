@@ -8,6 +8,7 @@ import Notification, { NotificationType } from "../models/Notification";
 import PointsTransaction, { PointsTransactionType } from "../models/PointsTransaction";
 import { MembershipRole } from "../models/User";
 import { writeAuditLog } from "../utils/auditLogService";
+import { sendPushToUsers } from "../utils/pushService";
 import {
     validate,
     invalidate,
@@ -376,6 +377,19 @@ export class LeaderConsumptionController {
                     metadata: { consumptionId: consumption._id, amount: consumption.amount },
                     ip: req.ip,
                 });
+
+                // LB-80: push a los mismos LEADER/CO_LEADER de la
+                // notificación in-app. Fire-and-forget, SIN await, post-commit
+                // (este flujo no usa transacción).
+                sendPushToUsers(
+                    leaders.map((m) => m.user),
+                    {
+                        category: 'consumos',
+                        title: 'Consumo en disputa',
+                        body: 'consumo en disputa por rechazos repetidos, avisá al bar',
+                        relatedOuting: outing._id.toString(),
+                    },
+                );
 
                 res.status(200).json({
                     consumptionId: consumption._id,

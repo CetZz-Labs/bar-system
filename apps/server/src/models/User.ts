@@ -14,6 +14,17 @@ export interface IMembership {
     joinedAt: Date;
 }
 
+// LB-80: preferencias de notificación push por categoría. Opt-in por defecto
+// (todo en `true`). `canjes` es NO-desactivable: es la confirmación de una
+// transacción (entrega de un canje), criterio LB-57 — la ruta
+// `PATCH /api/push/preferences` ignora / fuerza `canjes: true` aunque el
+// cliente mande `false`.
+export interface INotificationPreferences {
+    salidas: boolean;
+    consumos: boolean;
+    canjes: boolean;
+}
+
 export interface IUser extends Document {
     name: string;
     lastName: string;
@@ -25,6 +36,7 @@ export interface IUser extends Document {
     isActive: boolean;
     profileComplete: boolean;
     memberships: IMembership[];
+    notificationPreferences: INotificationPreferences;
 }
 
 const userSchema = new Schema<IUser>({
@@ -84,6 +96,24 @@ const userSchema = new Schema<IUser>({
             }
         }],
         default: []
+    },
+    // LB-80: preferencias de notificación push por categoría (opt-in por
+    // defecto). `canjes` está acá por completitud, pero es no-desactivable
+    // (confirmación de transacción, criterio LB-57): el endpoint de
+    // preferencias nunca lo baja a `false`.
+    notificationPreferences: {
+        salidas: {
+            type: Boolean,
+            default: true,
+        },
+        consumos: {
+            type: Boolean,
+            default: true,
+        },
+        canjes: {
+            type: Boolean,
+            default: true,
+        },
     }
 }, {
     timestamps: true
