@@ -1,8 +1,7 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useParams, useNavigate } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "motion/react";
-import { toast } from "sonner";
 import {
   ArrowLeft,
   MapPin,
@@ -11,11 +10,15 @@ import {
   Gift,
   Coins,
   CheckCircle2,
-  Loader2,
-  AlertCircle,
   PlusCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { IconButton } from "@/components/ui/IconButton";
+import { Card } from "@/components/ui/Card";
+import { Badge } from "@/components/ui/Badge";
+import { Spinner } from "@/components/ui/Spinner";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { ErrorState } from "@/components/ui/ErrorState";
 import { getBarDetail } from "@/API/BarAPI";
 import { getAvailableRewardsForBar } from "@/API/RewardAPI";
 import { ATTENDANCE_POINTS_DAYS } from "@/types/bar";
@@ -25,17 +28,18 @@ import GroupPickerModal from "./components/GroupPickerModal";
 /**
  * LB-76: ficha de un bar para el cliente (usuario logueado, sin necesidad
  * de ser BarUser de ese bar). Distinta de BarProfileView (edición, dueño) y
- * de BarRewardsView (ABM de recompensas, dueño/cajero). Sin badge
- * "Destacado" ni foto/logo — excluidos explícitamente del MVP del ticket.
+ * de BarRewardsView (ABM de recompensas, dueño/cajero).
+ *
+ * LB-90 (polish): adopción del design system (Card / Badge / Spinner /
+ * EmptyState / ErrorState / IconButton). El error de `barDetail` deja de
+ * duplicarse (antes toast + bloque inline); ahora es solo un ErrorState
+ * inline con "Reintentar". El error de la lista de recompensas deja de ser
+ * un hueco silencioso y muestra un ErrorState acotado.
  */
 
 function RewardCard({ reward }: { reward: Reward }) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="flex flex-col gap-2 p-4 rounded-lg bg-surface-2 border border-border"
-    >
+    <Card padding="md" className="flex flex-col gap-2">
       <h3 className="text-base font-display font-bold tracking-tight leading-tight">
         {reward.name}
       </h3>
@@ -48,7 +52,7 @@ function RewardCard({ reward }: { reward: Reward }) {
         <Coins size={14} />
         {reward.pointsRequired} pts
       </div>
-    </motion.div>
+    </Card>
   );
 }
 
@@ -61,6 +65,7 @@ export default function BarDetailView() {
     data: bar,
     isLoading: isLoadingBar,
     isError: isBarError,
+    refetch: refetchBar,
   } = useQuery({
     queryKey: ["barDetail", id],
     queryFn: () => getBarDetail(id!),
@@ -73,6 +78,7 @@ export default function BarDetailView() {
     data: rewards,
     isLoading: isLoadingRewards,
     isError: isRewardsError,
+    refetch: refetchRewards,
   } = useQuery({
     queryKey: ["barAvailableRewards", id],
     queryFn: () => getAvailableRewardsForBar(id!),
@@ -81,69 +87,50 @@ export default function BarDetailView() {
     refetchOnWindowFocus: false,
   });
 
-  useEffect(() => {
-    if (isBarError) {
-      toast.error("No pudimos cargar la información de este bar");
-    }
-  }, [isBarError]);
-
-  useEffect(() => {
-    if (isRewardsError) {
-      toast.error("No pudimos cargar las recompensas de este bar");
-    }
-  }, [isRewardsError]);
-
   const isLoading = isLoadingBar;
 
   return (
     <motion.div
       initial={{ y: 16, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
-      transition={{ duration: 0.35, ease: [0.4, 0, 0.2, 1] }}
+      transition={{ duration: 0.12, ease: [0.4, 0, 0.2, 1] }}
       className="flex flex-col flex-1 pb-nav pt-5 px-4 min-h-[100dvh]"
     >
       {/* Header */}
       <header className="flex items-center gap-4 mb-6">
-        <button
-          onClick={() => navigate(-1)}
-          className="flex justify-center items-center w-10 h-10 rounded-full bg-surface-2 border border-border transition-colors hover:bg-surface-3"
-          aria-label="Volver"
-        >
+        <IconButton aria-label="Volver" onClick={() => navigate(-1)}>
           <ArrowLeft size={20} className="text-text-secondary" />
-        </button>
+        </IconButton>
         <h1 className="text-2xl font-display font-bold tracking-tight m-0 truncate">
           {bar?.name ?? "Detalle del bar"}
         </h1>
       </header>
 
-      {isLoading && (
-        <div className="flex flex-col items-center justify-center flex-1 gap-4 text-text-secondary">
-          <Loader2 size={32} className="text-lime animate-spin" />
-          <p className="text-sm">Cargando bar...</p>
-        </div>
-      )}
+      {isLoading && <Spinner center size="lg" label="Cargando bar" />}
 
       {!isLoading && (isBarError || !bar) && (
-        <div className="flex flex-col items-center justify-center flex-1 gap-4 px-4 text-center">
-          <AlertCircle size={48} className="text-text-muted" />
-          <p className="text-error text-base">Error al cargar la información del bar</p>
-          <Button variant="outline" onClick={() => navigate(-1)}>
-            Volver
-          </Button>
-        </div>
+        <ErrorState
+          title="No pudimos cargar la información del bar."
+          description="Revisá tu conexión e intentá de nuevo."
+          onRetry={() => refetchBar()}
+          onBack={() => navigate(-1)}
+        />
       )}
 
       {!isLoading && !isBarError && bar && (
         <div className="flex flex-col gap-6 flex-1">
           {bar.hasActiveCheckIn && (
-            <span className="inline-flex items-center self-start gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium border bg-lime/10 text-lime border-lime/20">
-              <CheckCircle2 size={16} />
+            <Badge
+              variant="success"
+              icon={<CheckCircle2 size={16} />}
+              className="self-start px-3 py-1.5 text-sm"
+            >
               Estás acá ahora
-            </span>
+            </Badge>
           )}
 
           {/* Info del bar */}
-          <div className="flex flex-col gap-3 p-4 rounded-lg bg-surface-2 border border-border">
+          <Card padding="md" className="flex flex-col gap-3">
             <h2 className="text-lg font-display font-bold tracking-tight leading-tight">
               {bar.name}
             </h2>
@@ -160,7 +147,7 @@ export default function BarDetailView() {
                 <span>Cierra a las {bar.closingTime}</span>
               </div>
             </div>
-          </div>
+          </Card>
 
           {/* Puntos por asistencia (solo lectura) */}
           <div className="flex flex-col gap-3">
@@ -170,15 +157,14 @@ export default function BarDetailView() {
             </h2>
             <div className="grid grid-cols-2 gap-3">
               {ATTENDANCE_POINTS_DAYS.map(({ key, label }) => (
-                <div
-                  key={key}
-                  className="flex flex-col gap-1 p-3 rounded-lg bg-surface-2 border border-border"
-                >
-                  <span className="text-xs text-text-muted uppercase tracking-wide">{label}</span>
+                <Card key={key} padding="none" className="flex flex-col gap-1 p-3">
+                  <span className="text-xs text-text-secondary uppercase tracking-wide">
+                    {label}
+                  </span>
                   <span className="text-lg font-display font-bold text-lime">
                     {bar.attendancePointsByDay[key]} pts
                   </span>
-                </div>
+                </Card>
               ))}
             </div>
           </div>
@@ -190,19 +176,21 @@ export default function BarDetailView() {
               Recompensas
             </h2>
 
-            {isLoadingRewards && (
-              <div className="flex items-center justify-center py-6">
-                <Loader2 size={24} className="text-lime animate-spin" />
-              </div>
+            {isLoadingRewards && <Spinner center label="Cargando recompensas" />}
+
+            {!isLoadingRewards && isRewardsError && (
+              <ErrorState
+                title="No pudimos cargar las recompensas."
+                onRetry={() => refetchRewards()}
+                className="py-6"
+              />
             )}
 
             {!isLoadingRewards && !isRewardsError && rewards && rewards.length === 0 && (
-              <p className="text-text-secondary text-sm">
-                Este bar todavía no tiene recompensas disponibles.
-              </p>
+              <EmptyState icon={Gift} title="Todavía no hay recompensas en este bar." />
             )}
 
-            {!isLoadingRewards && rewards && rewards.length > 0 && (
+            {!isLoadingRewards && !isRewardsError && rewards && rewards.length > 0 && (
               <div className="flex flex-col gap-3">
                 {rewards.map((reward) => (
                   <RewardCard key={reward.id} reward={reward} />

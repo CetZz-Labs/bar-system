@@ -31,7 +31,8 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       <motion.button
         ref={ref}
         className={cn(
-          "font-ui flex items-center justify-center gap-2 cursor-pointer outline-none transition-colors duration-normal ease-default",
+          "font-ui flex items-center justify-center gap-2 cursor-pointer transition-colors duration-normal ease-default",
+          "focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lime-border",
           VARIANT_CLASSES[variant],
           SIZE_CLASSES[size],
           fullWidth ? "w-full" : "w-auto",

@@ -166,6 +166,25 @@ campo — no en un toast, no en un banner genérico arriba del formulario (ver
   `aria-label="Botón"`).
 - Todo elemento `<input>` debe tener su `<label>` asociado explícitamente
   vía `htmlFor` / `id` — nunca un placeholder como único sustituto de label.
+- **Foco de teclado visible.** Ningún control interactivo suprime el foco sin
+  reemplazo. La regla global de `index.css` (`:focus-visible` → `outline`
+  `2px` `var(--color-lime-border)`, `outline-offset: 2px`) es el estándar; los
+  primitivos que necesiten `focus:outline-none` (para no mostrar el outline
+  del navegador en click de mouse) **deben** añadir su propio anillo
+  `focus-visible:outline-2 focus-visible:outline-offset-2
+  focus-visible:outline-lime-border` (así lo hacen `Button` e `IconButton`
+  desde LB-90).
+- **Botón dentro de un botón / estado de carga.** Un botón que reemplaza su
+  texto por un spinner mientras trabaja debe conservar un nombre accesible
+  (texto `sr-only` o `aria-label`) y marcar el spinner con `aria-hidden`
+  (`aria-busy` en el botón es opcional pero recomendado).
+- **Acciones repetidas en listas.** Cuando la misma etiqueta ("Cancelar",
+  "Eliminar") se repite por fila, cada botón lleva un `aria-label`
+  contextual (`Cancelar canje de {rewardName}`).
+- **Modales.** El primitivo `Modal` cierra con `Escape` mientras está abierto
+  y, con `showCloseButton`, expone una "X" con `aria-label="Cerrar"`.
+  Focus-trap completo y restaurar el foco al disparador quedan como
+  follow-up conocido (no implementado aún).
 
 ---
 
@@ -311,6 +330,11 @@ Layout: `--width-app` `430px` · `--height-nav` `64px` · `--spacing-page-x` `16
 | `fullWidth` | `boolean` | `false` |
 | …resto | `ButtonHTMLAttributes` | — |
 
+Foco (LB-90): `focus:outline-none` + anillo propio
+`focus-visible:outline-2 focus-visible:outline-offset-2
+focus-visible:outline-lime-border` (coherente con la regla global de
+`index.css`). No dejar botones sin indicador de foco de teclado.
+
 ```tsx
 <Button variant="primary" size="lg" fullWidth onClick={submit}>Guardar</Button>
 ```
@@ -325,6 +349,8 @@ Botón circular solo-icono. Unifica las 3 variantes del botón "volver".
 | `size` | `sm` (36px) `\| md` (40px) | `md` |
 | `aria-label` | `string` | **obligatorio** (tipos) |
 | …resto | `ButtonHTMLAttributes` | `type="button"` |
+
+Foco (LB-90): mismo anillo `focus-visible:outline-*` que `Button`.
 
 ```tsx
 <IconButton aria-label="Volver" onClick={() => navigate(-1)}>
@@ -490,11 +516,15 @@ Confirm-dialog **y** contenedor de contenido/formulario. Backdrop
 | `children` | `ReactNode` (cuerpo: form, lista…) | — |
 | `size` | `sm \| md \| lg` | `sm` |
 | `isPending` | `boolean` | `false` |
+| `showCloseButton` | `boolean` (LB-90) → "X" arriba a la derecha con `aria-label="Cerrar"` | `false` |
 | `onConfirm` | `() => void` | — (si se pasa → footer Cancelar / Confirmar) |
 | `confirmText` / `cancelText` | `string` | `"Confirmar"` / `"Cancelar"` |
 | `confirmVariant` | `ButtonProps["variant"]` | `danger` |
 | `footer` | `ReactNode` (footer custom; anula el default) | — |
 | `hideFooter` | `boolean` (el children provee sus acciones) | `false` |
+
+Cierra con **`Escape`** mientras está abierto (LB-90). Focus-trap /
+restaurar foco: follow-up conocido, aún no implementado.
 
 ```tsx
 {/* confirm-dialog (retrocompatible) */}
@@ -555,6 +585,7 @@ paleta). No se instancia otro `<Toaster>` en ninguna vista.
   - `"No pudimos cargar la auditoría."`
   - `"No pudimos cargar las recompensas."`
   - `"No pudimos cargar la información del bar."`
+  - `"No pudimos cargar el grupo."` · `"No pudimos cargar tus grupos."` · `"No pudimos cargar tus canjes."` (LB-90)
 - Subtítulo (opcional): `"Revisá tu conexión e intentá de nuevo."`
 - Acción primaria: botón **"Reintentar"** (`onRetry`). Acción secundaria
   opcional: **"Volver"** (`onBack`).
@@ -567,3 +598,34 @@ Reemplaza los 3 textos divergentes de `CashierRedemptionsView` /
 
 > **"No pudimos acceder a la cámara. Ingresá el código manualmente como
 > alternativa."**
+
+### 8.4 Estado de precondición (LB-90)
+
+Cuando el vacío **no** es "todavía no hay datos" sino una **condición previa
+sin cumplir**, la fórmula "Todavía no…" no aplica. En su lugar: el **título**
+nombra la condición que falta y la **descripción** indica cómo resolverla.
+Va con `<EmptyState>` (icono lucide contextual), no `<ErrorState>` (no es un
+error).
+
+- `GroupRewardsView` sin check-in activo:
+  - Título: **"Necesitás un check-in activo"**
+  - Descripción: **"Hacé check-in en un bar con tu grupo para ver y canjear sus recompensas."**
+  - CTA: "Volver al grupo".
+
+### 8.5 Canjes en estado terminal (LB-90)
+
+En la lista de canjes del grupo (`GroupRewardsView`), además de los `HELD`
+activos se muestran los `REJECTED` / `EXPIRED` recientes (los `HELD` cuyo
+`expiresAt` ya pasó se tratan como vencidos en el cliente):
+
+- Rechazado (`REJECTED`): **"Este canje fue rechazado."** + `<Badge variant="error">Rechazado</Badge>`.
+- Vencido (`EXPIRED` o `HELD` expirado): **"Este QR venció. Generá uno nuevo."** + `<Badge variant="neutral">Vencido</Badge>`.
+
+### 8.6 Estados vacíos nuevos del catálogo
+
+- `"Todavía no hay recompensas en este bar."` — `GroupRewardsView` /
+  `BarDetailView` cuando el bar no tiene recompensas activas (reemplaza
+  "Este bar todavía no tiene recompensas disponibles.").
+- `"Todavía no pertenecés a ningún grupo."` + descripción
+  `"Creá uno para poder armar una salida."` — `GroupPickerModal` (título y
+  subtítulo separados según §8.1).

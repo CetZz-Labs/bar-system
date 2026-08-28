@@ -5,7 +5,6 @@ import { renderWithProviders } from '@/test/renderWithProviders';
 import BarDetailView from './BarDetailView';
 import * as BarAPI from '@/API/BarAPI';
 import * as RewardAPI from '@/API/RewardAPI';
-import { toast } from 'sonner';
 import type { BarPublicDetail } from '@/types/bar';
 import type { Reward } from '@/types/reward';
 
@@ -126,7 +125,7 @@ describe('BarDetailView (LB-76)', () => {
     expect(screen.queryByText('Estás acá ahora')).not.toBeInTheDocument();
   });
 
-  it('shows an error toast and the error state when the bar query fails', async () => {
+  it('shows a single inline ErrorState with a retry button when the bar query fails', async () => {
     vi.mocked(BarAPI.getBarDetail).mockRejectedValue({
       type: 'server',
       message: 'Error del servidor',
@@ -140,15 +139,19 @@ describe('BarDetailView (LB-76)', () => {
     // que GroupsListView.test.tsx para su caso de error.
     await waitFor(
       () => {
-        expect(toast.error).toHaveBeenCalledWith('No pudimos cargar la información de este bar');
+        expect(
+          screen.getByText('No pudimos cargar la información del bar.')
+        ).toBeInTheDocument();
       },
       { timeout: 3000 }
     );
 
-    expect(screen.getByText('Error al cargar la información del bar')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument();
+    // El copy viejo ("Error al cargar…") ya no está.
+    expect(screen.queryByText('Error al cargar la información del bar')).not.toBeInTheDocument();
   });
 
-  it('shows an error toast when the rewards query fails, without breaking the rest of the view', async () => {
+  it('shows an inline ErrorState under "Recompensas" when the rewards query fails, without breaking the rest of the view', async () => {
     vi.mocked(BarAPI.getBarDetail).mockResolvedValue(mockBarDetail);
     vi.mocked(RewardAPI.getAvailableRewardsForBar).mockRejectedValue({
       type: 'server',
@@ -161,11 +164,27 @@ describe('BarDetailView (LB-76)', () => {
     // usa `retry: 1` a nivel de componente.
     await waitFor(
       () => {
-        expect(toast.error).toHaveBeenCalledWith('No pudimos cargar las recompensas de este bar');
+        expect(
+          screen.getByText('No pudimos cargar las recompensas.')
+        ).toBeInTheDocument();
       },
       { timeout: 3000 }
     );
 
     expect(screen.getAllByText('El Bar de Juan').length).toBeGreaterThan(0);
+    expect(screen.getByText('Puntos por asistencia')).toBeInTheDocument();
+  });
+
+  it('renders an EmptyState when the bar has no rewards', async () => {
+    vi.mocked(BarAPI.getBarDetail).mockResolvedValue(mockBarDetail);
+    vi.mocked(RewardAPI.getAvailableRewardsForBar).mockResolvedValue([]);
+
+    renderBarDetail();
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Todavía no hay recompensas en este bar.')
+      ).toBeInTheDocument();
+    });
   });
 });

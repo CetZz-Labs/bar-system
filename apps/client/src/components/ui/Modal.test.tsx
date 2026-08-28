@@ -83,4 +83,22 @@ describe('Modal', () => {
     expect(dialog).toHaveAttribute('aria-modal', 'true');
     expect(dialog).toHaveAttribute('aria-labelledby', 'modal-title');
   });
+
+  it('does not render a close button by default', () => {
+    render(<Modal {...defaultProps} />);
+    expect(screen.queryByRole('button', { name: 'Cerrar' })).not.toBeInTheDocument();
+  });
+
+  it('renders a "Cerrar" close button that calls onClose when showCloseButton is set', () => {
+    render(<Modal {...defaultProps} showCloseButton />);
+    const closeButton = screen.getByRole('button', { name: 'Cerrar' });
+    fireEvent.click(closeButton);
+    expect(defaultProps.onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes on Escape key while open', () => {
+    render(<Modal {...defaultProps} />);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(defaultProps.onClose).toHaveBeenCalledTimes(1);
+  });
 });

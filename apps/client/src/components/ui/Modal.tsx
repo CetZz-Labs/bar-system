@@ -1,6 +1,8 @@
 import React from "react";
 import { motion, AnimatePresence } from "motion/react";
+import { X } from "lucide-react";
 import { Button, type ButtonProps } from "./Button";
+import { IconButton } from "./IconButton";
 import { cn } from "@/utils/cn";
 
 export interface ModalProps {
@@ -13,6 +15,8 @@ export interface ModalProps {
   isPending?: boolean;
   /** Ancho maximo del panel. Default `sm`. */
   size?: "sm" | "md" | "lg";
+  /** Muestra una "X" de cierre arriba a la derecha (`aria-label="Cerrar"`). Default `false`. */
+  showCloseButton?: boolean;
 
   /* ── Modo confirm-dialog (retrocompatible) ── */
   /** Si se pasa, se renderiza el footer por defecto Cancelar / Confirmar. */
@@ -46,6 +50,7 @@ export function Modal({
   confirmVariant = "danger",
   isPending = false,
   size = "sm",
+  showCloseButton = false,
   footer,
   hideFooter = false,
   children,
@@ -55,6 +60,18 @@ export function Modal({
       onClose();
     }
   };
+
+  // Cierre con tecla Escape mientras el modal esta abierto. Focus-trap
+  // completo / restaurar foco al disparador quedan como follow-up (a11y mas
+  // grande): ver docs/design.md §5.
+  React.useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [isOpen, onClose]);
 
   const showDefaultFooter = !hideFooter && !footer && typeof onConfirm === "function";
 
@@ -88,10 +105,25 @@ export function Modal({
           >
             <h2
               id="modal-title"
-              className="text-xl font-display font-bold tracking-tight text-text-primary mb-2"
+              className={cn(
+                "text-xl font-display font-bold tracking-tight text-text-primary mb-2",
+                showCloseButton && "pr-10",
+              )}
             >
               {title}
             </h2>
+
+            {showCloseButton && (
+              <IconButton
+                size="sm"
+                aria-label="Cerrar"
+                onClick={onClose}
+                className="absolute top-4 right-4"
+              >
+                <X size={16} className="text-text-secondary" />
+              </IconButton>
+            )}
+
             {description && (
               <p className="text-text-secondary text-base mb-6">{description}</p>
             )}

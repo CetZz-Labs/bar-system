@@ -1,11 +1,18 @@
-import { useCallback, useState } from "react";
-import { useParams, useNavigate, Link } from "react-router";
+import { useCallback, useEffect, useState } from "react";
+import { useParams, useNavigate } from "react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "motion/react";
-import { ArrowLeft, Gift, Coins, MapPinOff, Loader2, AlertCircle, XCircle } from "lucide-react";
+import { ArrowLeft, Gift, Coins, MapPinOff, Loader2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
+import { IconButton } from "@/components/ui/IconButton";
+import { Card } from "@/components/ui/Card";
+import { Badge } from "@/components/ui/Badge";
+import { Spinner } from "@/components/ui/Spinner";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { ErrorState } from "@/components/ui/ErrorState";
 import { Modal } from "@/components/ui/Modal";
+import { cn } from "@/utils/cn";
 import { getGroupBySlug } from "@/API/GroupAPI";
 import { getActiveOuting } from "@/API/OutingAPI";
 import { getGroupRewards } from "@/API/RewardAPI";
@@ -13,27 +20,22 @@ import { createRedemption, cancelRedemption, getGroupRedemptions } from "@/API/R
 import { useGroupPointsSocket } from "@/hooks/useGroupPointsSocket";
 import { toastApiError } from "@/utils/apiError";
 import type { Reward } from "@/types/reward";
-import type { RedemptionQrResult } from "@/types/redemption";
+import type { Redemption, RedemptionQrResult } from "@/types/redemption";
 
 /**
  * LB-72: recompensas disponibles del grupo en el bar del check-in activo.
  * "Check-in activo" se resuelve acá con `getActiveOuting` (misma llamada
  * que ya usa OutingSection.tsx) en vez de inferirlo de la respuesta de
- * `getGroupRewards` — decisión propia, ver impl_LB-72.md: la respuesta del
- * backend `{ rewards: [], balance: 0 }` es ambigua (también puede
- * significar "hay check-in pero el bar no tiene recompensas activas o el
- * saldo es 0"), así que la señal de "hay o no check-in" se resuelve por una
- * fuente independiente.
+ * `getGroupRewards`.
  *
- * LB-68 (segunda pasada): conecta el botón "Canjear" (antes deshabilitado,
- * "Próximamente") a `POST /api/groups/:groupId/redemptions`. Modal de
- * confirmación (mismo componente `Modal` que ya usa OutingSection.tsx para
- * "Cancelar salida"), QR + código manual al confirmar (mismo estilo visual
- * que `CashierOutingView.tsx`, sin componente compartido — no existe uno en
- * el repo, ver exp_LB-68.md §8), y listado de canjes HELD propios con botón
- * "Cancelar". El saldo por bar se actualiza en vivo vía WebSocket
- * (`available_points_updated`, ya emitido por el backend de LB-68 desde
- * create/cancel) — no hace falta refrescar manualmente.
+ * LB-68: conecta el botón "Canjear" a `POST /api/groups/:groupId/redemptions`,
+ * QR + código manual al confirmar, y listado de canjes HELD propios con
+ * botón "Cancelar". Saldo por bar en vivo vía WebSocket.
+ *
+ * LB-90 (polish): adopción del design system (EmptyState / ErrorState /
+ * Spinner / IconButton / Card / Badge), estados de error visibles para las
+ * queries `group` y `redemptions`, canjes REJECTED / EXPIRED visibles con
+ * copy del catálogo, timer local sobre `expiresAt`, y ajustes de a11y.
  */
 
 function formatTime(iso: string) {
@@ -44,12 +46,17 @@ function formatTime(iso: string) {
   }
 }
 
+function isExpired(iso: string, nowMs: number): boolean {
+  const t = new Date(iso).getTime();
+  return Number.isFinite(t) && t <= nowMs;
+}
+
 function ProgressToNextReward({ balance, nextReward }: { balance: number; nextReward: Reward }) {
   const pct = Math.max(0, Math.min(100, Math.round((balance / nextReward.pointsRequired) * 100)));
   const missing = Math.max(0, nextReward.pointsRequired - balance);
 
   return (
-    <div className="w-full bg-surface-2 border border-border rounded-xl p-4">
+    <Card padding="md" className="w-full">
       <div className="flex items-center justify-between mb-2">
         <p className="text-text-primary text-sm font-medium m-0">
           Próxima recompensa: {nextReward.name}
@@ -61,6 +68,7 @@ function ProgressToNextReward({ balance, nextReward }: { balance: number; nextRe
           className="h-full bg-lime rounded-full transition-[width] duration-normal ease-default"
           style={{ width: `${pct}%` }}
           role="progressbar"
+          aria-label={`Progreso hacia ${nextReward.name}`}
           aria-valuenow={pct}
           aria-valuemin={0}
           aria-valuemax={100}
@@ -69,7 +77,7 @@ function ProgressToNextReward({ balance, nextReward }: { balance: number; nextRe
       <p className="text-text-secondary text-xs mt-2 m-0">
         Te faltan {missing} pts para poder canjearla
       </p>
-    </div>
+    </Card>
   );
 }
 
@@ -91,24 +99,14 @@ function RewardCard({
   const buttonDisabled = !canRequestRedemption || !canRedeem || isRedeeming;
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="flex flex-col gap-2 p-4 rounded-lg bg-surface-2 border border-border"
-    >
+    <Card padding="md" className="flex flex-col gap-2">
       <div className="flex items-start justify-between gap-3">
         <h3 className="text-base font-display font-bold tracking-tight leading-tight">
           {reward.name}
         </h3>
-        <span
-          className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium border whitespace-nowrap ${
-            canRedeem
-              ? "bg-lime/10 text-lime border-lime/20"
-              : "bg-surface-3 text-text-secondary border-border"
-          }`}
-        >
+        <Badge variant={canRedeem ? "success" : "neutral"} className="whitespace-nowrap">
           {canRedeem ? "Podés canjear" : `Te faltan ${missing} pts`}
-        </span>
+        </Badge>
       </div>
 
       {reward.description && (
@@ -124,14 +122,22 @@ function RewardCard({
         <Button
           variant="primary"
           size="sm"
-          className={`mt-2 ${buttonDisabled ? "opacity-60 cursor-not-allowed" : ""}`}
+          className={cn("mt-2", buttonDisabled && "opacity-60 cursor-not-allowed")}
           disabled={buttonDisabled}
+          aria-busy={isRedeeming || undefined}
           onClick={() => onRedeem(reward)}
         >
-          {isRedeeming ? <Loader2 size={14} className="animate-spin" /> : "Canjear"}
+          {isRedeeming ? (
+            <>
+              <Loader2 size={14} className="animate-spin" aria-hidden="true" />
+              <span className="sr-only">Canjeando</span>
+            </>
+          ) : (
+            "Canjear"
+          )}
         </Button>
       )}
-    </motion.div>
+    </Card>
   );
 }
 
@@ -143,7 +149,10 @@ function RedemptionQrResultCard({
   onDismiss: () => void;
 }) {
   return (
-    <div className="rounded-md border border-lime-border bg-surface-2 p-5 flex flex-col items-center gap-4 text-center">
+    <Card
+      padding="lg"
+      className="border-lime-border flex flex-col items-center gap-4 text-center"
+    >
       <p className="overline m-0">Mostrale esto al cajero</p>
       <img src={result.qrData} alt="QR de canje" className="w-48 h-48 rounded-md bg-white p-2" />
       <div>
@@ -156,7 +165,32 @@ function RedemptionQrResultCard({
       <Button type="button" variant="outline" size="sm" onClick={onDismiss}>
         Listo
       </Button>
-    </div>
+    </Card>
+  );
+}
+
+function ClosedRedemptionCard({
+  redemption,
+  displayStatus,
+}: {
+  redemption: Redemption;
+  displayStatus: "REJECTED" | "EXPIRED";
+}) {
+  const isRejected = displayStatus === "REJECTED";
+  return (
+    <Card padding="none" className="px-4 py-3 flex items-center justify-between gap-3">
+      <div className="min-w-0">
+        <p className="text-text-secondary font-medium m-0 truncate">{redemption.rewardName}</p>
+        <p className="text-text-secondary text-xs m-0">
+          {isRejected
+            ? "Este canje fue rechazado."
+            : "Este QR venció. Generá uno nuevo."}
+        </p>
+      </div>
+      <Badge variant={isRejected ? "error" : "neutral"}>
+        {isRejected ? "Rechazado" : "Vencido"}
+      </Badge>
+    </Card>
   );
 }
 
@@ -167,8 +201,16 @@ export default function GroupRewardsView() {
   const [liveBalance, setLiveBalance] = useState<number | null>(null);
   const [selectedReward, setSelectedReward] = useState<Reward | null>(null);
   const [redemptionResult, setRedemptionResult] = useState<RedemptionQrResult | null>(null);
+  const [nowTick, setNowTick] = useState(() => Date.now());
 
-  const { data: group } = useQuery({
+  const backToGroup = () => navigate(slug ? `/groups/${slug}` : "/groups");
+
+  const {
+    data: group,
+    isLoading: isLoadingGroup,
+    isError: isGroupError,
+    refetch: refetchGroup,
+  } = useQuery({
     queryKey: ["group", slug],
     queryFn: () => getGroupBySlug(slug!),
     enabled: !!slug,
@@ -193,6 +235,7 @@ export default function GroupRewardsView() {
     data: rewardsData,
     isLoading: isLoadingRewards,
     isError: isRewardsError,
+    refetch: refetchRewards,
   } = useQuery({
     queryKey: ["groupRewards", groupId],
     queryFn: () => getGroupRewards(groupId!),
@@ -205,6 +248,9 @@ export default function GroupRewardsView() {
     queryFn: () => getGroupRedemptions(groupId!),
     enabled: !!groupId && canManageRedemptions,
     refetchOnWindowFocus: false,
+    // LB-90: refresco acotado para que un HELD que vence server-side pase a
+    // EXPIRED sin que el usuario tenga que recargar.
+    refetchInterval: canManageRedemptions ? 60_000 : false,
   });
 
   const onAvailablePoints = useCallback(
@@ -218,6 +264,14 @@ export default function GroupRewardsView() {
 
   // Saldo global (points_balance_updated) no aplica al header por-bar; se ignora.
   useGroupPointsSocket(groupId, () => {}, onAvailablePoints);
+
+  // LB-90: timer local para que un canje HELD cuyo `expiresAt` ya pasó
+  // transicione visiblemente a "vencido" sin esperar un refetch.
+  useEffect(() => {
+    if (!canManageRedemptions) return;
+    const id = setInterval(() => setNowTick(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, [canManageRedemptions]);
 
   const createRedemptionMutation = useMutation({
     mutationFn: (rewardId: string) => createRedemption(groupId!, rewardId),
@@ -244,72 +298,78 @@ export default function GroupRewardsView() {
     onError: (error: unknown) => toastApiError(error),
   });
 
-  const isLoading = isLoadingOuting || (hasCheckIn && isLoadingRewards);
-  // `liveBalance` solo se setea a partir de un evento de socket
-  // (available_points_updated); mientras no llegue ninguno, se muestra el
-  // saldo del fetch inicial de getGroupRewards directamente (sin
-  // sincronizarlo a un state local vía efecto, para no disparar renders en
-  // cascada — ver react-hooks/set-state-in-effect).
+  const isLoading =
+    isLoadingGroup || isLoadingOuting || (hasCheckIn && isLoadingRewards);
   const balance = liveBalance ?? rewardsData?.balance ?? 0;
   const rewards = rewardsData?.rewards ?? [];
   const nextReward = rewards.find((r) => r.pointsRequired > balance);
-  const pendingRedemptions = (redemptionsQuery.data ?? []).filter((r) => r.status === "HELD");
+
+  const allRedemptions = redemptionsQuery.data ?? [];
+  const pendingRedemptions = allRedemptions.filter(
+    (r) => r.status === "HELD" && !isExpired(r.expiresAt, nowTick)
+  );
+  const closedRedemptions = allRedemptions
+    .filter(
+      (r) =>
+        r.status === "REJECTED" ||
+        r.status === "EXPIRED" ||
+        (r.status === "HELD" && isExpired(r.expiresAt, nowTick))
+    )
+    .slice(0, 5);
 
   return (
     <motion.div
       initial={{ y: 16, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
-      transition={{ duration: 0.35, ease: [0.4, 0, 0.2, 1] }}
+      transition={{ duration: 0.12, ease: [0.4, 0, 0.2, 1] }}
       className="flex flex-col flex-1 pb-nav pt-5 px-4 min-h-[100dvh] max-w-sm mx-auto w-full"
     >
       <header className="flex items-center gap-4 mb-6">
-        <button
-          onClick={() => navigate(slug ? `/groups/${slug}` : "/groups")}
-          className="flex justify-center items-center w-10 h-10 rounded-full bg-surface-2 border border-border transition-colors hover:bg-surface-3"
+        <IconButton
           aria-label="Volver"
+          onClick={() => navigate(slug ? `/groups/${slug}` : "/groups")}
         >
           <ArrowLeft size={20} className="text-text-secondary" />
-        </button>
-        <h1 className="text-2xl font-display font-bold tracking-tight m-0">
-          Recompensas
-        </h1>
+        </IconButton>
+        <h1 className="text-2xl font-display font-bold tracking-tight m-0">Recompensas</h1>
       </header>
 
-      {isLoading && (
-        <div className="flex flex-col items-center justify-center flex-1 gap-4">
-          <Loader2 size={32} className="text-lime animate-spin" />
-          <p className="text-text-secondary text-base">Cargando recompensas...</p>
-        </div>
+      {isGroupError && (
+        <ErrorState
+          title="No pudimos cargar el grupo."
+          description="Revisá tu conexión e intentá de nuevo."
+          onRetry={() => refetchGroup()}
+          onBack={backToGroup}
+        />
       )}
 
-      {!isLoading && !hasCheckIn && (
-        <div className="flex flex-col items-center justify-center flex-1 gap-4 px-4 text-center">
-          <MapPinOff size={48} className="text-text-muted" />
-          <div>
-            <p className="text-text-primary text-lg font-semibold">Sin check-in activo</p>
-            <p className="text-text-secondary text-sm mt-1">
-              Hacé check-in en un bar para ver sus recompensas
-            </p>
-          </div>
-          {slug && (
-            <Link to={`/groups/${slug}`} className="text-lime text-sm">
+      {!isGroupError && isLoading && (
+        <Spinner center size="lg" label="Cargando recompensas" />
+      )}
+
+      {!isGroupError && !isLoading && !hasCheckIn && (
+        <EmptyState
+          icon={MapPinOff}
+          title="Necesitás un check-in activo"
+          description="Hacé check-in en un bar con tu grupo para ver y canjear sus recompensas."
+          action={
+            <Button variant="outline" onClick={backToGroup}>
               Volver al grupo
-            </Link>
-          )}
-        </div>
+            </Button>
+          }
+        />
       )}
 
-      {!isLoading && hasCheckIn && isRewardsError && (
-        <div className="flex flex-col items-center justify-center flex-1 gap-4 px-4 text-center">
-          <AlertCircle size={48} className="text-text-muted" />
-          <p className="text-error text-base">Error al cargar las recompensas del bar</p>
-          <Button variant="outline" onClick={() => navigate(-1)}>
-            Volver
-          </Button>
-        </div>
+      {!isGroupError && !isLoading && hasCheckIn && isRewardsError && (
+        <ErrorState
+          title="No pudimos cargar las recompensas."
+          description="Revisá tu conexión e intentá de nuevo."
+          onRetry={() => refetchRewards()}
+          onBack={() => navigate(-1)}
+        />
       )}
 
-      {!isLoading && hasCheckIn && !isRewardsError && (
+      {!isGroupError && !isLoading && hasCheckIn && !isRewardsError && (
         <div className="flex flex-col gap-4">
           {redemptionResult && (
             <RedemptionQrResultCard
@@ -318,24 +378,20 @@ export default function GroupRewardsView() {
             />
           )}
 
-          <div className="w-full bg-surface-2 border border-border rounded-xl p-4">
+          <Card padding="md" className="w-full">
             <p className="text-text-primary text-base font-medium m-0">
               Tenés <span className="text-lime font-bold">{balance} pts</span> en{" "}
               {activeOuting?.bar.name}
             </p>
-          </div>
+          </Card>
 
           {nextReward && <ProgressToNextReward balance={balance} nextReward={nextReward} />}
 
           {rewards.length === 0 && (
-            <div className="flex flex-col items-center justify-center flex-1 gap-4 text-center py-8">
-              <div className="flex items-center justify-center w-16 h-16 rounded-full bg-surface-2 border border-border">
-                <Gift size={28} className="text-text-secondary" />
-              </div>
-              <p className="text-text-secondary text-base">
-                Este bar todavía no tiene recompensas disponibles.
-              </p>
-            </div>
+            <EmptyState
+              icon={Gift}
+              title="Todavía no hay recompensas en este bar."
+            />
           )}
 
           {rewards.length > 0 && (
@@ -347,8 +403,7 @@ export default function GroupRewardsView() {
                   balance={balance}
                   canRequestRedemption={canManageRedemptions}
                   isRedeeming={
-                    createRedemptionMutation.isPending &&
-                    selectedReward?.id === reward.id
+                    createRedemptionMutation.isPending && selectedReward?.id === reward.id
                   }
                   onRedeem={setSelectedReward}
                 />
@@ -356,33 +411,60 @@ export default function GroupRewardsView() {
             </div>
           )}
 
+          {canManageRedemptions && redemptionsQuery.isError && (
+            <ErrorState
+              title="No pudimos cargar tus canjes."
+              onRetry={() => redemptionsQuery.refetch()}
+              className="py-6"
+            />
+          )}
+
           {canManageRedemptions && pendingRedemptions.length > 0 && (
             <div className="flex flex-col gap-2">
               <p className="overline m-0">Canjes pendientes</p>
               <ul className="list-none p-0 m-0 flex flex-col gap-2">
                 {pendingRedemptions.map((redemption) => (
-                  <li
-                    key={redemption.id}
-                    className="rounded-md border border-border bg-surface-2 px-4 py-3 flex items-center justify-between gap-3"
-                  >
-                    <div className="min-w-0">
-                      <p className="text-text-primary font-medium m-0 truncate">
-                        {redemption.rewardName}
-                      </p>
-                      <p className="text-text-secondary text-xs m-0">
-                        Código {redemption.manualCode} · vence {formatTime(redemption.expiresAt)}
-                      </p>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => cancelRedemptionMutation.mutate(redemption.id)}
-                      disabled={cancelRedemptionMutation.isPending}
+                  <li key={redemption.id}>
+                    <Card
+                      padding="none"
+                      className="px-4 py-3 flex items-center justify-between gap-3"
                     >
-                      <XCircle size={14} />
-                      Cancelar
-                    </Button>
+                      <div className="min-w-0">
+                        <p className="text-text-primary font-medium m-0 truncate">
+                          {redemption.rewardName}
+                        </p>
+                        <p className="text-text-secondary text-xs m-0">
+                          Código {redemption.manualCode} · vence {formatTime(redemption.expiresAt)}
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        aria-label={`Cancelar canje de ${redemption.rewardName}`}
+                        onClick={() => cancelRedemptionMutation.mutate(redemption.id)}
+                        disabled={cancelRedemptionMutation.isPending}
+                      >
+                        <XCircle size={14} aria-hidden="true" />
+                        Cancelar
+                      </Button>
+                    </Card>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {canManageRedemptions && closedRedemptions.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <p className="overline m-0">Canjes recientes</p>
+              <ul className="list-none p-0 m-0 flex flex-col gap-2">
+                {closedRedemptions.map((redemption) => (
+                  <li key={redemption.id}>
+                    <ClosedRedemptionCard
+                      redemption={redemption}
+                      displayStatus={redemption.status === "REJECTED" ? "REJECTED" : "EXPIRED"}
+                    />
                   </li>
                 ))}
               </ul>

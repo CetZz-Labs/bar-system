@@ -1297,3 +1297,95 @@ navegador mucho antes de que el token firmado expire realmente.
   sistema — la nota de `richColors` sí se mantiene por ser regla de paleta). Cambio cosmético
   dentro del alcance ya aprobado; sin transición de Jira ni ciclo de review formal. `lint`/
   `build`/`test` de `@bar/client` en verde (test 308/308).
+- **Commit (2026-08-27):** `5ed6efa` `feat(client): LB-89 design system unificado — tokens,
+  primitivos, cn() y docs` en `feat/design-system` (46 archivos, +1693/−225). Sin push.
+
+### [2026-08-27] - LB-90: [S5][UX-2] Polish sus vistas (estados vacíos + errores + accesibilidad)
+- **Dominio afectado:** Frontend (`apps/client`). Sin backend → C2 de `CHECKPOINTS.md` N/A.
+- **Subagentes involucrados:** Explorer (`progress/explorers/exp_LB-90.md`), Implementer
+  (`progress/implementers/impl_LB-90.md` — se retomó el mismo agente de LB-89, con la API de los
+  primitivos fresca), Reviewer (`progress/reviewers/review_LB-90.md`).
+- **Contexto:** UX-2 del Sprint 5 — aplicar el design system de LB-89 + el guideline de estados
+  a **las vistas propias de Lautaro**, que salieron de LB-68 (iniciar canje: QR + reserva), LB-72
+  (ver recompensas disponibles líder/grupo) y LB-76 (detalle de un bar). El Explorer identificó
+  los 3 archivos concretos: `views/groups/GroupRewardsView.tsx` (contiene inline `ProgressToNextReward`,
+  `RewardCard`, `RedemptionQrResultCard`, modal de confirmación, sección "Canjes pendientes"),
+  `views/bar/BarDetailView.tsx` (su `RewardCard` es copia propia, NO reusa la de LB-72 pese a lo
+  que decía el ticket), `views/bar/components/GroupPickerModal.tsx` (modal hand-rolled). **Ninguno
+  fue tocado por el barrido parcial de LB-89** — no usaban ningún primitivo nuevo. El kickoff de
+  Sprint 5 (vault) confirma que LB-90 y **LB-99** ("[S5][UX-1b] Barrido de vistas") no se solapan:
+  "cada dev arregla sus propias pantallas". Frontend puro (confirmado: toda la info de QR expirado
+  / canje rechazado ya está client-side vía `GET /groups/:id/redemptions`).
+- **Decisiones de producto (vía `AskUserQuestion`):** (1) **adopción COMPLETA** del design system
+  en las 3 vistas (no solo el polish de estados) → esos 3 archivos **salen del alcance de LB-99**;
+  NO se extrae un `RewardCard` compartido (cada vista mantiene su copia local, migrada in-place).
+  (2) Dejar de filtrar solo `HELD` en la lista de canjes: mostrar `REJECTED` y `EXPIRED` con copy
+  del catálogo. LB-69 (rechazo del cajero) no está implementado → hoy nada genera `REJECTED` real;
+  UI lista y testeada con mocks. (3) Micro-animaciones: **solo** acotar a `--duration-fast`, sacar
+  stagger de listas, alertas de error sin animación de entrada (`design.md §3`); **no** portar el
+  "+N pts flotante" de LB-70 (sería feature nueva en sprint de hardening).
+- **Resumen de Cambios:**
+  - **`GroupRewardsView.tsx`:** empty → `<EmptyState>`, error → `<ErrorState>` con `onRetry`+`onBack`
+    (incl. las queries `group` y `redemptions`, que antes fallaban en silencio), `Loader2` →
+    `<Spinner>`, botón "Volver" → `<IconButton>`, cards (`ProgressToNextReward`, header de saldo,
+    `RewardCard`, `RedemptionQrResultCard`, filas de canjes pendientes) → `<Card>` (`rounded-xl`),
+    badges "Podés canjear"/"Te faltan X pts" → `<Badge>` conservando texto, `cn()`. Nueva sección
+    **"Canjes recientes"** (`closedRedemptions`, máx 5) con `ClosedRedemptionCard`: `REJECTED` →
+    "Este canje fue rechazado." + `Badge error`; `EXPIRED` o `HELD` vencido → "Este QR venció.
+    Generá uno nuevo." + `Badge neutral`. `pendingRedemptions` = `HELD && !isExpired(expiresAt)`.
+    **Timer local** `setInterval(30_000)` (con `clearInterval` en cleanup, solo si `canManageRedemptions`)
+    + `refetchInterval: 60_000` acotado en la query de redemptions. A11y: botón "Canjear" en envío
+    → `<Loader2 aria-hidden>` + `<span class="sr-only">Canjeando</span>` + `aria-busy`; "Cancelar"
+    por fila → `aria-label` contextual `Cancelar canje de {rewardName}`; progressbar → `aria-label`.
+    Motion: entrada de página `0.35` → `0.12`; `RewardCard` deja de ser `motion.div`.
+  - **`BarDetailView.tsx`:** **eliminado el doble mensaje de error** — antes `useEffect`→`toast.error`
+    + bloque inline "Error al cargar…"; ahora un solo `<ErrorState>` inline (`onRetry`+`onBack`),
+    se quitaron ambos `toast.error` (bloqueante y no-bloqueante) y el import de `sonner`. Hueco
+    silencioso de la lista de recompensas cubierto con `<ErrorState>` acotado bajo el header. Empty
+    → `<EmptyState>`, `Loader2` → `<Spinner>`, "Volver" → `<IconButton>`, `RewardCard`/celdas de la
+    grilla lun-dom/card de info → `<Card>`. **Contraste:** label de día de la grilla `text-text-muted`
+    (#444, no pasa WCAG AA sobre surface) → `text-text-secondary` (#888, ≈5.0:1 — pasa AA texto
+    normal). Badge "Estás acá ahora" → `<Badge variant="success">` con icono + texto.
+  - **`GroupPickerModal.tsx`:** migrado al primitivo `<Modal>` (`hideFooter` + `size="md"` +
+    `showCloseButton`). Se pierde la presentación bottom-sheet en mobile a cambio del modal centrado
+    del sistema (tradeoff de consistencia, aceptado por el reviewer como observación de UX no
+    bloqueante). Loader → `<Spinner>`, estado de error nuevo → `<ErrorState>`, empty → `<EmptyState>`.
+  - **Primitivos compartidos (cambio acotado, señalado al reviewer):** `Button.tsx` e `IconButton.tsx`
+    — se quitó `outline-none` de la cadena base y se agregó un anillo `focus-visible:outline-2
+    focus-visible:outline-offset-2 focus-visible:outline-lime-border` (los botones del sistema no
+    tenían indicador de foco de teclado). `Modal.tsx` — nueva prop `showCloseButton?: boolean`
+    (default `false` → render idéntico al anterior) que renderiza `<IconButton aria-label="Cerrar">`,
+    + cierre con `Escape` (listener en `document` con cleanup, sin leak). Retrocompatibles:
+    `Button.test.tsx`/`IconButton.test.tsx` pasan sin modificarse; `Modal.test.tsx` +3 casos.
+  - **`docs/design.md`** (diff +62/−0, puramente aditivo, §1–§4 y la tabla de tokens §6 sin cambios):
+    §5 gana 4 bloques (foco de teclado visible, botón dentro de botón, acciones repetidas en listas,
+    modales con `Escape`+`showCloseButton`) con el **focus-trap completo del `Modal` diferido**
+    explícitamente como follow-up; §7 documenta el foco en `Button`/`IconButton` y la prop de `Modal`;
+    §8 gana §8.4 (estados de precondición, ej. "Necesitás un check-in activo" / "Hacé check-in en un
+    bar con tu grupo para ver y canjear sus recompensas"), §8.5 (canjes en estado terminal + variantes
+    de `Badge`), §8.6, y una línea a §8.2.
+- **Tests:** `GroupRewardsView.test.tsx` 8 → 12 (2 actualizados por el copy nuevo de "sin check-in",
+  +4: EmptyState sin recompensas, ErrorState+Reintentar al fallar `getGroupRewards`, `REJECTED`/`EXPIRED`
+  visibles con copy del catálogo vía mock, nombre accesible en "Canjear" mientras `isPending`).
+  `BarDetailView.test.tsx` 5 → 6 (2 de error reescritos: `ErrorState` inline en vez de `toast.error`;
+  +1: EmptyState con rewards `[]`). `Modal.test.tsx` 10 → 13 (+3: sin "X" por defecto, `showCloseButton`
+  → `onClose`, `Escape` cierra). `GroupPickerModal.test.tsx` 3 → 3 sin cambios. Suite: 49 files /
+  **316 tests** (baseline 308, +8).
+- **Veredicto del Reviewer:** `[APPROVED]` (primera pasada, sin cambios requeridos). C1 verificado
+  (`git status` → solo `apps/client/**` + `docs/design.md`; sin imports de `apps/server`), C3
+  verificado (mutations conservan `toastApiError` → mover errores de **carga** de query a
+  `ErrorState` inline no viola C3 y es coherente con `design.md §3/§4/§8.2`; `<Toaster>` sigue
+  único en `router.tsx`, sin import colgante en `BarDetailView`; sin CVA, sin `bg-[#...]`; fix de
+  contraste verificado ≈5.0:1). C2 N/A. **C4 corrido en vivo por el reviewer:** lint exit 0 (10
+  warnings `react-hooks/incompatible-library` preexistentes, 0 en archivos de LB-90 — los 9 archivos
+  con warning son de formularios ajenos), build exit 0 (`tsc -b`), test 49 files / 316 tests verdes.
+  3 hallazgos no bloqueantes: `vi.mock` de `sonner` muerto en `BarDetailView.test.tsx`; el `Escape`
+  del `Modal` ahora aplica a sus 11 consumidores (recomendada prueba manual de que no interrumpe
+  flujos a medias); `GroupPickerModal` pierde el bottom-sheet en mobile (prueba manual en viewport
+  angosto).
+- **Estado en Jira:** LB-90 → "Finalizada". Comentario en **LB-99** descontando las 3 vistas de su
+  alcance (y aclarando que el fix de la tilde en `ErrorState.tsx` sigue pendiente ahí — LB-90 no
+  tocó ese archivo). Working tree de `feat/design-system` **sin commitear** (9 archivos modificados:
+  6 de código + `docs/design.md` + 2 de test que ya estaban; en realidad 3 vistas + 3 primitivos +
+  4 tests + doc) — commit/push a decisión del desarrollador. El commit de LB-89 (`5ed6efa`) sigue
+  siendo el HEAD.

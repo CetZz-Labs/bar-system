@@ -113,10 +113,12 @@ describe("GroupRewardsView", () => {
     renderView();
 
     await waitFor(() =>
-      expect(screen.getByText("Sin check-in activo")).toBeInTheDocument()
+      expect(screen.getByText("Necesitás un check-in activo")).toBeInTheDocument()
     );
     expect(
-      screen.getByText("Hacé check-in en un bar para ver sus recompensas")
+      screen.getByText(
+        "Hacé check-in en un bar con tu grupo para ver y canjear sus recompensas."
+      )
     ).toBeInTheDocument();
     expect(getGroupRewards).not.toHaveBeenCalled();
   });
@@ -132,7 +134,7 @@ describe("GroupRewardsView", () => {
     renderView();
 
     await waitFor(() =>
-      expect(screen.getByText("Sin check-in activo")).toBeInTheDocument()
+      expect(screen.getByText("Necesitás un check-in activo")).toBeInTheDocument()
     );
     expect(getGroupRewards).not.toHaveBeenCalled();
   });
@@ -260,5 +262,92 @@ describe("GroupRewardsView", () => {
     await waitFor(() => expect(screen.getByText("Chopp gratis")).toBeInTheDocument());
     expect(screen.queryByRole("button", { name: "Canjear" })).not.toBeInTheDocument();
     expect(getGroupRedemptions).not.toHaveBeenCalled();
+  });
+
+  it("renders an EmptyState when the bar has no rewards", async () => {
+    vi.mocked(getActiveOuting).mockResolvedValue(activeOuting);
+    vi.mocked(getGroupRewards).mockResolvedValue({ balance: 10, rewards: [] });
+
+    renderView();
+
+    await waitFor(() =>
+      expect(
+        screen.getByText("Todavía no hay recompensas en este bar.")
+      ).toBeInTheDocument()
+    );
+  });
+
+  it("renders an ErrorState with a Reintentar button when the rewards query fails", async () => {
+    vi.mocked(getActiveOuting).mockResolvedValue(activeOuting);
+    vi.mocked(getGroupRewards).mockRejectedValue({ type: "server", message: "boom" });
+
+    renderView();
+
+    await waitFor(() =>
+      expect(
+        screen.getByText("No pudimos cargar las recompensas.")
+      ).toBeInTheDocument()
+    );
+    expect(screen.getByRole("button", { name: "Reintentar" })).toBeInTheDocument();
+  });
+
+  it("shows REJECTED and EXPIRED redemptions with catalog copy", async () => {
+    vi.mocked(getActiveOuting).mockResolvedValue(activeOuting);
+    vi.mocked(getGroupRewards).mockResolvedValue(rewardsResponse);
+    const base = {
+      group: "group-1",
+      outing: "outing-1",
+      bar: "bar-1",
+      reward: "reward-1",
+      rewardName: "Chopp gratis",
+      pointsRequired: 50,
+      createdAt: new Date().toISOString(),
+    };
+    const rejected: Redemption = {
+      ...base,
+      id: "r-rej",
+      status: "REJECTED",
+      manualCode: "111111",
+      expiresAt: new Date(Date.now() - 60 * 1000).toISOString(),
+    };
+    const expired: Redemption = {
+      ...base,
+      id: "r-exp",
+      status: "EXPIRED",
+      manualCode: "222222",
+      expiresAt: new Date(Date.now() - 60 * 1000).toISOString(),
+    };
+    vi.mocked(getGroupRedemptions).mockResolvedValue([rejected, expired]);
+
+    renderView();
+
+    await waitFor(() =>
+      expect(screen.getByText("Canjes recientes")).toBeInTheDocument()
+    );
+    expect(screen.getByText("Este canje fue rechazado.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Este QR venció. Generá uno nuevo.")
+    ).toBeInTheDocument();
+  });
+
+  it("keeps an accessible name on the Canjear button while the redemption is pending", async () => {
+    const user = userEvent.setup();
+    vi.mocked(getActiveOuting).mockResolvedValue(activeOuting);
+    vi.mocked(getGroupRewards).mockResolvedValue(rewardsResponse);
+    // Promesa que nunca resuelve: deja la mutación en isPending.
+    vi.mocked(createRedemption).mockReturnValue(new Promise(() => {}));
+
+    renderView();
+
+    await waitFor(() => expect(screen.getByText("Chopp gratis")).toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: "Canjear" }));
+    await waitFor(() => expect(screen.getByRole("dialog")).toBeInTheDocument());
+    await user.click(screen.getByRole("dialog").querySelector("button:last-of-type")!);
+
+    // El botón de la card conserva un nombre accesible ("Canjeando") en vez
+    // de quedar solo con el spinner.
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Canjeando" })).toBeInTheDocument()
+    );
   });
 });

@@ -33,7 +33,8 @@ export const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>(
         ref={ref}
         type={type}
         className={cn(
-          "flex items-center justify-center rounded-full text-text-primary cursor-pointer outline-none transition-colors duration-normal ease-default shrink-0",
+          "flex items-center justify-center rounded-full text-text-primary cursor-pointer transition-colors duration-normal ease-default shrink-0",
+          "focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lime-border",
           VARIANT_CLASSES[variant],
           SIZE_CLASSES[size],
           className,
