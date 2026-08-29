@@ -1462,3 +1462,52 @@ navegador mucho antes de que el token firmado expire realmente.
 - **Estado en Jira:** LB-97 → "Finalizada". Commiteado en `feat/LB-96-group-membership-check`
   (`5e8bfbd`), sin push (misma decisión del usuario que en LB-96: seguir encadenando tickets en
   esta rama).
+
+### [2026-08-29] - LB-94: [S5][PERF-1] Optimización de queries pesadas (dashboard OWNER + historial)
+- **Dominio afectado:** Backend (`apps/server`).
+- **Subagentes involucrados:** Explorer (`progress/explorers/exp_LB-94.md`), Implementer
+  (`progress/implementers/impl_LB-94.md`), Reviewer (`progress/reviewers/review_LB-94.md`).
+- **Contexto:** profiling estático (sin entorno de DB disponible para el Explorer) del dashboard
+  OWNER (LB-74) y el historial de movimientos (LB-71). Hallazgo principal: **no era un problema
+  de índices faltantes** sino de **shape de query no-sargable** — 3 funciones de
+  `apps/server/src/utils/barDashboard.ts` (`getDashboardStatCards`, `getActivityTable`,
+  `getCashierTable`) filtraban por fecha sobre un campo calculado (`anchorDate`, vía
+  `$addFields`+`$ifNull($checkedInAt,$scheduledFor)`) que Mongo no puede indexar ni empujar hacia
+  el `$match` de `bar`, forzando un escaneo de todo el histórico no-`CANCELLED` del bar antes de
+  filtrar por rango — el candidato más probable a violar el objetivo de <500ms a medida que un
+  bar acumula meses de actividad. LB-71 (historial) se confirmó ya bien implementado (paginación
+  por cursor + índice compuesto correcto), sin cambios necesarios. Barrido general de N+1 encontró
+  un caso real y no bloqueante en `ShiftSummaryController.history` (índice faltante) y un loop
+  secuencial de diseño en `closeOutingsForBar` (cierre perezoso del bar).
+- **Decisiones de producto (vía `AskUserQuestion`):** (1) sumar el índice de `Shift` aunque sea
+  un endpoint distinto al literal del ticket, por ser N+1 real de bajo riesgo; (2) dejar armado
+  (sin ejecutar) el script de load test + seed de volumen en vez de correrlo hoy o de omitirlo
+  del todo, documentado para correr en el futuro; (3) dejar `closeOutingsForBar` explícitamente
+  fuera de este ticket — es una decisión de diseño (paralelizar transacciones Mongo trae riesgo
+  de contención), se abre seguimiento aparte.
+- **Resumen de Cambios:** `barDashboard.ts` — nuevo helper `outingAnchorDateMatch(from, to)` con
+  un `$or` sargable (`checkedInAt` en rango, o `checkedInAt` null/ausente + `scheduledFor` en
+  rango — verificado matemáticamente equivalente al `$ifNull` anterior en los casos límite,
+  incluyendo cuando `checkedInAt` existe pero cae fuera de rango) usado por spread en las 3
+  funciones; se eliminaron los stages `$addFields`/`$match` de `anchorDate` (confirmado sin
+  referencias posteriores en ningún pipeline). `Shift.ts` — nuevo índice
+  `{bar:1, startedAt:-1}` para `ShiftSummaryController.history`. Nueva devDependency
+  `autocannon`/`@types/autocannon` + dos scripts nuevos sin ejecutar:
+  `apps/server/scripts/load-test-dashboard.ts` (100 conexiones concurrentes contra el dashboard)
+  y `apps/server/scripts/seed-lb94-volume.ts` (8 semanas × 20 salidas/día de datos de volumen).
+  `closeOuting.ts`, `GroupBalanceController.ts` (LB-71) y `shiftSummary.ts`/
+  `ShiftSummaryController.ts` quedaron explícitamente sin tocar.
+- **Veredicto del Reviewer:** `[APPROVED]` (primera pasada). Verificó la equivalencia matemática
+  del `$or` en los casos límite (no solo el caso feliz) contra el modelo `Outing` real, confirmó
+  con `grep` que `anchorDate` no quedó referenciado en ningún stage posterior, re-verificó de
+  forma independiente que los 2 scripts nuevos compilan (con un `tsconfig` de scratch, ya que
+  `apps/server/tsconfig.json` no incluye `scripts/`), confirmó que no hay artefactos de ejecución
+  de esos scripts en el repo, y corrió la suite completa en vivo (**634/634 tests**) + `tsc
+  --noEmit` sin errores. C1/C3 N/A, C2/C4 en verde. Observación no bloqueante: los tests de
+  `barDashboard.test.ts` verifican shape de pipeline sobre mocks, no comportamiento real contra
+  Mongo — mismo patrón preexistente desde la creación del archivo en LB-74, no una convención
+  nueva de este ticket.
+- **Estado:** rama `feat/LB-96-group-membership-check`, commit `8069ace`, sin push. Pendiente tras
+  este cierre: comentario en LB-94 documentando los scripts de load test listos para correr en el
+  futuro, y apertura de un ticket de seguimiento para `closeOutingsForBar` (paralelización, fuera
+  de alcance de este ticket).
