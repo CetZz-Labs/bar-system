@@ -1425,3 +1425,40 @@ navegador mucho antes de que el token firmado expire realmente.
   `git status --short`). C1/C2/C4 verificados en verde, C3 N/A (ticket 100% backend).
 - **Estado:** rama `feat/LB-96-group-membership-check` (creada desde `development` recién
   actualizado). Commit/push/transición de Jira a decisión del desarrollador tras este veredicto.
+
+### [2026-08-29] - LB-97: Test preexistente fallando en LeaderConsumptionController.accept
+- **Dominio afectado:** Backend (`apps/server`) — cambio 100% en un archivo de test.
+- **Subagentes involucrados:** Explorer (`progress/explorers/exp_LB-97.md`), Implementer
+  (`progress/implementers/impl_LB-97.md`), Reviewer (`progress/reviewers/review_LB-97.md`).
+- **Contexto:** ticket de seguimiento de LB-84, confirmado preexistente e independiente del
+  dominio de auth/roles. El Explorer (sin acceso a `Bash` en este entorno, diagnóstico por
+  lectura estática exhaustiva) identificó que `leaderConsumption.test.ts` → `accept > awards
+  floor(amount/1000) points and emits websocket` fallaba (500 en vez de 200) porque el test
+  nunca mockeaba `PointsTransaction.aggregate` explícitamente — el automock de Vitest devolvía
+  `undefined`, algo que `Model.aggregate()` real de Mongoose nunca hace (siempre resuelve a un
+  array, vacío en el peor caso). Diagnóstico: bug del mock/fixture del test, no de lógica de
+  negocio real — `LeaderConsumptionController.ts:264` (`barPoints[0]?.points ?? points`) ya
+  maneja correctamente el caso legítimo de array vacío.
+- **Resumen de Cambios:** único archivo tocado,
+  `apps/server/src/controllers/__tests__/leaderConsumption.test.ts`. (1) mock explícito
+  `vi.mocked(PointsTransaction.aggregate).mockResolvedValue([{ points: 12 }])`, coherente con
+  el fixture (`amount: 12500` → `Math.floor(12500/1000) = 12`). (2) **Segundo issue** encontrado
+  en runtime por el Implementer (no cubierto por el diagnóstico original del Explorer, que no
+  pudo correr los tests): la aserción de `emitGroupPointsBalance` no contemplaba el tercer
+  argumento `meta` que el controller ya emite en producción (parte de la feature de saldo vivo,
+  LB-70/71/75, mergeada después de que se documentó este bug). El Implementer documentó el
+  bloqueo sin auto-aprobarse (regla del harness respetada); el Leader amplió explícitamente el
+  alcance del ticket por tratarse de la misma clase de problema (aserción de test desactualizada
+  vs. contrato real del código) en el mismo test — se ajustó la aserción a 3 argumentos con
+  `expect.objectContaining(...)` para el `meta`, siguiendo un patrón ya consolidado en el repo
+  (verificado en 9 archivos de test existentes). **No se tocó `LeaderConsumptionController.ts`
+  ni ningún otro archivo de producción.**
+- **Veredicto del Reviewer:** `[APPROVED]` (tras la ampliación de alcance autorizada). Confirmó
+  con `git diff` que el único archivo modificado es el test; verificó los valores del mock y de
+  la aserción contra el código real del controller y de `pointsHub.ts`; confirmó que el patrón
+  `expect.objectContaining` en el tercer argumento ya es convención del repo; corrió la suite
+  completa en vivo (**633/633 tests passed**) y `tsc --noEmit` sin errores. C1/C3 N/A (no toca
+  frontend ni cruza capas), C2 N/A (no se tocó código de producción ni rutas), C4 en verde.
+- **Estado en Jira:** LB-97 → "Finalizada". Commiteado en `feat/LB-96-group-membership-check`
+  (`5e8bfbd`), sin push (misma decisión del usuario que en LB-96: seguir encadenando tickets en
+  esta rama).
