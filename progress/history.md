@@ -1389,3 +1389,125 @@ navegador mucho antes de que el token firmado expire realmente.
   6 de código + `docs/design.md` + 2 de test que ya estaban; en realidad 3 vistas + 3 primitivos +
   4 tests + doc) — commit/push a decisión del desarrollador. El commit de LB-89 (`5ed6efa`) sigue
   siendo el HEAD.
+
+### [2026-08-29] - LB-96: GroupController.getGroupById/getGroupMembers sin chequeo de membresía
+- **Dominio afectado:** Backend (`apps/server`).
+- **Subagentes involucrados:** Explorer (`progress/explorers/exp_LB-96.md`), Implementer
+  (`progress/implementers/impl_LB-96.md`), Reviewer (`progress/reviewers/review_LB-96.md`).
+- **Contexto:** ticket de seguimiento de LB-84 (hallazgo documentado en `docs/AUTHZ_MATRIX.md`,
+  sección "Hallazgo abierto"): `GroupController.getGroupById` (`GET /api/groups/:id`) y
+  `GroupController.getGroupMembers` (`GET /api/groups/:id/members`) no verificaban que el usuario
+  autenticado fuera miembro del grupo solicitado — cualquier usuario logueado podía ver
+  nombre/slug/`memberCount`/`inviteCode` y la lista completa de miembros de cualquier grupo por ID.
+  El Explorer confirmó que el hallazgo seguía vigente sobre `development` actualizado y documentó
+  el patrón de referencia ya usado por `getGroupBySlug` (404 antes de 403, mensaje estándar
+  `'No tenés acceso a este grupo'`, sin ningún helper de membresía reutilizable en el modelo
+  `Group` — la comparación manual sobre `group.memberships` es el patrón consistente en todo el
+  archivo).
+- **Resumen de Cambios:** se replicó el patrón de `getGroupBySlug` en ambos métodos: chequeo de
+  membresía tras el 404, 403 con el mismo mensaje si el usuario no está en `group.memberships`.
+  Cuidado específico de no mezclar los dos patrones de comparación de `ObjectId` según si el query
+  usa `.populate()` o no: `getGroupById` (sin populate) compara `m.user.toString() === userId`;
+  `getGroupMembers` (con populate) compara `m.user._id.toString() === userId`. De yapa, se corrigió
+  que `getGroupById` exponía `inviteCode` sin ninguna condición de rol — ahora solo se devuelve si
+  el usuario es `LEADER`/`CO_LEADER`, mismo criterio que `getGroupBySlug`. No se tocaron rutas
+  (`authenticate()` ya estaba encadenado y garantiza `req.user`) ni se creó ningún helper nuevo en
+  el modelo `Group`.
+- **Tests:** nuevos `getGroupById.test.ts` y `getGroupMembers.test.ts` (no existían tests previos
+  para estos métodos), siguiendo la plantilla de `getGroupBySlug.test.ts`: 404, 403 (caso central
+  del ticket), 200 (miembro, incluyendo `inviteCode` presente/ausente según rol para `getGroupById`)
+  y 500. 17 tests nuevos en verde.
+- **Veredicto del Reviewer:** `[APPROVED]` (primera pasada, sin cambios requeridos). Verificó el
+  código real línea por línea contra `getGroupBySlug`, confirmó que no se mezclaron los patrones de
+  comparación de `ObjectId` (el riesgo específico de este fix), corrió los tests nuevos y la suite
+  completa del backend en vivo (632 passed, 1 failed — único fallo preexistente en
+  `leaderConsumption.test.ts`, alcance de **LB-97**, confirmado ajeno al diff de este ticket vía
+  `git status --short`). C1/C2/C4 verificados en verde, C3 N/A (ticket 100% backend).
+- **Estado:** rama `feat/LB-96-group-membership-check` (creada desde `development` recién
+  actualizado). Commit/push/transición de Jira a decisión del desarrollador tras este veredicto.
+
+### [2026-08-29] - LB-97: Test preexistente fallando en LeaderConsumptionController.accept
+- **Dominio afectado:** Backend (`apps/server`) — cambio 100% en un archivo de test.
+- **Subagentes involucrados:** Explorer (`progress/explorers/exp_LB-97.md`), Implementer
+  (`progress/implementers/impl_LB-97.md`), Reviewer (`progress/reviewers/review_LB-97.md`).
+- **Contexto:** ticket de seguimiento de LB-84, confirmado preexistente e independiente del
+  dominio de auth/roles. El Explorer (sin acceso a `Bash` en este entorno, diagnóstico por
+  lectura estática exhaustiva) identificó que `leaderConsumption.test.ts` → `accept > awards
+  floor(amount/1000) points and emits websocket` fallaba (500 en vez de 200) porque el test
+  nunca mockeaba `PointsTransaction.aggregate` explícitamente — el automock de Vitest devolvía
+  `undefined`, algo que `Model.aggregate()` real de Mongoose nunca hace (siempre resuelve a un
+  array, vacío en el peor caso). Diagnóstico: bug del mock/fixture del test, no de lógica de
+  negocio real — `LeaderConsumptionController.ts:264` (`barPoints[0]?.points ?? points`) ya
+  maneja correctamente el caso legítimo de array vacío.
+- **Resumen de Cambios:** único archivo tocado,
+  `apps/server/src/controllers/__tests__/leaderConsumption.test.ts`. (1) mock explícito
+  `vi.mocked(PointsTransaction.aggregate).mockResolvedValue([{ points: 12 }])`, coherente con
+  el fixture (`amount: 12500` → `Math.floor(12500/1000) = 12`). (2) **Segundo issue** encontrado
+  en runtime por el Implementer (no cubierto por el diagnóstico original del Explorer, que no
+  pudo correr los tests): la aserción de `emitGroupPointsBalance` no contemplaba el tercer
+  argumento `meta` que el controller ya emite en producción (parte de la feature de saldo vivo,
+  LB-70/71/75, mergeada después de que se documentó este bug). El Implementer documentó el
+  bloqueo sin auto-aprobarse (regla del harness respetada); el Leader amplió explícitamente el
+  alcance del ticket por tratarse de la misma clase de problema (aserción de test desactualizada
+  vs. contrato real del código) en el mismo test — se ajustó la aserción a 3 argumentos con
+  `expect.objectContaining(...)` para el `meta`, siguiendo un patrón ya consolidado en el repo
+  (verificado en 9 archivos de test existentes). **No se tocó `LeaderConsumptionController.ts`
+  ni ningún otro archivo de producción.**
+- **Veredicto del Reviewer:** `[APPROVED]` (tras la ampliación de alcance autorizada). Confirmó
+  con `git diff` que el único archivo modificado es el test; verificó los valores del mock y de
+  la aserción contra el código real del controller y de `pointsHub.ts`; confirmó que el patrón
+  `expect.objectContaining` en el tercer argumento ya es convención del repo; corrió la suite
+  completa en vivo (**633/633 tests passed**) y `tsc --noEmit` sin errores. C1/C3 N/A (no toca
+  frontend ni cruza capas), C2 N/A (no se tocó código de producción ni rutas), C4 en verde.
+- **Estado en Jira:** LB-97 → "Finalizada". Commiteado en `feat/LB-96-group-membership-check`
+  (`5e8bfbd`), sin push (misma decisión del usuario que en LB-96: seguir encadenando tickets en
+  esta rama).
+
+### [2026-08-29] - LB-94: [S5][PERF-1] Optimización de queries pesadas (dashboard OWNER + historial)
+- **Dominio afectado:** Backend (`apps/server`).
+- **Subagentes involucrados:** Explorer (`progress/explorers/exp_LB-94.md`), Implementer
+  (`progress/implementers/impl_LB-94.md`), Reviewer (`progress/reviewers/review_LB-94.md`).
+- **Contexto:** profiling estático (sin entorno de DB disponible para el Explorer) del dashboard
+  OWNER (LB-74) y el historial de movimientos (LB-71). Hallazgo principal: **no era un problema
+  de índices faltantes** sino de **shape de query no-sargable** — 3 funciones de
+  `apps/server/src/utils/barDashboard.ts` (`getDashboardStatCards`, `getActivityTable`,
+  `getCashierTable`) filtraban por fecha sobre un campo calculado (`anchorDate`, vía
+  `$addFields`+`$ifNull($checkedInAt,$scheduledFor)`) que Mongo no puede indexar ni empujar hacia
+  el `$match` de `bar`, forzando un escaneo de todo el histórico no-`CANCELLED` del bar antes de
+  filtrar por rango — el candidato más probable a violar el objetivo de <500ms a medida que un
+  bar acumula meses de actividad. LB-71 (historial) se confirmó ya bien implementado (paginación
+  por cursor + índice compuesto correcto), sin cambios necesarios. Barrido general de N+1 encontró
+  un caso real y no bloqueante en `ShiftSummaryController.history` (índice faltante) y un loop
+  secuencial de diseño en `closeOutingsForBar` (cierre perezoso del bar).
+- **Decisiones de producto (vía `AskUserQuestion`):** (1) sumar el índice de `Shift` aunque sea
+  un endpoint distinto al literal del ticket, por ser N+1 real de bajo riesgo; (2) dejar armado
+  (sin ejecutar) el script de load test + seed de volumen en vez de correrlo hoy o de omitirlo
+  del todo, documentado para correr en el futuro; (3) dejar `closeOutingsForBar` explícitamente
+  fuera de este ticket — es una decisión de diseño (paralelizar transacciones Mongo trae riesgo
+  de contención), se abre seguimiento aparte.
+- **Resumen de Cambios:** `barDashboard.ts` — nuevo helper `outingAnchorDateMatch(from, to)` con
+  un `$or` sargable (`checkedInAt` en rango, o `checkedInAt` null/ausente + `scheduledFor` en
+  rango — verificado matemáticamente equivalente al `$ifNull` anterior en los casos límite,
+  incluyendo cuando `checkedInAt` existe pero cae fuera de rango) usado por spread en las 3
+  funciones; se eliminaron los stages `$addFields`/`$match` de `anchorDate` (confirmado sin
+  referencias posteriores en ningún pipeline). `Shift.ts` — nuevo índice
+  `{bar:1, startedAt:-1}` para `ShiftSummaryController.history`. Nueva devDependency
+  `autocannon`/`@types/autocannon` + dos scripts nuevos sin ejecutar:
+  `apps/server/scripts/load-test-dashboard.ts` (100 conexiones concurrentes contra el dashboard)
+  y `apps/server/scripts/seed-lb94-volume.ts` (8 semanas × 20 salidas/día de datos de volumen).
+  `closeOuting.ts`, `GroupBalanceController.ts` (LB-71) y `shiftSummary.ts`/
+  `ShiftSummaryController.ts` quedaron explícitamente sin tocar.
+- **Veredicto del Reviewer:** `[APPROVED]` (primera pasada). Verificó la equivalencia matemática
+  del `$or` en los casos límite (no solo el caso feliz) contra el modelo `Outing` real, confirmó
+  con `grep` que `anchorDate` no quedó referenciado en ningún stage posterior, re-verificó de
+  forma independiente que los 2 scripts nuevos compilan (con un `tsconfig` de scratch, ya que
+  `apps/server/tsconfig.json` no incluye `scripts/`), confirmó que no hay artefactos de ejecución
+  de esos scripts en el repo, y corrió la suite completa en vivo (**634/634 tests**) + `tsc
+  --noEmit` sin errores. C1/C3 N/A, C2/C4 en verde. Observación no bloqueante: los tests de
+  `barDashboard.test.ts` verifican shape de pipeline sobre mocks, no comportamiento real contra
+  Mongo — mismo patrón preexistente desde la creación del archivo en LB-74, no una convención
+  nueva de este ticket.
+- **Estado:** rama `feat/LB-96-group-membership-check`, commit `8069ace`, sin push. Pendiente tras
+  este cierre: comentario en LB-94 documentando los scripts de load test listos para correr en el
+  futuro, y apertura de un ticket de seguimiento para `closeOutingsForBar` (paralelización, fuera
+  de alcance de este ticket).

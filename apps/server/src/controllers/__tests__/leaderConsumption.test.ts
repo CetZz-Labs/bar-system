@@ -265,6 +265,7 @@ describe('LeaderConsumptionController', () => {
       } as any)
 
       vi.mocked(PointsTransaction.create).mockResolvedValue([{}] as any)
+      vi.mocked(PointsTransaction.aggregate).mockResolvedValue([{ points: 12 }] as any)
 
       const req: any = { user: { _id: 'u1' }, params: { consumptionId: 'c1' }, ip: '1.1.1.1' }
       const res = mockRes()
@@ -279,7 +280,16 @@ describe('LeaderConsumptionController', () => {
         })
       )
       expect(attendancePoints.awardAttendancePointsIfFirst).toHaveBeenCalledWith('o1')
-      expect(pointsHub.emitGroupPointsBalance).toHaveBeenCalledWith('g1', 42)
+      expect(pointsHub.emitGroupPointsBalance).toHaveBeenCalledWith(
+        'g1',
+        42,
+        expect.objectContaining({
+          barId: 'b1',
+          delta: 12,
+          newBalance: 12,
+          reason: 'consumo',
+        })
+      )
       expect(PointsTransaction.create).toHaveBeenCalled()
     })
   })
