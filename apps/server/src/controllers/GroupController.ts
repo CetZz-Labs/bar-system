@@ -1087,6 +1087,7 @@ export class GroupController {
 
     static getGroupById = async (req: Request, res: Response) => {
         try {
+            const userId = req.user!._id.toString();
             const { id } = req.params;
 
             const group = await Group.findById(id)
@@ -1098,11 +1099,21 @@ export class GroupController {
                 return;
             }
 
+            const isMember = group.memberships.some((m) => m.user.toString() === userId);
+            if (!isMember) {
+                res.status(403).json({ message: 'No tenés acceso a este grupo' });
+                return;
+            }
+
+            const currentUserMembership = group.memberships.find((m) => m.user.toString() === userId);
+            const currentUserRole = currentUserMembership?.role;
+            const isLeaderOrCoLeader = currentUserRole === MembershipRole.LEADER || currentUserRole === MembershipRole.CO_LEADER;
+
             res.status(200).json({
                 id: group._id,
                 name: group.name,
                 slug: group.slug,
-                inviteCode: group.inviteCode,
+                inviteCode: isLeaderOrCoLeader ? group.inviteCode : undefined,
                 type: group.type,
                 avatarUrl: group.avatarUrl,
                 memberCount: group.memberships.length,
@@ -1115,6 +1126,7 @@ export class GroupController {
 
     static getGroupMembers = async (req: Request, res: Response) => {
         try {
+            const userId = req.user!._id.toString();
             const { id } = req.params;
 
             const group = await Group.findById(id)
@@ -1123,6 +1135,12 @@ export class GroupController {
 
             if (!group) {
                 res.status(404).json({ message: 'Grupo no encontrado' });
+                return;
+            }
+
+            const isMember = group.memberships.some((m) => m.user._id.toString() === userId);
+            if (!isMember) {
+                res.status(403).json({ message: 'No tenés acceso a este grupo' });
                 return;
             }
 

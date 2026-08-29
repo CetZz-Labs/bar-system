@@ -1389,3 +1389,39 @@ navegador mucho antes de que el token firmado expire realmente.
   6 de código + `docs/design.md` + 2 de test que ya estaban; en realidad 3 vistas + 3 primitivos +
   4 tests + doc) — commit/push a decisión del desarrollador. El commit de LB-89 (`5ed6efa`) sigue
   siendo el HEAD.
+
+### [2026-08-29] - LB-96: GroupController.getGroupById/getGroupMembers sin chequeo de membresía
+- **Dominio afectado:** Backend (`apps/server`).
+- **Subagentes involucrados:** Explorer (`progress/explorers/exp_LB-96.md`), Implementer
+  (`progress/implementers/impl_LB-96.md`), Reviewer (`progress/reviewers/review_LB-96.md`).
+- **Contexto:** ticket de seguimiento de LB-84 (hallazgo documentado en `docs/AUTHZ_MATRIX.md`,
+  sección "Hallazgo abierto"): `GroupController.getGroupById` (`GET /api/groups/:id`) y
+  `GroupController.getGroupMembers` (`GET /api/groups/:id/members`) no verificaban que el usuario
+  autenticado fuera miembro del grupo solicitado — cualquier usuario logueado podía ver
+  nombre/slug/`memberCount`/`inviteCode` y la lista completa de miembros de cualquier grupo por ID.
+  El Explorer confirmó que el hallazgo seguía vigente sobre `development` actualizado y documentó
+  el patrón de referencia ya usado por `getGroupBySlug` (404 antes de 403, mensaje estándar
+  `'No tenés acceso a este grupo'`, sin ningún helper de membresía reutilizable en el modelo
+  `Group` — la comparación manual sobre `group.memberships` es el patrón consistente en todo el
+  archivo).
+- **Resumen de Cambios:** se replicó el patrón de `getGroupBySlug` en ambos métodos: chequeo de
+  membresía tras el 404, 403 con el mismo mensaje si el usuario no está en `group.memberships`.
+  Cuidado específico de no mezclar los dos patrones de comparación de `ObjectId` según si el query
+  usa `.populate()` o no: `getGroupById` (sin populate) compara `m.user.toString() === userId`;
+  `getGroupMembers` (con populate) compara `m.user._id.toString() === userId`. De yapa, se corrigió
+  que `getGroupById` exponía `inviteCode` sin ninguna condición de rol — ahora solo se devuelve si
+  el usuario es `LEADER`/`CO_LEADER`, mismo criterio que `getGroupBySlug`. No se tocaron rutas
+  (`authenticate()` ya estaba encadenado y garantiza `req.user`) ni se creó ningún helper nuevo en
+  el modelo `Group`.
+- **Tests:** nuevos `getGroupById.test.ts` y `getGroupMembers.test.ts` (no existían tests previos
+  para estos métodos), siguiendo la plantilla de `getGroupBySlug.test.ts`: 404, 403 (caso central
+  del ticket), 200 (miembro, incluyendo `inviteCode` presente/ausente según rol para `getGroupById`)
+  y 500. 17 tests nuevos en verde.
+- **Veredicto del Reviewer:** `[APPROVED]` (primera pasada, sin cambios requeridos). Verificó el
+  código real línea por línea contra `getGroupBySlug`, confirmó que no se mezclaron los patrones de
+  comparación de `ObjectId` (el riesgo específico de este fix), corrió los tests nuevos y la suite
+  completa del backend en vivo (632 passed, 1 failed — único fallo preexistente en
+  `leaderConsumption.test.ts`, alcance de **LB-97**, confirmado ajeno al diff de este ticket vía
+  `git status --short`). C1/C2/C4 verificados en verde, C3 N/A (ticket 100% backend).
+- **Estado:** rama `feat/LB-96-group-membership-check` (creada desde `development` recién
+  actualizado). Commit/push/transición de Jira a decisión del desarrollador tras este veredicto.
