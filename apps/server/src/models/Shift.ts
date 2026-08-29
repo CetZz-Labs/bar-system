@@ -102,6 +102,11 @@ const shiftSchema = new Schema<IShift>({
 
 shiftSchema.index({ bar: 1, user: 1, endedAt: 1 });
 shiftSchema.index({ user: 1, endedAt: 1 });
+// LB-94: cubre ShiftSummaryController.history — filtro {bar, endedAt:{$ne:null},
+// startedAt:{$gte,$lte}} + sort({startedAt:-1}) (ShiftSummaryController.ts:176-190).
+// Ninguno de los índices existentes tiene `startedAt` como prefijo/sort útil
+// (ver progress/explorers/exp_LB-94.md §3.1).
+shiftSchema.index({ bar: 1, startedAt: -1 });
 
 const Shift = model<IShift>('Shift', shiftSchema);
 
