@@ -1565,11 +1565,9 @@ navegador mucho antes de que el token firmado expire realmente.
   imagen, `express.static('/uploads')` + import `path` eliminados de `server.ts`. Hallazgos no
   bloqueantes: `config/cloudinary.ts` llama `config()` a nivel módulo en vez de envolverlo en una
   función como `nodemailer.ts` (cosmético, mismo guard/patrón de singleton).
-- **Estado en Jira:** **pendiente de transición a "Done"** — el servidor MCP de Jira no conectó
-  en esta sesión (`CONNECT_TIMEOUT`). Reintentar el MCP y transicionar, o hacerlo a mano.
-  Cambios en working tree (rama `feat/production`), sin commit/push — decisión del usuario.
-  Recordatorio de prueba manual pendiente (4 flujos de upload contra Cloudinary con credenciales
-  reales).
+- **Estado en Jira:** LB-101 → **"Finalizada"** (2026-09-02, tras el fixup de abajo y la prueba
+  manual del usuario). Commit `5c362dd` en `feat/production` (16 archivos), **sin push** —
+  decisión del usuario de seguir acumulando en la rama.
 
 ### [2026-09-02] - LB-101 (fixup): asset_folder para Dynamic folders mode de Cloudinary
 - **Dominio afectado:** Backend (`apps/server`).
@@ -1597,5 +1595,6 @@ navegador mucho antes de que el token firmado expire realmente.
   nunca se comitteó, el diff del fixup se validó por comparación de contenido + `git grep`. La
   verificación de que el asset cae realmente en `labanda/dev/<tipo>/` es prueba manual del
   usuario contra Cloudinary real, fuera del alcance del harness.
-- **Estado en Jira:** pendiente de transición a "Done" (quality gate satisfecho para LB-101 +
-  fixup). Working tree en `feat/production`, sin commit/push.
+- **Estado en Jira:** LB-101 transicionada a **"Finalizada"** el 2026-09-02 (quality gate LB-101
+  + fixup satisfecho, prueba manual del usuario OK). Commit `5c362dd` en `feat/production`, sin
+  push. El commit incluye el fixup (no hubo commit intermedio de LB-101).
