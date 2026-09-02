@@ -20,8 +20,6 @@ function createUploadMiddleware(maxFileSize: number) {
 }
 
 export const upload = createUploadMiddleware(2 * 1024 * 1024); // 2 MB
-export const uploadLogo = createUploadMiddleware(2 * 1024 * 1024); // 2 MB
-export const uploadCover = createUploadMiddleware(3 * 1024 * 1024); // 3 MB
 
 /**
  * Middleware flexible que acepta un único archivo con cualquier nombre de campo.

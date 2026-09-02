@@ -58,9 +58,10 @@ vi.mock('../../models/Outing', () => ({
 // cloudinary.uploader.upload_stream instead of writing to disk. The stub
 // returns a Writable-like object whose .end() invokes the SDK callback with
 // a fake secure_url derived from the deterministic public_id.
-const { mockUploadStream, mockCloudinaryConfig } = vi.hoisted(() => ({
+const { mockUploadStream, mockCloudinaryConfig, mockDestroy } = vi.hoisted(() => ({
   mockUploadStream: vi.fn(),
   mockCloudinaryConfig: vi.fn(),
+  mockDestroy: vi.fn(),
 }))
 
 function stubUploadStreamSuccess() {
@@ -76,7 +77,7 @@ function stubUploadStreamSuccess() {
 vi.mock('cloudinary', () => ({
   v2: {
     config: mockCloudinaryConfig,
-    uploader: { upload_stream: mockUploadStream },
+    uploader: { upload_stream: mockUploadStream, destroy: mockDestroy },
   },
 }))
 
@@ -219,6 +220,8 @@ describe('BarController.updateBarProfile', () => {
   beforeEach(() => {
     vi.mocked(BarUser.findOne).mockReset()
     vi.mocked(Bar.findById).mockReset()
+    mockDestroy.mockReset()
+    mockDestroy.mockResolvedValue({ result: 'ok' })
   })
 
   it('returns 200 and updates name, description and phone', async () => {
@@ -402,6 +405,114 @@ describe('BarController.updateBarProfile', () => {
     await BarController.updateBarProfile(req, res)
 
     expect(res.status).toHaveBeenCalledWith(404)
+  })
+
+  describe('remove logo/cover (logoUrl/coverUrl: null)', () => {
+    it('removes an existing logo: 200, unsets bar.logoUrl and calls cloudinary destroy with the deterministic public_id', async () => {
+      const userId = new Types.ObjectId()
+      const barId = new Types.ObjectId()
+      const mockBar = buildMockBar({
+        _id: barId,
+        logoUrl: 'https://res.cloudinary.com/test-cloud/image/upload/labanda/test/bar-logos/old.jpg',
+      })
+
+      vi.mocked(BarUser.findOne).mockResolvedValue({ role: BarUserRole.OWNER } as any)
+      vi.mocked(Bar.findById).mockResolvedValue(mockBar as any)
+
+      const req = buildMockRequest({
+        user: { _id: userId } as any,
+        params: { id: barId.toString() },
+        body: { logoUrl: null },
+      })
+      const res = buildMockResponse()
+
+      await BarController.updateBarProfile(req, res)
+
+      expect(mockDestroy).toHaveBeenCalledTimes(1)
+      expect(mockDestroy).toHaveBeenCalledWith(
+        `labanda/test/bar-logos/${barId.toString()}`,
+        { invalidate: true, resource_type: 'image' }
+      )
+      expect(mockBar.logoUrl).toBeUndefined()
+      expect(mockBar.save).toHaveBeenCalled()
+      expect(res.status).toHaveBeenCalledWith(200)
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({ bar: expect.objectContaining({ logoUrl: undefined }) })
+      )
+    })
+
+    it('removes an existing cover: 200, unsets bar.coverUrl and calls cloudinary destroy for bar-covers', async () => {
+      const userId = new Types.ObjectId()
+      const barId = new Types.ObjectId()
+      const mockBar = buildMockBar({
+        _id: barId,
+        coverUrl: 'https://res.cloudinary.com/test-cloud/image/upload/labanda/test/bar-covers/old.jpg',
+      })
+
+      vi.mocked(BarUser.findOne).mockResolvedValue({ role: BarUserRole.OWNER } as any)
+      vi.mocked(Bar.findById).mockResolvedValue(mockBar as any)
+
+      const req = buildMockRequest({
+        user: { _id: userId } as any,
+        params: { id: barId.toString() },
+        body: { coverUrl: null },
+      })
+      const res = buildMockResponse()
+
+      await BarController.updateBarProfile(req, res)
+
+      expect(mockDestroy).toHaveBeenCalledTimes(1)
+      expect(mockDestroy).toHaveBeenCalledWith(
+        `labanda/test/bar-covers/${barId.toString()}`,
+        { invalidate: true, resource_type: 'image' }
+      )
+      expect(mockBar.coverUrl).toBeUndefined()
+      expect(res.status).toHaveBeenCalledWith(200)
+    })
+
+    it('is a no-op when logoUrl: null is sent for a bar that has no logo (destroy not called)', async () => {
+      const userId = new Types.ObjectId()
+      const barId = new Types.ObjectId()
+      const mockBar = buildMockBar({ _id: barId, logoUrl: undefined })
+
+      vi.mocked(BarUser.findOne).mockResolvedValue({ role: BarUserRole.OWNER } as any)
+      vi.mocked(Bar.findById).mockResolvedValue(mockBar as any)
+
+      const req = buildMockRequest({
+        user: { _id: userId } as any,
+        params: { id: barId.toString() },
+        body: { logoUrl: null },
+      })
+      const res = buildMockResponse()
+
+      await BarController.updateBarProfile(req, res)
+
+      expect(mockDestroy).not.toHaveBeenCalled()
+      expect(mockBar.save).toHaveBeenCalled()
+      expect(res.status).toHaveBeenCalledWith(200)
+    })
+
+    it('returns 400 when logoUrl is a non-null value (setting a URL is not supported here)', async () => {
+      const userId = new Types.ObjectId()
+      const barId = new Types.ObjectId()
+      const mockBar = buildMockBar({ _id: barId })
+
+      vi.mocked(BarUser.findOne).mockResolvedValue({ role: BarUserRole.OWNER } as any)
+      vi.mocked(Bar.findById).mockResolvedValue(mockBar as any)
+
+      const req = buildMockRequest({
+        user: { _id: userId } as any,
+        params: { id: barId.toString() },
+        body: { logoUrl: 'https://algo/x.jpg' },
+      })
+      const res = buildMockResponse()
+
+      await BarController.updateBarProfile(req, res)
+
+      expect(res.status).toHaveBeenCalledWith(400)
+      expect(mockDestroy).not.toHaveBeenCalled()
+      expect(mockBar.save).not.toHaveBeenCalled()
+    })
   })
 
   describe('attendancePointsByDay (LB-59)', () => {

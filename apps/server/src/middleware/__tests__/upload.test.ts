@@ -16,7 +16,7 @@ vi.mock('multer', () => ({
   default: mockMulterFn,
 }))
 
-import { upload, uploadLogo, uploadCover, uploadSingle } from '../upload'
+import { upload, uploadSingle } from '../upload'
 
 // Captured once at import time: the `fileFilter` option is identical
 // (same implementation) across every `createUploadMiddleware` call,
@@ -34,11 +34,9 @@ describe('upload middleware', () => {
   })
 
   describe('module-level middleware instances', () => {
-    it('creates upload, uploadLogo and uploadCover via multer(memoryStorage)', () => {
+    it('creates the upload instance via multer(memoryStorage)', () => {
       expect(upload).toBeDefined()
-      expect(uploadLogo).toBeDefined()
-      expect(uploadCover).toBeDefined()
-      expect(mockMulterFn.mock.calls.length).toBeGreaterThanOrEqual(3)
+      expect(mockMulterFn.mock.calls.length).toBeGreaterThanOrEqual(1)
     })
   })
 

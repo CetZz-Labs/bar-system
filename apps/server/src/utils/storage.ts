@@ -52,3 +52,28 @@ export async function saveBarCover(buffer: Buffer, entityId: string): Promise<st
 export async function saveUserAvatar(buffer: Buffer, entityId: string): Promise<string> {
     return uploadImage(buffer, 'user-avatars', entityId)
 }
+
+/**
+ * Borra el asset de una entidad en Cloudinary usando el MISMO `public_id`
+ * determinístico que `uploadImage` (`${CLOUDINARY_FOLDER}/<tipo>/<entityId>`).
+ * Es idempotente: si Cloudinary responde `{ result: 'not found' }` (el asset ya
+ * no existe) se resuelve normal, sin lanzar. Solo propaga un error real de
+ * red/SDK (la promesa de `destroy` rechaza por su cuenta en ese caso).
+ */
+export async function deleteImage(assetType: ImageAssetType, entityId: string): Promise<void> {
+    const publicId = `${process.env.CLOUDINARY_FOLDER}/${assetType}/${entityId}`
+
+    const result: unknown = await cloudinary.uploader.destroy(publicId, {
+        invalidate: true,
+        resource_type: 'image',
+    })
+
+    if (
+        typeof result === 'object' &&
+        result !== null &&
+        'result' in result &&
+        (result as { result: unknown }).result === 'not found'
+    ) {
+        return
+    }
+}

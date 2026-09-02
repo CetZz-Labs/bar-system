@@ -1598,3 +1598,30 @@ navegador mucho antes de que el token firmado expire realmente.
 - **Estado en Jira:** LB-101 transicionada a **"Finalizada"** el 2026-09-02 (quality gate LB-101
   + fixup satisfecho, prueba manual del usuario OK). Commit `5c362dd` en `feat/production`, sin
   push. El commit incluye el fixup (no hubo commit intermedio de LB-101).
+
+### [2026-09-02] - Ad-hoc: follow-ups menores post LB-101 (sin ticket Jira)
+- **Dominio afectado:** Backend (`apps/server`).
+- **Subagentes involucrados:** Implementer (`progress/implementers/impl_followups-post-LB-101.md`),
+  Reviewer (`progress/reviewers/review_followups-post-LB-101.md`). Sin Explorer — ambos puntos ya
+  relevados en `exp_LB-101.md` §9.6 / §9.8.
+- **Contexto:** al cerrar LB-101 quedaron documentados 2 arreglos menores; el usuario autorizó
+  hacerlos directamente, sin abrir ticket.
+- **Resumen de Cambios:** (1) **"Quitar logo/portada" del bar ahora persiste server-side.**
+  `BarController.updateBarProfile` ignoraba `logoUrl`/`coverUrl` del body (el botón del cliente
+  `BarProfileView.tsx` era no-op). Ahora destructura ambos, acepta **sólo `null`** (string no-null
+  → 400 vía `express-validator` en `barRoute.ts` con `.optional().custom(v => v === null)`), y al
+  quitar una imagen que tenía valor llama a la nueva `deleteImage(assetType, entityId)` de
+  `utils/storage.ts` (`cloudinary.uploader.destroy` con el mismo `public_id` determinístico que
+  `uploadImage` + `invalidate: true`; idempotente ante `{ result: 'not found' }`; tipado sin `any`
+  vía `unknown` + narrowing) y hace `$unset` del campo (`bar.logoUrl = undefined`, patrón de
+  Mongoose ya usado en la misma función). El `deleteImage` ocurre antes de `bar.save()`; el guard
+  `BarUserRole.OWNER` de LB-84 quedó intacto. Frontend no tocado. (2) **Exports muertos
+  eliminados:** `uploadLogo`/`uploadCover` de `middleware/upload.ts` (sólo se referenciaban en su
+  propio test; las rutas de bar usan `uploadSingle`). `upload`/`uploadSingle`/`createUploadMiddleware`
+  intactos. `grep` de `uploadLogo|uploadCover` en `apps/server/` → 0 coincidencias.
+- **Veredicto del Reviewer:** `[APPROVED]` (primera pasada). 13 puntos + C1–C4 verificados contra
+  el código real, comandos re-corridos en vivo: `lint` exit 0, `test` **653/653** (+11 tests
+  nuevos), `test:coverage` sin fallo de umbral, `src/utils/storage.ts` y `src/middleware/upload.ts`
+  al 100% en las 4 métricas. `git status`: exactamente 7 archivos (4 producción + 3 tests),
+  `apps/client/` sin cambios, sin re-modificar archivos del commit `5c362dd`.
+- **Commit:** `feat/production`, sin push.

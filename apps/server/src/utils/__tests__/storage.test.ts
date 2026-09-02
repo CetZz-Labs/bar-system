@@ -2,15 +2,16 @@ import { vi, describe, it, expect, beforeEach } from 'vitest'
 
 // LB-101: storage.ts uploads image buffers to Cloudinary via
 // cloudinary.uploader.upload_stream. The SDK is fully mocked here — no network.
-const { mockUploadStream, mockCloudinaryConfig } = vi.hoisted(() => ({
+const { mockUploadStream, mockCloudinaryConfig, mockDestroy } = vi.hoisted(() => ({
   mockUploadStream: vi.fn(),
   mockCloudinaryConfig: vi.fn(),
+  mockDestroy: vi.fn(),
 }))
 
 vi.mock('cloudinary', () => ({
   v2: {
     config: mockCloudinaryConfig,
-    uploader: { upload_stream: mockUploadStream },
+    uploader: { upload_stream: mockUploadStream, destroy: mockDestroy },
   },
 }))
 
@@ -19,6 +20,7 @@ import {
   saveBarLogo,
   saveBarCover,
   saveUserAvatar,
+  deleteImage,
 } from '../storage'
 
 const ENTITY_ID = '64b7f0c2e1a2b3c4d5e6f7a8'
@@ -118,5 +120,51 @@ describe('utils/storage — Cloudinary upload', () => {
     await saveBarCover(buffer, ENTITY_ID)
 
     expect(endSpy).toHaveBeenCalledWith(buffer)
+  })
+})
+
+describe('utils/storage — deleteImage (Cloudinary destroy)', () => {
+  beforeEach(() => {
+    process.env.CLOUDINARY_FOLDER = 'labanda/test'
+    mockDestroy.mockReset()
+    mockDestroy.mockResolvedValue({ result: 'ok' })
+  })
+
+  it.each([
+    { assetType: 'group-avatars' as const },
+    { assetType: 'bar-logos' as const },
+    { assetType: 'bar-covers' as const },
+    { assetType: 'user-avatars' as const },
+  ])(
+    'calls destroy with the deterministic public_id for $assetType',
+    async ({ assetType }) => {
+      await deleteImage(assetType, ENTITY_ID)
+
+      expect(mockDestroy).toHaveBeenCalledTimes(1)
+      const [publicId, options] = mockDestroy.mock.calls[0]
+      expect(publicId).toBe(`labanda/test/${assetType}/${ENTITY_ID}`)
+      expect(options).toEqual({ invalidate: true, resource_type: 'image' })
+    }
+  )
+
+  it('honours a different CLOUDINARY_FOLDER at call time', async () => {
+    process.env.CLOUDINARY_FOLDER = 'labanda/prod'
+
+    await deleteImage('bar-logos', ENTITY_ID)
+
+    const [publicId] = mockDestroy.mock.calls[0]
+    expect(publicId).toBe(`labanda/prod/bar-logos/${ENTITY_ID}`)
+  })
+
+  it('resolves (idempotent) when Cloudinary responds { result: "not found" }', async () => {
+    mockDestroy.mockResolvedValue({ result: 'not found' })
+
+    await expect(deleteImage('bar-logos', ENTITY_ID)).resolves.toBeUndefined()
+  })
+
+  it('rejects when the SDK/network call fails', async () => {
+    mockDestroy.mockRejectedValue(new Error('Cloudinary is down'))
+
+    await expect(deleteImage('bar-covers', ENTITY_ID)).rejects.toThrow('Cloudinary is down')
   })
 })

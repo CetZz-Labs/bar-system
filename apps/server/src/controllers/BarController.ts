@@ -5,7 +5,7 @@ import BarUser, { BarUserRole } from "../models/BarUser";
 import User from "../models/User";
 import Outing, { OutingStatus } from "../models/Outing";
 import { generateSlug } from "../utils/slug";
-import { saveBarLogo, saveBarCover } from "../utils/storage";
+import { saveBarLogo, saveBarCover, deleteImage } from "../utils/storage";
 import { verifyBarAccess } from "../utils/barAccess";
 import { getBarDayOfWeek } from "../utils/barDay";
 import sharp from "sharp";
@@ -410,7 +410,7 @@ export class BarController {
         try {
             const userId = req.user!._id.toString();
             const { id } = req.params;
-            const { name, description, phone, closingTime, attendancePointsByDay } = req.body;
+            const { name, description, phone, closingTime, attendancePointsByDay, logoUrl, coverUrl } = req.body;
 
             // LB-84: solo el OWNER puede editar el perfil del bar — antes
             // cualquier BarUser (incluido CASHIER) pasaba este chequeo
@@ -476,6 +476,33 @@ export class BarController {
                     return;
                 }
                 bar.attendancePointsByDay = attendancePointsByDay;
+            }
+
+            // logoUrl/coverUrl solo aceptan `null` en este endpoint: es la
+            // operación "quitar". Setear una URL directa NO está soportado acá
+            // (el logo/portada se suben por POST /bar/:id/logo y /:id/cover).
+            // El borrado en Cloudinary ocurre ANTES de bar.save(); si rechaza,
+            // se propaga al catch (500) y bar.save() no llega a ejecutarse.
+            if (logoUrl !== undefined) {
+                if (logoUrl !== null) {
+                    res.status(400).json({ message: 'logoUrl solo puede establecerse en null (operación "quitar")' });
+                    return;
+                }
+                if (bar.logoUrl) {
+                    await deleteImage('bar-logos', bar._id.toString());
+                    bar.logoUrl = undefined;
+                }
+            }
+
+            if (coverUrl !== undefined) {
+                if (coverUrl !== null) {
+                    res.status(400).json({ message: 'coverUrl solo puede establecerse en null (operación "quitar")' });
+                    return;
+                }
+                if (bar.coverUrl) {
+                    await deleteImage('bar-covers', bar._id.toString());
+                    bar.coverUrl = undefined;
+                }
             }
 
             await bar.save();

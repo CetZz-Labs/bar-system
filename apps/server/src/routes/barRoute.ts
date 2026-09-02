@@ -111,6 +111,16 @@ router.patch('/:id/perfil',
     body('attendancePointsByDay.sunday')
         .optional()
         .isInt({ min: 0, max: 1000 }).withMessage('Los puntos de domingo deben ser un entero entre 0 y 1000'),
+    // logoUrl/coverUrl: en este endpoint solo se acepta `null` (operación
+    // "quitar logo/portada"). `.optional()` deja pasar la ausencia del campo;
+    // cuando viene, `.custom` rechaza con 400 cualquier valor que no sea null
+    // (el seteo de la imagen se hace por POST /bar/:id/logo y /:id/cover).
+    body('logoUrl')
+        .optional()
+        .custom((value) => value === null).withMessage('logoUrl solo puede ser null en este endpoint'),
+    body('coverUrl')
+        .optional()
+        .custom((value) => value === null).withMessage('coverUrl solo puede ser null en este endpoint'),
     handleInputErrors,
     BarController.updateBarProfile
 );
