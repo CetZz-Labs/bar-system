@@ -1,31 +1,54 @@
-import fs from 'fs/promises';
-import path from 'path';
+import { cloudinary } from '../config/cloudinary'
 
-export async function saveGroupAvatar(buffer: Buffer, filename: string): Promise<string> {
-    const filepath = path.join('uploads', 'group-avatars', filename);
+type ImageAssetType = 'group-avatars' | 'bar-logos' | 'bar-covers' | 'user-avatars'
 
-    // Ensure the uploads/group-avatars directory exists
-    await fs.mkdir(path.dirname(filepath), { recursive: true });
-
-    await fs.writeFile(filepath, buffer);
-
-    return `/uploads/group-avatars/${filename}`;
+/**
+ * Sube un buffer de imagen a Cloudinary usando un `public_id` determinístico
+ * (`${CLOUDINARY_FOLDER}/<tipo>/<entityId>`). `overwrite: true` + `invalidate: true`
+ * hacen que cada entidad tenga un único asset que se reemplaza in-place, sin huérfanos
+ * y sin necesidad de `destroy()`. Devuelve el `secure_url` (URL HTTPS absoluta).
+ *
+ * El product environment de Cloudinary está en **dynamic folders mode**: en ese
+ * modo las barras dentro del `public_id` NO determinan la carpeta visible del
+ * asset (iría a la raíz del Media Library). Hay que pasar `asset_folder`
+ * explícito con el mismo path base que el `public_id` para que quede organizado
+ * bajo `${CLOUDINARY_FOLDER}/<tipo>/`. El parámetro `folder` está deprecado para
+ * código nuevo en dynamic mode, por eso no se usa.
+ */
+function uploadImage(buffer: Buffer, assetType: ImageAssetType, entityId: string): Promise<string> {
+    return new Promise<string>((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+            {
+                public_id: `${process.env.CLOUDINARY_FOLDER}/${assetType}/${entityId}`,
+                asset_folder: `${process.env.CLOUDINARY_FOLDER}/${assetType}`,
+                overwrite: true,
+                invalidate: true,
+                resource_type: 'image',
+            },
+            (error, result) => {
+                if (error || !result) {
+                    reject(error ?? new Error('Cloudinary no devolvió un resultado de subida'))
+                    return
+                }
+                resolve(result.secure_url)
+            },
+        )
+        stream.end(buffer)
+    })
 }
 
-export async function saveBarLogo(buffer: Buffer, filename: string): Promise<string> {
-    const filepath = path.join('uploads', 'bar-logos', filename);
-
-    await fs.mkdir(path.dirname(filepath), { recursive: true });
-    await fs.writeFile(filepath, buffer);
-
-    return `/uploads/bar-logos/${filename}`;
+export async function saveGroupAvatar(buffer: Buffer, entityId: string): Promise<string> {
+    return uploadImage(buffer, 'group-avatars', entityId)
 }
 
-export async function saveBarCover(buffer: Buffer, filename: string): Promise<string> {
-    const filepath = path.join('uploads', 'bar-covers', filename);
+export async function saveBarLogo(buffer: Buffer, entityId: string): Promise<string> {
+    return uploadImage(buffer, 'bar-logos', entityId)
+}
 
-    await fs.mkdir(path.dirname(filepath), { recursive: true });
-    await fs.writeFile(filepath, buffer);
+export async function saveBarCover(buffer: Buffer, entityId: string): Promise<string> {
+    return uploadImage(buffer, 'bar-covers', entityId)
+}
 
-    return `/uploads/bar-covers/${filename}`;
+export async function saveUserAvatar(buffer: Buffer, entityId: string): Promise<string> {
+    return uploadImage(buffer, 'user-avatars', entityId)
 }

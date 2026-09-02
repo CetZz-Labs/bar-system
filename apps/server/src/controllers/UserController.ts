@@ -1,8 +1,7 @@
 import { Request, Response } from "express";
 import { Types } from "mongoose";
 import User, { IMembership } from "../models/User";
-import path from "path";
-import fs from "fs/promises";
+import { saveUserAvatar } from "../utils/storage";
 const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2 MB
 
@@ -89,17 +88,8 @@ export class UserController {
                 return;
             }
 
-            // Upload to local storage
-            const ext = path.extname(req.file.originalname) || '.jpg';
-            const filename = `${user._id}-${Date.now()}${ext}`;
-            const filepath = path.join('uploads', 'avatars', filename);
-
-            // Ensure the uploads/avatars directory exists
-            await fs.mkdir(path.dirname(filepath), { recursive: true });
-
-            await fs.writeFile(filepath, req.file.buffer);
-
-            const avatarUrl = `/uploads/avatars/${filename}`;
+            // Upload to Cloudinary (deterministic public_id per user, overwrite in place)
+            const avatarUrl = await saveUserAvatar(req.file.buffer, user._id.toString());
             user.avatarUrl = avatarUrl;
             await user.save();
 

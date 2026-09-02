@@ -1511,3 +1511,91 @@ navegador mucho antes de que el token firmado expire realmente.
   este cierre: comentario en LB-94 documentando los scripts de load test listos para correr en el
   futuro, y apertura de un ticket de seguimiento para `closeOutingsForBar` (paralelización, fuera
   de alcance de este ticket).
+
+### [2026-09-02] - LB-101: Migrar almacenamiento de imágenes (avatares/logos/portadas) a Cloudinary
+- **Dominio afectado:** Backend (`apps/server`).
+- **Subagentes involucrados:** Explorer (`progress/explorers/exp_LB-101.md`), Implementer
+  (`progress/implementers/impl_LB-101.md`), Reviewer (`progress/reviewers/review_LB-101.md`).
+- **Contexto:** el backend se despliega en Render (decisión de `progress/` del 2026-09-01), cuyo
+  filesystem es efímero — los uploads escritos con `fs.writeFile` se pierden entre redeploys/
+  instancias. `apps/server/src/utils/storage.ts` (`saveGroupAvatar`/`saveBarLogo`/`saveBarCover`)
+  y `UserController.uploadAvatar` (que escribía a disco inline, sin pasar por `storage.ts`)
+  guardaban en `uploads/<tipo>/` y devolvían rutas relativas `/uploads/...` servidas por un
+  `express.static` en `server.ts`. El Explorer confirmó que `multer` ya usaba `memoryStorage()`
+  (los controllers leen `req.file.buffer`), que el frontend ya resuelve URLs absolutas
+  (`apps/client/src/utils/resolveImageUrl.ts:25`, rama `url.startsWith("http")`), y que no hay
+  ningún entorno desplegado con URLs `/uploads/...` persistidas.
+- **Decisiones de alcance (usuario, vía `AskUserQuestion`):** (1) el avatar de **usuario** entra
+  en el alcance pese al texto literal del ticket ("grupo y bar") — misma clase de bug; se
+  refactoriza `UserController.uploadAvatar` para pasar por una nueva `saveUserAvatar` de
+  `storage.ts`. (2) Borrado de assets viejos vía **`public_id` determinístico**
+  (`${CLOUDINARY_FOLDER}/<tipo>/<entityId>`) + `overwrite: true` + `invalidate: true` — un asset
+  por entidad, se sobrescribe in-place; **sin** campos `*PublicId` en los modelos, **sin**
+  `cloudinary.uploader.destroy()`, **sin** nombres con `Date.now()`. (3) Nada desplegado → se
+  **elimina** el montaje `express.static('/uploads')` de `server.ts` (y el import `path` que
+  quedaba sin uso); sin backfill ni retrocompat.
+- **Resumen de Cambios:** nueva dependency `cloudinary ^2.11.0` en `@bar/server` + fila nueva en
+  la tabla de librerías autorizadas de `.claude/rules/backend.md` §2. Nuevo
+  `apps/server/src/config/cloudinary.ts` (patrón singleton de `config/nodemailer.ts`: guard
+  `NODE_ENV !== 'production'` + `process.loadEnvFile()` dentro del propio archivo, `cloudinary.config(...)`
+  a nivel módulo, importado desde `storage.ts` para garantizar el `config()` antes del primer
+  upload). `utils/storage.ts` reescrito: helper privado `uploadImage(buffer, assetType, entityId)`
+  con `cloudinary.uploader.upload_stream` + `stream.end(buffer)` (el SDK no acepta `Buffer` en
+  `upload()`); las 4 funciones (`saveGroupAvatar`/`saveBarLogo`/`saveBarCover`/`saveUserAvatar`)
+  mantienen firma `(buffer, entityId) => Promise<string>` devolviendo `secure_url`. `sharp`
+  preservado EXACTO (resize 512² `cover` del avatar de grupo en `GroupController`, validación de
+  dimensiones ≥200px del logo en `BarController`, sin `sharp` en cover ni en avatar de usuario) —
+  solo cambió el destino. En `createGroup` se genera el `_id` up-front (`new Types.ObjectId()`,
+  pasado como `_id` explícito al constructor) para que el `public_id` coincida con el documento.
+  4 vars nuevas en `apps/server/.env.example` (`CLOUDINARY_CLOUD_NAME`/`API_KEY`/`API_SECRET`
+  vacías + `CLOUDINARY_FOLDER=labanda/dev`), 4 env dummy en `__tests__/setup.ts`. Tests migrados
+  de mock de `fs`/`fs/promises` a mock del SDK `cloudinary` (`barProfile.test.ts`,
+  `uploadAvatar.test.ts`), ajuste de `groupCreation.test.ts`, nuevo
+  `utils/__tests__/storage.test.ts` (verifica `public_id` determinístico + `overwrite` +
+  `invalidate` + `resource_type` sin red real; `storage.ts` queda 100% coverage). `apps/client/`
+  sin cambios. Fuera de alcance, no tocados: el no-op del PATCH "quitar logo/portada" en
+  `BarController.updateBarProfile`, los exports muertos `uploadLogo`/`uploadCover` de
+  `middleware/upload.ts`, el bug de `index.ts:7` (LB-102, pospuesto).
+- **Veredicto del Reviewer:** `[APPROVED]` (primera pasada). Verificó C1–C4 contra el código real
+  y los 10 puntos de alcance/decisiones; re-corrió los comandos de `apps/server` en vivo: `lint`
+  (`tsc --noEmit`) exit 0, `test` **642/642** en 72 archivos, `test:coverage` 94.3% statements
+  global (umbral 80% sobre `utils/**`+`middleware/**` respetado) y **100% en `src/utils/storage.ts`**.
+  Confirmó: sin `any` en producción, sin capa `services/`, `apps/server/.env` no aparece en el
+  diff y sigue gitignored, sin `destroy()`, sin campos `*PublicId`, sin `Date.now()` en flujos de
+  imagen, `express.static('/uploads')` + import `path` eliminados de `server.ts`. Hallazgos no
+  bloqueantes: `config/cloudinary.ts` llama `config()` a nivel módulo en vez de envolverlo en una
+  función como `nodemailer.ts` (cosmético, mismo guard/patrón de singleton).
+- **Estado en Jira:** **pendiente de transición a "Done"** — el servidor MCP de Jira no conectó
+  en esta sesión (`CONNECT_TIMEOUT`). Reintentar el MCP y transicionar, o hacerlo a mano.
+  Cambios en working tree (rama `feat/production`), sin commit/push — decisión del usuario.
+  Recordatorio de prueba manual pendiente (4 flujos de upload contra Cloudinary con credenciales
+  reales).
+
+### [2026-09-02] - LB-101 (fixup): asset_folder para Dynamic folders mode de Cloudinary
+- **Dominio afectado:** Backend (`apps/server`).
+- **Subagentes involucrados:** Implementer (`progress/implementers/impl_LB-101-folder-fix.md`),
+  Reviewer (`progress/reviewers/review_LB-101-folder-fix.md`).
+- **Contexto:** con LB-101 ya `[APPROVED]` (sin commitear), la prueba manual del usuario con
+  credenciales reales encontró que el asset se subía a la **raíz** del Media Library de
+  Cloudinary, no a `labanda/dev/<tipo>/`. Causa raíz: el product environment está en **dynamic
+  folders mode** (default de cuentas Cloudinary creadas después del 2024-06-04), donde las barras
+  del `public_id` NO determinan la carpeta visible — hay que pasar `asset_folder` explícito. El
+  parámetro `folder` está deprecado para código nuevo en dynamic mode. La spec original del
+  Leader ("path embebido solo en `public_id`") fue la causa; el `[APPROVED]` previo se emitió
+  contra esa spec.
+- **Resumen de Cambios:** una línea en `apps/server/src/utils/storage.ts` (`uploadImage()`):
+  `asset_folder: \`${process.env.CLOUDINARY_FOLDER}/${assetType}\`` agregado a las opciones de
+  `cloudinary.uploader.upload_stream`, con el mismo path base que el `public_id` (recomendación
+  de la doc de Cloudinary). `public_id`, `overwrite`, `invalidate`, `resource_type` sin cambios.
+  Sin `folder` ni `public_id_prefix`. Sin `any` propio (lo absorbe la index signature
+  `[futureKey: string]: any` del `.d.ts` del SDK). Tests: `storage.test.ts` valida `asset_folder`
+  + `not.toHaveProperty('folder')` en las 4 funciones; `barProfile.test.ts` lo agrega en los 2
+  tests que inspeccionan opciones; `groupCreation`/`uploadAvatar` sin cambios.
+- **Veredicto del Reviewer:** `[APPROVED]` (primera pasada del fixup). 7 puntos verificados
+  contra el código real, comandos re-corridos en vivo: `lint` exit 0, `test` 642/642,
+  `test:coverage` 94.3% global / 100% en `src/utils/storage.ts`. Salvedad no bloqueante: LB-101
+  nunca se comitteó, el diff del fixup se validó por comparación de contenido + `git grep`. La
+  verificación de que el asset cae realmente en `labanda/dev/<tipo>/` es prueba manual del
+  usuario contra Cloudinary real, fuera del alcance del harness.
+- **Estado en Jira:** pendiente de transición a "Done" (quality gate satisfecho para LB-101 +
+  fixup). Working tree en `feat/production`, sin commit/push.

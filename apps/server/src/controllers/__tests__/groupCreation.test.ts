@@ -54,9 +54,15 @@ vi.mock('sharp', () => ({
   })),
 }))
 
-// Mock saveGroupAvatar
+// Mock saveGroupAvatar — now returns a Cloudinary secure_url (LB-101)
+const CLOUDINARY_AVATAR_URL =
+  'https://res.cloudinary.com/test-cloud/image/upload/labanda/dev/group-avatars/test-group.jpg'
 vi.mock('../../utils/storage', () => ({
-  saveGroupAvatar: vi.fn().mockResolvedValue('/uploads/group-avatars/test-file.jpg'),
+  saveGroupAvatar: vi
+    .fn()
+    .mockResolvedValue(
+      'https://res.cloudinary.com/test-cloud/image/upload/labanda/dev/group-avatars/test-group.jpg'
+    ),
 }))
 
 describe('GroupController.createGroup', () => {
@@ -131,11 +137,11 @@ describe('GroupController.createGroup', () => {
       await GroupController.createGroup(req, res)
 
       expect(sharp).toHaveBeenCalledWith(fileBuffer)
-      expect(saveGroupAvatar).toHaveBeenCalled()
+      expect(saveGroupAvatar).toHaveBeenCalledWith(expect.any(Buffer), expect.any(String))
       expect(res.status).toHaveBeenCalledWith(201)
       expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({
-          avatarUrl: '/uploads/group-avatars/test-file.jpg',
+          avatarUrl: CLOUDINARY_AVATAR_URL,
         })
       )
     })

@@ -3,7 +3,7 @@ import { UserController } from '../../controllers/UserController'
 import User from '../../models/User'
 import { buildMockRequest, buildMockResponse } from '../../__tests__/helpers/mockHelpers'
 import { Types } from 'mongoose'
-import fs from 'fs/promises'
+import { saveUserAvatar } from '../../utils/storage'
 
 // Mock User model
 vi.mock('../../models/User', () => ({
@@ -12,21 +12,22 @@ vi.mock('../../models/User', () => ({
   },
 }))
 
-// Mock fs
-vi.mock('fs/promises', () => ({
-  default: {
-    writeFile: vi.fn().mockResolvedValue(undefined),
-    mkdir: vi.fn().mockResolvedValue(undefined),
-  },
+// Mock storage — LB-101: avatar now goes to Cloudinary via saveUserAvatar
+const CLOUDINARY_AVATAR_URL =
+  'https://res.cloudinary.com/test-cloud/image/upload/labanda/dev/user-avatars/user123.jpg'
+vi.mock('../../utils/storage', () => ({
+  saveUserAvatar: vi
+    .fn()
+    .mockResolvedValue(
+      'https://res.cloudinary.com/test-cloud/image/upload/labanda/dev/user-avatars/user123.jpg'
+    ),
 }))
 
 describe('UserController.uploadAvatar', () => {
   beforeEach(() => {
     vi.mocked(User.findById).mockReset()
-    vi.mocked(fs.writeFile).mockReset()
-    vi.mocked(fs.mkdir).mockReset()
-    vi.mocked(fs.mkdir).mockResolvedValue(undefined)
-    vi.mocked(fs.writeFile).mockResolvedValue(undefined)
+    vi.mocked(saveUserAvatar).mockReset()
+    vi.mocked(saveUserAvatar).mockResolvedValue(CLOUDINARY_AVATAR_URL)
   })
 
   describe('when valid image file is uploaded', () => {
@@ -55,16 +56,11 @@ describe('UserController.uploadAvatar', () => {
 
       expect(res.status).toHaveBeenCalledWith(201)
       expect(res.json).toHaveBeenCalledWith(
-        expect.objectContaining({
-          avatarUrl: expect.stringMatching(/^\/uploads\/avatars\/.*\.jpg$/),
-        })
+        expect.objectContaining({ avatarUrl: CLOUDINARY_AVATAR_URL })
       )
-      expect(mockUser.avatarUrl).toMatch(/^\/uploads\/avatars\/.*\.jpg$/)
+      expect(mockUser.avatarUrl).toBe(CLOUDINARY_AVATAR_URL)
       expect(mockUser.save).toHaveBeenCalled()
-      expect(fs.writeFile).toHaveBeenCalledWith(
-        expect.stringMatching(/uploads\\avatars\\.*\.jpg$/),
-        fileBuffer
-      )
+      expect(saveUserAvatar).toHaveBeenCalledWith(fileBuffer, mockUser._id.toString())
     })
   })
 
@@ -153,7 +149,7 @@ describe('UserController.uploadAvatar', () => {
     })
   })
 
-  describe('when file write fails', () => {
+  describe('when the upload fails', () => {
     it('returns 500 with upload error', async () => {
       const mockUser = {
         _id: new Types.ObjectId(),
@@ -161,7 +157,7 @@ describe('UserController.uploadAvatar', () => {
         save: vi.fn().mockResolvedValue(true),
       }
       vi.mocked(User.findById).mockResolvedValue(mockUser as any)
-      vi.mocked(fs.writeFile).mockRejectedValue(new Error('Write failed'))
+      vi.mocked(saveUserAvatar).mockRejectedValue(new Error('Cloudinary upload failed'))
 
       const req = buildMockRequest({
         user: { _id: mockUser._id } as any,

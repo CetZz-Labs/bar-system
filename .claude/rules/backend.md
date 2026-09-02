@@ -52,6 +52,7 @@ Solo se usan las siguientes librerías para las responsabilidades indicadas. No 
 | Generación de códigos QR | `qrcode` |
 | Logging HTTP | `morgan` |
 | Parseo de cookies | `cookie-parser` |
+| Almacenamiento de imágenes en la nube | `cloudinary` (SDK v2) |
 
 ---
 

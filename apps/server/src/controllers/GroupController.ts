@@ -10,7 +10,6 @@ import { saveGroupAvatar } from "../utils/storage";
 import { generateSlug } from "../utils/slug";
 import { generateInviteCode } from "../utils/code";
 import sharp from "sharp";
-import path from "path";
 import QRCode from "qrcode";
 
 const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2 MB
@@ -125,6 +124,10 @@ export class GroupController {
                 return;
             }
 
+            // Group _id resolved up-front so the Cloudinary public_id is deterministic
+            // (the avatar upload happens before the document is persisted).
+            const groupId = new Types.ObjectId();
+
             // Process optional photo
             let avatarUrl: string | undefined;
             if (req.file) {
@@ -137,9 +140,7 @@ export class GroupController {
                     .resize(512, 512, { fit: 'cover' })
                     .toBuffer();
 
-                const ext = path.extname(req.file.originalname) || '.jpg';
-                const filename = `${Date.now()}-${Math.random().toString(36).substring(2)}${ext}`;
-                avatarUrl = await saveGroupAvatar(resizedBuffer, filename);
+                avatarUrl = await saveGroupAvatar(resizedBuffer, groupId.toString());
             }
 
             // Generate unique slug and invite code
@@ -148,6 +149,7 @@ export class GroupController {
 
             // Create group with leader membership
             const group = new Group({
+                _id: groupId,
                 name: req.body.name,
                 slug,
                 type: req.body.type,

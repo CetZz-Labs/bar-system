@@ -8,7 +8,6 @@ import { generateSlug } from "../utils/slug";
 import { saveBarLogo, saveBarCover } from "../utils/storage";
 import { verifyBarAccess } from "../utils/barAccess";
 import { getBarDayOfWeek } from "../utils/barDay";
-import path from "path";
 import sharp from "sharp";
 
 const NAME_MIN_LENGTH = 3;
@@ -551,9 +550,7 @@ export class BarController {
                 return;
             }
 
-            const ext = path.extname(req.file.originalname) || '.jpg';
-            const filename = `${bar._id}-${Date.now()}${ext}`;
-            const logoUrl = await saveBarLogo(req.file.buffer, filename);
+            const logoUrl = await saveBarLogo(req.file.buffer, bar._id.toString());
 
             bar.logoUrl = logoUrl;
             await bar.save();
@@ -603,9 +600,7 @@ export class BarController {
                 return;
             }
 
-            const ext = path.extname(req.file.originalname) || '.jpg';
-            const filename = `${bar._id}-${Date.now()}${ext}`;
-            const coverUrl = await saveBarCover(req.file.buffer, filename);
+            const coverUrl = await saveBarCover(req.file.buffer, bar._id.toString());
 
             bar.coverUrl = coverUrl;
             await bar.save();

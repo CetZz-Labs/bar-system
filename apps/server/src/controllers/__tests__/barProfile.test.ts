@@ -4,7 +4,6 @@ import Bar, { BarStatus } from '../../models/Bar'
 import BarUser, { BarUserRole } from '../../models/BarUser'
 import { buildMockRequest, buildMockResponse } from '../../__tests__/helpers/mockHelpers'
 import { Types } from 'mongoose'
-import fs from 'fs/promises'
 import sharp from 'sharp'
 
 const validSchedule = [
@@ -55,11 +54,29 @@ vi.mock('../../models/Outing', () => ({
   },
 }))
 
-// Mock fs
-vi.mock('fs/promises', () => ({
-  default: {
-    writeFile: vi.fn().mockResolvedValue(undefined),
-    mkdir: vi.fn().mockResolvedValue(undefined),
+// Mock the Cloudinary SDK — LB-101: storage.ts now uploads via
+// cloudinary.uploader.upload_stream instead of writing to disk. The stub
+// returns a Writable-like object whose .end() invokes the SDK callback with
+// a fake secure_url derived from the deterministic public_id.
+const { mockUploadStream, mockCloudinaryConfig } = vi.hoisted(() => ({
+  mockUploadStream: vi.fn(),
+  mockCloudinaryConfig: vi.fn(),
+}))
+
+function stubUploadStreamSuccess() {
+  mockUploadStream.mockImplementation((options: any, callback: any) => ({
+    end: () =>
+      callback(undefined, {
+        secure_url: `https://res.cloudinary.com/test-cloud/image/upload/${options.public_id}.jpg`,
+        public_id: options.public_id,
+      }),
+  }))
+}
+
+vi.mock('cloudinary', () => ({
+  v2: {
+    config: mockCloudinaryConfig,
+    uploader: { upload_stream: mockUploadStream },
   },
 }))
 
@@ -529,10 +546,8 @@ describe('BarController.uploadBarLogo', () => {
   beforeEach(() => {
     vi.mocked(BarUser.findOne).mockReset()
     vi.mocked(Bar.findById).mockReset()
-    vi.mocked(fs.writeFile).mockReset()
-    vi.mocked(fs.mkdir).mockReset()
-    vi.mocked(fs.mkdir).mockResolvedValue(undefined)
-    vi.mocked(fs.writeFile).mockResolvedValue(undefined)
+    mockUploadStream.mockReset()
+    stubUploadStreamSuccess()
     vi.mocked(sharp).mockReturnValue({
       metadata: vi.fn().mockResolvedValue({ width: 400, height: 400 }),
     } as any)
@@ -561,13 +576,22 @@ describe('BarController.uploadBarLogo', () => {
 
     await BarController.uploadBarLogo(req, res)
 
+    const expectedLogoUrl = `https://res.cloudinary.com/test-cloud/image/upload/${process.env.CLOUDINARY_FOLDER}/bar-logos/${barId.toString()}.jpg`
     expect(res.status).toHaveBeenCalledWith(201)
     expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({
-        logoUrl: expect.stringMatching(/^\/uploads\/bar-logos\/.*\.jpg$/),
-      })
+      expect.objectContaining({ logoUrl: expectedLogoUrl })
     )
-    expect(mockBar.logoUrl).toMatch(/^\/uploads\/bar-logos\/.*\.jpg$/)
+    expect(mockBar.logoUrl).toBe(expectedLogoUrl)
+    expect(mockUploadStream).toHaveBeenCalledWith(
+      expect.objectContaining({
+        public_id: `${process.env.CLOUDINARY_FOLDER}/bar-logos/${barId.toString()}`,
+        asset_folder: `${process.env.CLOUDINARY_FOLDER}/bar-logos`,
+        overwrite: true,
+        invalidate: true,
+      }),
+      expect.any(Function)
+    )
+    expect(mockUploadStream.mock.calls[0][0]).not.toHaveProperty('folder')
     expect(mockBar.save).toHaveBeenCalled()
   })
 
@@ -749,10 +773,8 @@ describe('BarController.uploadBarCover', () => {
   beforeEach(() => {
     vi.mocked(BarUser.findOne).mockReset()
     vi.mocked(Bar.findById).mockReset()
-    vi.mocked(fs.writeFile).mockReset()
-    vi.mocked(fs.mkdir).mockReset()
-    vi.mocked(fs.mkdir).mockResolvedValue(undefined)
-    vi.mocked(fs.writeFile).mockResolvedValue(undefined)
+    mockUploadStream.mockReset()
+    stubUploadStreamSuccess()
   })
 
   it('returns 201 with coverUrl for valid image', async () => {
@@ -778,13 +800,22 @@ describe('BarController.uploadBarCover', () => {
 
     await BarController.uploadBarCover(req, res)
 
+    const expectedCoverUrl = `https://res.cloudinary.com/test-cloud/image/upload/${process.env.CLOUDINARY_FOLDER}/bar-covers/${barId.toString()}.jpg`
     expect(res.status).toHaveBeenCalledWith(201)
     expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({
-        coverUrl: expect.stringMatching(/^\/uploads\/bar-covers\/.*\.jpg$/),
-      })
+      expect.objectContaining({ coverUrl: expectedCoverUrl })
     )
-    expect(mockBar.coverUrl).toMatch(/^\/uploads\/bar-covers\/.*\.jpg$/)
+    expect(mockBar.coverUrl).toBe(expectedCoverUrl)
+    expect(mockUploadStream).toHaveBeenCalledWith(
+      expect.objectContaining({
+        public_id: `${process.env.CLOUDINARY_FOLDER}/bar-covers/${barId.toString()}`,
+        asset_folder: `${process.env.CLOUDINARY_FOLDER}/bar-covers`,
+        overwrite: true,
+        invalidate: true,
+      }),
+      expect.any(Function)
+    )
+    expect(mockUploadStream.mock.calls[0][0]).not.toHaveProperty('folder')
     expect(mockBar.save).toHaveBeenCalled()
   })
 
