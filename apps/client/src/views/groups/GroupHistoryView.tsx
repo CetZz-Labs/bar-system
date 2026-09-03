@@ -6,6 +6,9 @@ import { ArrowLeft, Beer, CalendarCheck, Gift, Loader2 } from "lucide-react";
 import { getGroupBySlug } from "@/API/GroupAPI";
 import { getGroupHistory } from "@/API/PointsAPI";
 import { useQuery } from "@tanstack/react-query";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { CoachMark } from "@/components/onboarding/CoachMark";
+import { FIRST_VISIT_KEYS } from "@/utils/firstVisit";
 import { useGroupPointsSocket } from "@/hooks/useGroupPointsSocket";
 import type { PointsMovement } from "@/types/points";
 
@@ -54,7 +57,11 @@ export default function GroupHistoryView() {
     });
   }, []);
 
-  useGroupPointsSocket(groupId, () => {}, undefined, onMovement);
+  const onResync = useCallback(() => {
+    void historyQuery.refetch();
+  }, [historyQuery]);
+
+  useGroupPointsSocket(groupId, () => {}, undefined, onMovement, onResync);
 
   const pages = historyQuery.data?.pages ?? [];
   const apiItems = pages.flatMap((p) => p?.items ?? []);
@@ -71,7 +78,7 @@ export default function GroupHistoryView() {
       animate={{ opacity: 1, y: 0 }}
       className="flex flex-col gap-5 px-4 pt-5 pb-nav max-w-xl mx-auto w-full"
     >
-      <header className="flex items-center gap-3">
+      <header className="flex items-center gap-3 relative">
         <button
           type="button"
           aria-label="Volver"
@@ -84,6 +91,13 @@ export default function GroupHistoryView() {
           <h1 className="text-xl font-display font-bold m-0">Historial</h1>
           <p className="text-sm text-text-secondary m-0">{groupQuery.data?.name}</p>
         </div>
+        <CoachMark
+          storageKey={FIRST_VISIT_KEYS.coachHistory}
+          title="Historial de puntos"
+          body="Cada consumo, asistencia o canje aparece acá en vivo. Tocá un ítem para ver más detalle."
+          placement="bottom"
+          className="left-12"
+        />
       </header>
 
       {historyQuery.isLoading ? (

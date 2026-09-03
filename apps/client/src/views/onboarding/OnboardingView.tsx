@@ -12,6 +12,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { updateUserProfile, uploadAvatar } from "@/API/UserAPI";
 import { onboardingSchema } from "@/types/user";
 import { toastApiError } from "@/utils/apiError";
+import { markWizardPending } from "@/utils/firstVisit";
 
 type OnboardingForm = {
     fullName: string;
@@ -85,7 +86,8 @@ export default function OnboardingView() {
             toast.success("Perfil completado exitosamente");
             queryClient.invalidateQueries({ queryKey: ["session"] });
             queryClient.invalidateQueries({ queryKey: ["userProfile"] });
-            navigate("/profile");
+            markWizardPending();
+            navigate("/");
         } catch {
             // Errors handled by mutation onError
         }

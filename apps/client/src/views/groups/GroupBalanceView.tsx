@@ -40,7 +40,11 @@ export default function GroupBalanceView() {
     [balanceQuery]
   );
 
-  useGroupPointsSocket(groupId, onBalance);
+  const onResync = useCallback(() => {
+    void balanceQuery.refetch();
+  }, [balanceQuery]);
+
+  useGroupPointsSocket(groupId, onBalance, undefined, undefined, onResync);
 
   const total = liveTotal ?? balanceQuery.data?.total ?? 0;
   const byBar = balanceQuery.data?.byBar ?? [];

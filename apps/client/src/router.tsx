@@ -37,6 +37,7 @@ import CashierShiftSummaryView from './views/cashier/CashierShiftSummaryView'
 import CashierRedemptionsView from './views/cashier/CashierRedemptionsView'
 import CashierLayout from './layouts/CashierLayout'
 import SelectContextView from './views/auth/SelectContextView'
+import { RequireBarOwner } from './components/auth/RequireBarOwner'
 import NotFound from './views/NotFound'
 
 export default function Router() {
@@ -84,13 +85,48 @@ export default function Router() {
                     <Route path="/bar/registro" element={<BarRegisterView />} />
                     <Route path="/bar/explorar" element={<ExploreBarsView />} />
                     <Route path="/bar/mis-bares" element={<MyBarsView />} />
-                    <Route path="/bar/:id/perfil" element={<BarProfileView />} />
+                    <Route
+                        path="/bar/:id/perfil"
+                        element={
+                            <RequireBarOwner>
+                                <BarProfileView />
+                            </RequireBarOwner>
+                        }
+                    />
                     <Route path="/bar/:id/rewards" element={<BarRewardsView />} />
-                    <Route path="/bar/:id/categorias" element={<BarCategoriesView />} />
+                    <Route
+                        path="/bar/:id/categorias"
+                        element={
+                            <RequireBarOwner>
+                                <BarCategoriesView />
+                            </RequireBarOwner>
+                        }
+                    />
                     <Route path="/bar/:id" element={<BarDetailView />} />
-                    <Route path="/bar/:barId/dashboard" element={<BarDashboardView />} />
-                    <Route path="/bar/:barId/auditoria" element={<BarAuditLogView />} />
-                    <Route path="/bar/:barId/reportes" element={<BarReportsView />} />
+                    <Route
+                        path="/bar/:barId/dashboard"
+                        element={
+                            <RequireBarOwner>
+                                <BarDashboardView />
+                            </RequireBarOwner>
+                        }
+                    />
+                    <Route
+                        path="/bar/:barId/auditoria"
+                        element={
+                            <RequireBarOwner>
+                                <BarAuditLogView />
+                            </RequireBarOwner>
+                        }
+                    />
+                    <Route
+                        path="/bar/:barId/reportes"
+                        element={
+                            <RequireBarOwner>
+                                <BarReportsView />
+                            </RequireBarOwner>
+                        }
+                    />
                 </Route>
                 <Route path="/unirse/:inviteCode" element={<JoinGroupView />} />
 
