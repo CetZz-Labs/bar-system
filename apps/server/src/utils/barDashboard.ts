@@ -143,15 +143,40 @@ function validConsumptionStatusMatch(): Record<string, unknown> {
     };
 }
 
+/**
+ * Filtro sargable para la fecha "ancla" de una `Outing`
+ * (`checkedInAt ?? scheduledFor`). LB-94: reemplaza el patrón previo de
+ * `$addFields` + `$match` sobre un campo calculado, que no puede usar
+ * ningún índice y obliga a Mongo a escanear TODAS las `Outing` no-CANCELLED
+ * del bar (sin límite de fecha) antes de descartar por rango — ver
+ * progress/explorers/exp_LB-94.md §1. Este `$or` de dos ramas sí puede
+ * resolverse con los índices existentes `{bar:1,checkedInAt:1}` /
+ * `{bar:1,scheduledFor:1}` (Outing.ts:163-164), porque Mongo soporta
+ * index-per-branch en un `$or` top-level dentro del mismo `$match` que ya
+ * filtra por `bar`.
+ */
+function outingAnchorDateMatch(from: Date, to: Date): Record<string, unknown> {
+    return {
+        $or: [
+            { checkedInAt: { $gte: from, $lte: to } },
+            { checkedInAt: null, scheduledFor: { $gte: from, $lte: to } },
+        ],
+    };
+}
+
 export async function getDashboardStatCards(barId: string, range: DashboardRange): Promise<DashboardStatCards> {
     const barObjectId = new Types.ObjectId(barId);
     const { from, to } = range;
 
     const [groupsResult, consumptionResult, pointsResult, redemptionsResult] = await Promise.all([
         Outing.aggregate<{ count: number }>([
-            { $match: { bar: barObjectId, status: { $ne: OutingStatus.CANCELLED } } },
-            { $addFields: { anchorDate: { $ifNull: ['$checkedInAt', '$scheduledFor'] } } },
-            { $match: { anchorDate: { $gte: from, $lte: to } } },
+            {
+                $match: {
+                    bar: barObjectId,
+                    status: { $ne: OutingStatus.CANCELLED },
+                    ...outingAnchorDateMatch(from, to),
+                },
+            },
             { $count: 'count' },
         ]),
         Consumption.aggregate<{ _id: null; total: number }>([
@@ -227,9 +252,13 @@ export async function getActivityTable(
     const { from, to } = range;
 
     const pipeline: PipelineStage[] = [
-        { $match: { bar: barObjectId, status: { $ne: OutingStatus.CANCELLED } } },
-        { $addFields: { anchorDate: { $ifNull: ['$checkedInAt', '$scheduledFor'] } } },
-        { $match: { anchorDate: { $gte: from, $lte: to } } },
+        {
+            $match: {
+                bar: barObjectId,
+                status: { $ne: OutingStatus.CANCELLED },
+                ...outingAnchorDateMatch(from, to),
+            },
+        },
     ];
 
     if (filters.cashierId) {
@@ -482,10 +511,9 @@ export async function getCashierTable(
                     bar: barObjectId,
                     status: { $ne: OutingStatus.CANCELLED },
                     checkedInBy: { $in: cashierIds },
+                    ...outingAnchorDateMatch(from, to),
                 },
             },
-            { $addFields: { anchorDate: { $ifNull: ['$checkedInAt', '$scheduledFor'] } } },
-            { $match: { anchorDate: { $gte: from, $lte: to } } },
             { $group: { _id: '$checkedInBy', count: { $sum: 1 } } },
         ]),
         Consumption.aggregate<{ _id: Types.ObjectId; total: number }>([

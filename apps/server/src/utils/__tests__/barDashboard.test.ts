@@ -156,9 +156,35 @@ describe('getDashboardStatCards', () => {
     await getDashboardStatCards(barId, { from: new Date('2026-01-01'), to: new Date('2026-01-02') })
 
     const pipeline = vi.mocked(Outing.aggregate).mock.calls[0][0] as Record<string, unknown>[]
+    const match = pipeline[0] as { $match: Record<string, unknown> }
+    expect(match.$match.bar).toEqual(expect.any(Types.ObjectId))
+    expect(match.$match.status).toEqual({ $ne: OutingStatus.CANCELLED })
+  })
+
+  it('LB-94: filters the anchor date with a sargable $or (checkedInAt / scheduledFor) instead of a computed field', async () => {
+    vi.mocked(Outing.aggregate).mockResolvedValue([])
+    vi.mocked(Consumption.aggregate).mockResolvedValue([])
+    vi.mocked(PointsTransaction.aggregate).mockResolvedValue([])
+    vi.mocked(Redemption.aggregate).mockResolvedValue([])
+
+    const from = new Date('2026-01-01')
+    const to = new Date('2026-01-02')
+    await getDashboardStatCards(barId, { from, to })
+
+    const pipeline = vi.mocked(Outing.aggregate).mock.calls[0][0] as Record<string, unknown>[]
     expect(pipeline[0]).toEqual({
-      $match: { bar: expect.any(Types.ObjectId), status: { $ne: OutingStatus.CANCELLED } },
+      $match: {
+        bar: expect.any(Types.ObjectId),
+        status: { $ne: OutingStatus.CANCELLED },
+        $or: [
+          { checkedInAt: { $gte: from, $lte: to } },
+          { checkedInAt: null, scheduledFor: { $gte: from, $lte: to } },
+        ],
+      },
     })
+    // No debe quedar ningún stage de $addFields sobre un campo calculado
+    // (anchorDate) — el filtro sargable reemplaza por completo ese patrón.
+    expect(pipeline.some((stage) => 'anchorDate' in (stage.$addFields as Record<string, unknown> ?? {}))).toBe(false)
   })
 })
 
