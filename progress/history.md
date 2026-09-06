@@ -1702,6 +1702,22 @@ navegador mucho antes de que el token firmado expire realmente.
   Mongo Atlas con IP allowlist para Render; importar `apps/client` en Vercel (preset Vite, root
   `apps/client`, env `VITE_API_URL=https://<render>/api`, `VITE_VAPID_PUBLIC_KEY` si se retoma
   push); generar la App Password de Gmail. Detalle completo en `exp_LB-102.md` §final.
-- **Commits:** ninguno todavía — los cambios de LB-102 quedan sin commitear en el working tree de
-  `feat/production`, que además arrastra 3 commits sin push (`5c362dd`, `7e99720`, `646461f`).
-  Commit/push a criterio del usuario.
+- **Commits:** `3ba4a5e` (código, 10 archivos) + `a22fbaf` (`docs(progress)`), sobre
+  `feat/production`. `main` estaba 20 commits atrás de `development`; se hizo `git merge --ff-only
+  feat/production` en `main` (fast-forward limpio, sin conflictos) subiendo a `main` todo lo
+  acumulado (LB-58 → LB-101) + LB-102, y `git push origin main` (22 commits).
+- **Deploy real verificado (2026-09-06):** backend en Render (`https://bar-system-8460.onrender.com`,
+  Node 24 vía `NODE_VERSION`, `pnpm install --frozen-lockfile --prod=false && ... build`, start
+  `node dist/index.js`, health check `/health`, `NODE_ENV=production`, Mongo Atlas conectado) y
+  frontend en Vercel (`https://bar-system-client.vercel.app`, preset Vite, root `apps/client`,
+  `VITE_API_URL` solo en Production, `vercel.json` para el fallback SPA). El fix de `index.ts` se
+  confirmó en infra real (`Server is running on port 10000`). Prueba manual del usuario: login
+  cross-site con cookie `Secure; SameSite=None` OK, deep-link refresh OK.
+- **Follow-ups no bloqueantes surgidos en el deploy (sin ticket todavía):** (1) warnings de Mongoose
+  `Duplicate schema index` en `Bar.slug`, `Group.slug`, `Group.inviteCode` (índice declarado con
+  `index: true` **y** `schema.index()`) — deuda preexistente, candidato a limpieza. (2) `engines.node`
+  del repo sigue en `>=18` mientras el código necesita ≥ 20.6 (`process.loadEnvFile()`); hoy se
+  cubre con `NODE_VERSION` en Render. (3) Cookie de tercero `onrender.com`↔`vercel.app`: funciona
+  con `SameSite=None` pero conviene dominios propios bajo un mismo eTLD+1 antes del launch real.
+  (4) `.claude/agents/reviewer.md` no tiene `Write` en su toolset — el reviewer escribió su
+  bitácora vía `Bash`.
