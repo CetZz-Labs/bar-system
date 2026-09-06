@@ -1625,3 +1625,83 @@ navegador mucho antes de que el token firmado expire realmente.
   al 100% en las 4 métricas. `git status`: exactamente 7 archivos (4 producción + 3 tests),
   `apps/client/` sin cambios, sin re-modificar archivos del commit `5c362dd`.
 - **Commit:** `feat/production`, sin push.
+
+### [2026-09-06] - LB-102: Dejar el entorno listo para el primer deploy a producción (Render + Vercel)
+- **Dominio afectado:** Monorepo (Backend `apps/server` + config de `apps/client`).
+- **Subagentes involucrados:** Explorer (`progress/explorers/exp_LB-102.md`),
+  Implementer (`progress/implementers/impl_LB-102.md`), Reviewer (`progress/reviewers/review_LB-102.md`).
+- **Contexto:** primer deploy real del proyecto (pre-launch, sin datos de usuario en ningún
+  entorno). Plataformas: `apps/server` → Render, `apps/client` → Vercel, imágenes → Cloudinary
+  (LB-101, ya cerrado). Jira MCP se cayó al inicio de la sesión (`CONNECT_TIMEOUT`) y el usuario
+  lo reconectó a mano; la descripción y los 6 puntos del ticket se leyeron de Jira una vez
+  online. El mirror del vault (`12-Jira/`) estaba desactualizado (llegaba a LB-57).
+- **Decisiones de producto del usuario (vía `AskUserQuestion`, 2026-09-06):** (1) **CORS:**
+  soportar previews de Vercel → cambio de código, no solo doc. (2) **VAPID/push:** posponer, sin
+  código (`pushService.ts` ya degrada). (3) **Pin de Node:** NO tocar el repo, lo fija el usuario
+  en el dashboard de Render. (4) Adición autorizada a mitad de camino: endpoint **`GET /health`**
+  (el ticket lo listaba como fuera de alcance "salvo que el usuario lo pida").
+- **Resumen de Cambios (10 archivos: 4 nuevos + 6 modificados):**
+  1. **`src/index.ts`** — el guard `if (NODE_ENV !== 'production')` que envolvía
+     `http.createServer` + `initPointsHub` + `httpServer.listen` (sin `else`) hacía que en Render
+     (`NODE_ENV=production`) el proceso conectara a Mongo pero **nunca abriera puerto**. Invertido
+     a `!== 'test'` (guarda defensiva conservada, no eliminada: ningún test importa `index.ts` hoy
+     pero un `listen()` incondicional dejaría un handle colgado si alguno lo hiciera). `port =
+     process.env.PORT || 3000` y `listen` sin host (bind `0.0.0.0`) intactos. `console.log`
+     cosmético ajustado a `Server is running on port ${port}`.
+  2. **`src/utils/allowedOrigins.ts`** (nuevo) — helper compartido de allowlist CORS multi-origen:
+     `parseAllowedOrigins` (lee `FRONTEND_URL` como **CSV**, trim, descarta vacíos, fallback
+     `['http://localhost:5173']`), `getPreviewOriginRegex` (env **`CORS_PREVIEW_ORIGIN_REGEX`**
+     opcional → `RegExp | null`), `getOriginRules` (re-lee `process.env` en cada llamada, sin
+     cache de módulo), `isOriginAllowed(origin: string | undefined)` (`!origin` ⇒ true, match
+     exacto ⇒ true, regex de preview ⇒ true, resto ⇒ false). Sin `any`. Consumido por
+     **`config/cors.ts`** (se eliminó `ACCEPTED_ORIGINS` y el param `{ acceptedOrigins }` de
+     `corsMiddleware` — único llamador `server.ts` `app.use(corsMiddleware())`) y por
+     **`websocket/pointsHub.ts`** (el `cors.origin` de socket.io pasó de string único a función
+     con la misma lógica). `credentials: true` intacto en ambos.
+  3. **`apps/client/vercel.json`** (nuevo) — rewrite catch-all `/(.*)` → `/index.html` para la SPA
+     (`react-router` v7 + `BrowserRouter`, sin SSR). No se tocó `router.tsx` ni la config de Vite.
+  4. **`README.md`** — versión de pnpm alineada a `pnpm@11.22.0` (fuente: `packageManager` del
+     `package.json` raíz, que NO se tocó).
+  5. **`apps/server/.env.example`** — `SALT_ROUNDS=10` (opcional, comentado), `EMAIL_USER`/
+     `EMAIL_PASSWORD` visibles con nota de obligatorias en prod (App Password de Gmail),
+     `CORS_PREVIEW_ORIGIN_REGEX` documentada con ejemplo, nota de VAPID pospuesto, bloque
+     "Deploy (Render)" con `NODE_ENV=production` / `CLOUDINARY_FOLDER=labanda/prod`. Sin secretos.
+  6. **`src/server.ts`** — `GET /health` inline (siguiendo el precedente de `GET /api`), **200
+     siempre**: `{ status, uptime, timestamp, dbState: mongoose.connection.readyState }`.
+     **Liveness, no readiness** — el 200 no depende de Mongo, `dbState` es solo informativo, para
+     que un blip de DB no ponga a Render a matar el servicio en loop. Ruta en inglés, sin
+     validación, sin tocar modelos.
+  - Tests nuevos: `utils/__tests__/allowedOrigins.test.ts` (match exacto, CSV, `!origin`, regex
+    match/no-match, sin regex, integración), `__tests__/health.test.ts` (`GET /health` → 200 +
+    forma del payload, con `config/db` mockeado).
+- **Fuera de alcance, confirmado NO tocado por el Reviewer:** CI/CD (`.github/`), Dockerfile,
+  `Procfile`, `render.yaml`, `.nvmrc`, `engines` (raíz y `apps/server`), helmet, rate-limiting,
+  `docs/DEPLOY.md`, `config/supabase.ts`, entrada `uploads/` del `.gitignore`, deuda ADR-03
+  (cookie `maxAge` vs JWT `expiresIn`).
+- **Veredicto del Reviewer:** `[APPROVED]` (primera pasada). C1–C4 verificados contra el código
+  real; los 6 comandos de C4 re-corridos en vivo por el propio Reviewer: `server lint` exit 0,
+  `server test` **675/675** (74 archivos), `server test:coverage` 94.42% stmts / 86.66% branch
+  global (umbral 80% sobre `utils/**`+`middleware/**` respetado; `allowedOrigins.ts` ~100%),
+  `client lint` 0 errores (10 warnings preexistentes de `react-hooks/incompatible-library` en
+  vistas no tocadas), `client build` OK, `client test` **316/316**. `git status`: exactamente los
+  10 archivos del reporte, nada fuera de alcance.
+- **Hallazgos no bloqueantes:** (1) `engines.node` sigue en `>=18` en el `package.json` raíz
+  mientras el código usa `process.loadEnvFile()` (Node ≥ 20.6) — el ticket excluye tocar
+  `engines`/`.nvmrc`, queda como riesgo operacional: **el usuario fija Node ≥ 20.6 en Render**
+  (decisión de producto ya tomada). (2) `getOriginRules()` re-lee `process.env` por request (sin
+  cache) — costo despreciable, aceptado. (3) Health Check Path de Render = `/health` (no `/api`).
+  (4) Warnings de eslint/chunk en el client: baseline preexistente.
+- **Estado en Jira:** LB-102 `Tareas por hacer` → `En curso` (2026-09-06, transición id 21, al
+  arrancar el ciclo) → **`Listo`** (2026-09-06, transición id 31, tras `[APPROVED]` del Reviewer).
+- **Trabajo de infra que queda para el humano (fuera del harness):** crear el Web Service en
+  Render (build `pnpm install --frozen-lockfile && pnpm --filter @bar/server build`, start
+  `pnpm --filter @bar/server start`, Health Check Path `/health`, Node ≥ 20.6, env vars:
+  `NODE_ENV=production`, `DATABASE_URL` de Mongo Atlas, `JWT_SECRET` real, `FRONTEND_URL` del
+  dominio de Vercel, las 4 de Cloudinary con `CLOUDINARY_FOLDER=labanda/prod`, `EMAIL_USER`/
+  `EMAIL_PASSWORD` App Password; opcionalmente `CORS_PREVIEW_ORIGIN_REGEX`); crear el cluster de
+  Mongo Atlas con IP allowlist para Render; importar `apps/client` en Vercel (preset Vite, root
+  `apps/client`, env `VITE_API_URL=https://<render>/api`, `VITE_VAPID_PUBLIC_KEY` si se retoma
+  push); generar la App Password de Gmail. Detalle completo en `exp_LB-102.md` §final.
+- **Commits:** ninguno todavía — los cambios de LB-102 quedan sin commitear en el working tree de
+  `feat/production`, que además arrastra 3 commits sin push (`5c362dd`, `7e99720`, `646461f`).
+  Commit/push a criterio del usuario.
