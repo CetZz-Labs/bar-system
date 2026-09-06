@@ -2,6 +2,7 @@ import type { Server as HttpServer } from 'http';
 import { Server, type Socket } from 'socket.io';
 import jwt from 'jsonwebtoken';
 import Group from '../models/Group';
+import { isOriginAllowed } from '../utils/allowedOrigins';
 
 /**
  * Contrato WebSocket de saldo de grupo (LB-61 → LB-70/LB-74; ampliado por LB-68).
@@ -53,11 +54,15 @@ function readCookie(raw: string, name: string): string | undefined {
 }
 
 export function initPointsHub(httpServer: HttpServer): Server {
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-
     io = new Server(httpServer, {
         cors: {
-            origin: frontendUrl,
+            origin: (origin: string | undefined, callback) => {
+                if (isOriginAllowed(origin)) {
+                    return callback(null, true);
+                }
+
+                return callback(new Error('Not allowed by CORS'));
+            },
             credentials: true,
         },
         path: '/socket.io',

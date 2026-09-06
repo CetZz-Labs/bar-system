@@ -1,4 +1,5 @@
 import express, { Express } from 'express'
+import mongoose from 'mongoose'
 import morgan from 'morgan'
 import authRouter from './routes/authRoute'
 import userRouter from './routes/userRoute'
@@ -71,6 +72,20 @@ app.use('/api/bars', barsRouter)
 app.use('/api/rewards', rewardAvailableRouter)
 app.get('/api', (req, res) => {
     res.send('Hello World!')
+})
+
+// LB-102: health check para Render. Liveness, NO readiness: responde 200
+// mientras el proceso esté vivo, sin gatear en la conexión a Mongo (un blip de
+// DB no debe hacer que Render mate el servicio en loop). `dbState` va solo como
+// dato informativo. Handler inline siguiendo el precedente de `GET /api`; no
+// hay lógica de negocio que justifique routes/ → controllers/ → models/.
+app.get('/health', (req, res) => {
+    res.status(200).json({
+        status: 'ok',
+        uptime: process.uptime(),
+        timestamp: new Date().toISOString(),
+        dbState: mongoose.connection.readyState,
+    })
 })
 
 export default app

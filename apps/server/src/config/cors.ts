@@ -1,20 +1,13 @@
 import cors from 'cors';
+import { isOriginAllowed } from '../utils/allowedOrigins';
 
-const ACCEPTED_ORIGINS = [
-    process.env.FRONTEND_URL || 'http://localhost:5173'
-]
-
-export const corsMiddleware = ({ acceptedOrigins = ACCEPTED_ORIGINS } = {}) => cors({
-    origin: (origin, callback) => {
-        if (acceptedOrigins.includes(origin!)) {
+export const corsMiddleware = () => cors({
+    origin: (origin: string | undefined, callback) => {
+        if (isOriginAllowed(origin)) {
             return callback(null, true);
         }
 
-        if (!origin) {
-            return callback(null, true)
-        }
-
-        return callback(new Error('Not allowed by CORS'))
+        return callback(new Error('Not allowed by CORS'));
     },
-    credentials: true
-})
+    credentials: true,
+});

@@ -17,7 +17,7 @@ bar-system/
 ## Requisitos
 
 - Node.js ≥ 18
-- [pnpm](https://pnpm.io) 10.28+
+- [pnpm](https://pnpm.io) 11.22.0 (ver `packageManager` en `package.json`)
 
 ## Setup
 
