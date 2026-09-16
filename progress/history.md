@@ -1721,3 +1721,53 @@ navegador mucho antes de que el token firmado expire realmente.
   con `SameSite=None` pero conviene dominios propios bajo un mismo eTLD+1 antes del launch real.
   (4) `.claude/agents/reviewer.md` no tiene `Write` en su toolset — el reviewer escribió su
   bitácora vía `Bash`.
+
+### [2026-09-16] - LB-112: Bares unificado para usuario (con puntos + disponibles) — extiende LB-79
+- **Dominio afectado:** Monorepo (Backend + Frontend)
+- **Subagentes involucrados:** Explorer (`progress/explorers/exp_LB-112.md`),
+  Implementer (`progress/implementers/impl_LB-112.md`), Reviewer
+  (`progress/reviewers/review_LB-112.md`).
+- **Contexto:** primer ticket de Sprint 7 (`mvp-real`, MOD-3 de la auditoría
+  visual). Decisión del usuario: arrancar por este de los 4 nuevos
+  (LB-111/112/114/116) por no depender de nadie más del equipo. El Explorer
+  encontró que el endpoint de LB-79 (`listBars`) no traía ningún dato de
+  "puntos acumulados del grupo" (solo `todayAttendancePoints`, agnóstico de
+  grupo) y que el patrón de agregación correcto ya existía en
+  `GroupBalanceController.getBalance` (LB-70), pero scopeado a un solo
+  `groupId`. También encontró 3 ambigüedades sin precedente de código,
+  resueltas por el usuario vía `AskUserQuestion` antes de delegar: (1)
+  agregación multi-grupo (todos los grupos del usuario, no uno solo, sin
+  selector); (2) el nav "Mis bares" es hoy el único entry-point hacia toda
+  la gestión de bar del OWNER (perfil/dashboard/categorías/auditoría/
+  reportes) — el usuario eligió reemplazarlo **sin** gate condicional,
+  aceptando explícitamente que los dueños quedan sin navegación hacia su
+  panel hasta que LB-85 (segregación de vistas por rol, Franco, todavía
+  `Tareas por hacer`) se implemente; (3) extender `ExploreBarsView.tsx`
+  in-place en vez de crear una vista nueva.
+- **Resumen de Cambios:** `BarController.listBars` agrega
+  `accumulatedPoints` por bar vía `PointsTransaction.aggregate()` (`$match:
+  { group: { $in: groupIds } }` sobre TODOS los grupos del usuario, `$group`
+  por `bar`, `$sum` de `amount`, filtro `> 0`) — 1 sola query, sin N+1,
+  mergeado en memoria junto a `todayAttendancePoints`/`hasActiveCheckIn`.
+  `ExploreBarsView.tsx` (LB-79) extendido in-place: divide el listado en
+  "Con puntos acumulados" / "Disponibles", badge nuevo con ícono `Trophy`.
+  `MainLayout.tsx`: link del bottom nav cambia de `/bar/mis-bares` a
+  `/bar/explorar`, sin ningún chequeo de `BarUserRole.OWNER` — comentario
+  inline documentando la decisión de producto. La ruta `/bar/mis-bares`
+  sigue existiendo en el router (`MyBarsView.tsx` intacta, alcanzable solo
+  por URL directa o tras registrar un bar nuevo), solo perdió su entry-point
+  de nav. No se tocó `BarDetailView.tsx` (LB-76) ni se agregó ningún link a
+  `/bar/registro`.
+- **Veredicto del Reviewer:** `[APPROVED]` (primera pasada) — C1-C4 de
+  `CHECKPOINTS.md` verificados contra el código real y los comandos
+  corridos en vivo por el propio Reviewer (74 test files/676 tests server,
+  49 test files/317 tests client, lint y build limpios en ambos; el test de
+  `health.test.ts` que el Implementer había marcado como flaky en su
+  sandbox pasó limpio en la corrida del Reviewer — sin regresión). Sin
+  cambios requeridos.
+- **Jira:** `Tareas por hacer` → `En curso` → **`Finalizada`**, 2026-09-16.
+- **Cola de Sprint 7 restante:** LB-116 (Productos + recompensas
+  combinadas), LB-111 (Vista Salida) y LB-114 (Home del dueño) quedan
+  pausados — dependen de avances de Facundo (aprobación del modelo de
+  LB-116) y Franco (LB-85/LB-117) respectivamente. Ver
+  `progress/current.md` para el razonamiento completo de la cola.
