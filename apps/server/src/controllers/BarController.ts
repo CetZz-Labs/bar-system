@@ -4,6 +4,7 @@ import Bar, { ATTENDANCE_POINTS_DAY_KEYS, BarStatus, IAddress, IAttendancePoints
 import BarUser, { BarUserRole } from "../models/BarUser";
 import User from "../models/User";
 import Outing, { OutingStatus } from "../models/Outing";
+import PointsTransaction from "../models/PointsTransaction";
 import { generateSlug } from "../utils/slug";
 import { saveBarLogo, saveBarCover, deleteImage } from "../utils/storage";
 import { verifyBarAccess } from "../utils/barAccess";
@@ -230,15 +231,25 @@ export class BarController {
     };
 
     /**
-     * GET /api/bars — LB-79. Listado de bares ACTIVE para explorar, con los
-     * puntos de asistencia de HOY ya resueltos (`getBarDayOfWeek` +
-     * `ATTENDANCE_POINTS_DAY_KEYS`, en memoria, sin queries extra por bar) y
-     * `hasActiveCheckIn` por bar sin N+1: 1 query a `User` (memberships) + 1
-     * query a `Outing` para TODOS los grupos del usuario, sin filtrar por
-     * bar, resuelta en un `Set` en memoria (mismo criterio de "check-in
-     * activo" que `getPublicBarDetail`, LB-76). Búsqueda `?search=` por
-     * nombre: regex case-insensitive parcial (mismo patrón que
-     * `utils/cashierSearch.ts`, no el patrón exacto/anclado de `registerBar`).
+     * GET /api/bars — LB-79, extendido por LB-112. Listado de bares ACTIVE
+     * para explorar, con los puntos de asistencia de HOY ya resueltos
+     * (`getBarDayOfWeek` + `ATTENDANCE_POINTS_DAY_KEYS`, en memoria, sin
+     * queries extra por bar), `hasActiveCheckIn` por bar sin N+1 (1 query a
+     * `User` (memberships) + 1 query a `Outing` para TODOS los grupos del
+     * usuario, sin filtrar por bar, resuelta en un `Set` en memoria — mismo
+     * criterio de "check-in activo" que `getPublicBarDetail`, LB-76) y,
+     * desde LB-112, `accumulatedPoints`: saldo de puntos acumulados por bar,
+     * agregado sobre TODOS los `groupId` del usuario (no solo uno) —
+     * decisión de producto de LB-112: si la suma de `PointsTransaction` de
+     * cualquiera de los grupos del usuario en ese bar es > 0, el bar entra
+     * en la sección "con puntos" del frontend. Mismo patrón de agregación
+     * que `GroupBalanceController.getBalance` (LB-70:
+     * `PointsTransaction.aggregate` con `$group` por `bar`, `$sum` de
+     * `amount`, filtro `points > 0`), adaptado a `group: { $in: groupIds }`
+     * en vez de un `groupId` puntual — 1 sola query de agregación, sin N+1.
+     * Búsqueda `?search=` por nombre: regex case-insensitive parcial (mismo
+     * patrón que `utils/cashierSearch.ts`, no el patrón exacto/anclado de
+     * `registerBar`).
      */
     static listBars = async (req: Request, res: Response) => {
         try {
@@ -267,6 +278,15 @@ export class BarController {
             }).select('bar').lean();
             const activeBarIds = new Set(activeOutings.map((outing) => outing.bar.toString()));
 
+            const pointsByBar = await PointsTransaction.aggregate<{ _id: Types.ObjectId; points: number }>([
+                { $match: { group: { $in: groupIds } } },
+                { $group: { _id: '$bar', points: { $sum: '$amount' } } },
+                { $match: { points: { $gt: 0 } } },
+            ]);
+            const accumulatedPointsByBarId = new Map(
+                pointsByBar.map((row) => [row._id.toString(), row.points])
+            );
+
             const now = new Date();
             const result = bars.map((bar) => {
                 const dayIndex = getBarDayOfWeek(now, bar.closingTime);
@@ -280,6 +300,7 @@ export class BarController {
                     closingTime: bar.closingTime,
                     todayAttendancePoints,
                     hasActiveCheckIn: activeBarIds.has(bar._id.toString()),
+                    accumulatedPoints: accumulatedPointsByBarId.get(bar._id.toString()) ?? 0,
                 };
             });
 

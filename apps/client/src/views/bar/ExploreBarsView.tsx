@@ -9,6 +9,7 @@ import {
   MapPin,
   Clock,
   Coins,
+  Trophy,
   CheckCircle2,
   Loader2,
   AlertCircle,
@@ -19,10 +20,14 @@ import { exploreBars } from "@/API/BarAPI";
 import type { ExploreBar } from "@/types/bar";
 
 /**
- * LB-79: listado/exploración de bares (cliente logueado). Cards clickeables
- * (mismo patrón de accesibilidad — role="button"/tabIndex/onKeyDown — que
- * `BarCard` de MyBarsView.tsx), navegan a la ficha de detalle de LB-76
- * (`/bar/:id`). Sin geolocalización ni badge "Destacado" — fuera del MVP.
+ * LB-79, extendido por LB-112: listado unificado de bares (cliente
+ * logueado), dividido en dos secciones — "con puntos" (`accumulatedPoints`
+ * > 0 en cualquiera de los grupos del usuario) y "disponibles" (el resto).
+ * Cards clickeables (mismo patrón de accesibilidad — role="button"/
+ * tabIndex/onKeyDown — que `BarCard` de MyBarsView.tsx), navegan a la ficha
+ * de detalle de LB-76 (`/bar/:id`). Sin geolocalización ni badge
+ * "Destacado" — fuera del MVP. Sin selector de grupo ni link a
+ * `/bar/registro` (eso es flujo de OWNER, fuera de esta vista).
  */
 
 const DEBOUNCE_MS = 300;
@@ -75,6 +80,13 @@ function BarCard({ bar }: { bar: ExploreBar }) {
         <Coins size={14} className="shrink-0" />
         {bar.todayAttendancePoints} pts por asistencia hoy
       </div>
+
+      {bar.accumulatedPoints > 0 && (
+        <div className="flex items-center gap-1.5 text-sm text-text-secondary font-medium">
+          <Trophy size={14} className="shrink-0 text-lime" />
+          {bar.accumulatedPoints} pts acumulados
+        </div>
+      )}
     </motion.div>
   );
 }
@@ -105,6 +117,9 @@ export default function ExploreBarsView() {
       toast.error("No pudimos cargar el listado de bares");
     }
   }, [isError]);
+
+  const barsWithPoints = (bars ?? []).filter((bar) => bar.accumulatedPoints > 0);
+  const availableBars = (bars ?? []).filter((bar) => bar.accumulatedPoints === 0);
 
   return (
     <motion.div
@@ -166,10 +181,32 @@ export default function ExploreBarsView() {
       )}
 
       {!isLoading && !isError && bars && bars.length > 0 && (
-        <div className="flex flex-col gap-3">
-          {bars.map((bar) => (
-            <BarCard key={bar.id} bar={bar} />
-          ))}
+        <div className="flex flex-col gap-6">
+          {barsWithPoints.length > 0 && (
+            <section className="flex flex-col gap-3">
+              <h2 className="text-sm font-ui font-semibold text-text-secondary uppercase tracking-wide">
+                Con puntos acumulados
+              </h2>
+              <div className="flex flex-col gap-3">
+                {barsWithPoints.map((bar) => (
+                  <BarCard key={bar.id} bar={bar} />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {availableBars.length > 0 && (
+            <section className="flex flex-col gap-3">
+              <h2 className="text-sm font-ui font-semibold text-text-secondary uppercase tracking-wide">
+                Disponibles
+              </h2>
+              <div className="flex flex-col gap-3">
+                {availableBars.map((bar) => (
+                  <BarCard key={bar.id} bar={bar} />
+                ))}
+              </div>
+            </section>
+          )}
         </div>
       )}
     </motion.div>

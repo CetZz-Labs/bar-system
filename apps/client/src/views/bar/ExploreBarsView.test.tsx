@@ -39,6 +39,7 @@ const mockBars: ExploreBar[] = [
     closingTime: '06:00',
     todayAttendancePoints: 100,
     hasActiveCheckIn: false,
+    accumulatedPoints: 0,
   },
   {
     id: 'bar-2',
@@ -47,10 +48,11 @@ const mockBars: ExploreBar[] = [
     closingTime: '05:00',
     todayAttendancePoints: 0,
     hasActiveCheckIn: true,
+    accumulatedPoints: 0,
   },
 ];
 
-describe('ExploreBarsView (LB-79)', () => {
+describe('ExploreBarsView (LB-79, extendido por LB-112)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -118,6 +120,24 @@ describe('ExploreBarsView (LB-79)', () => {
     await waitFor(() => {
       expect(screen.getByText('Todavía no hay bares activos para mostrar.')).toBeInTheDocument();
     });
+  });
+
+  it('splits bars into "Con puntos acumulados" and "Disponibles" sections based on accumulatedPoints', async () => {
+    const barsWithSplit: ExploreBar[] = [
+      { ...mockBars[0], accumulatedPoints: 0 },
+      { ...mockBars[1], accumulatedPoints: 250 },
+    ];
+    vi.mocked(BarAPI.exploreBars).mockResolvedValue(barsWithSplit);
+
+    renderWithProviders(<ExploreBarsView />);
+
+    await waitFor(() => {
+      expect(screen.getByText('El Bar de Juan')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('Con puntos acumulados')).toBeInTheDocument();
+    expect(screen.getByText('Disponibles')).toBeInTheDocument();
+    expect(screen.getByText('250 pts acumulados')).toBeInTheDocument();
   });
 
   it('shows an error toast when the query fails', async () => {

@@ -45,13 +45,19 @@ export default function MainLayout() {
                         <Users size={24} />
                         <span className="text-[10px] font-ui font-medium">Grupos</span>
                     </Link>
+                    {/* LB-112: reemplaza el link a "/bar/mis-bares" por la vista
+                        unificada de exploración de bares ("/bar/explorar"), sin
+                        ningún gate condicional para dueños (BarUserRole.OWNER) —
+                        decisión de producto aceptada explícitamente: los dueños
+                        quedan sin entry-point de nav hacia "/bar/:id/perfil" hasta
+                        que LB-85 (segregación de vistas por rol) se implemente. */}
                     <Link
-                        to="/bar/mis-bares"
+                        to="/bar/explorar"
                         className={`flex flex-col items-center justify-center gap-1 w-16 h-full transition-colors ${location.pathname.startsWith('/bar') ? 'text-lime' : 'text-text-secondary hover:text-text-primary'}`}
-                        aria-label="Mis bares"
+                        aria-label="Bares"
                     >
                         <Store size={24} />
-                        <span className="text-[10px] font-ui font-medium">Mis bares</span>
+                        <span className="text-[10px] font-ui font-medium">Bares</span>
                     </Link>
                     <Link
                         to="/profile"

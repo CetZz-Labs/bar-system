@@ -4,11 +4,14 @@ import { BarController } from '../../controllers/BarController'
 import Bar, { BarStatus } from '../../models/Bar'
 import User from '../../models/User'
 import Outing, { OutingStatus } from '../../models/Outing'
+import PointsTransaction from '../../models/PointsTransaction'
 import { buildMockRequest, buildMockResponse } from '../../__tests__/helpers/mockHelpers'
 
-// LB-79: listado de bares para explorar (GET /api/bars). Cubre el cálculo de
-// `todayAttendancePoints` (sin tocar la DB por bar), `hasActiveCheckIn` sin
-// N+1 (2 queries totales) y la búsqueda por nombre `?search=`.
+// LB-79 (extendido por LB-112): listado de bares para explorar (GET
+// /api/bars). Cubre el cálculo de `todayAttendancePoints` (sin tocar la DB
+// por bar), `hasActiveCheckIn` sin N+1 (2 queries totales), la búsqueda por
+// nombre `?search=` y, desde LB-112, `accumulatedPoints` (agregación de
+// `PointsTransaction` sobre TODOS los `groupId` del usuario, sin N+1).
 
 vi.mock('../../models/Bar', () => ({
   default: {
@@ -46,6 +49,17 @@ vi.mock('../../models/Outing', () => ({
     CANCELLED: 'CANCELLED',
     COMPLETED: 'COMPLETED',
     NO_SHOW: 'NO_SHOW',
+  },
+}))
+
+vi.mock('../../models/PointsTransaction', () => ({
+  default: {
+    aggregate: vi.fn(),
+  },
+  PointsTransactionType: {
+    ATTENDANCE: 'ATTENDANCE',
+    CONSUMPTION: 'CONSUMPTION',
+    REDEMPTION: 'REDEMPTION',
   },
 }))
 
@@ -94,6 +108,8 @@ beforeEach(() => {
   vi.mocked(Bar.find).mockReset()
   vi.mocked(User.findById).mockReset()
   vi.mocked(Outing.find).mockReset()
+  vi.mocked(PointsTransaction.aggregate).mockReset()
+  vi.mocked(PointsTransaction.aggregate).mockResolvedValue([])
 })
 
 describe('BarController.listBars', () => {
@@ -179,6 +195,38 @@ describe('BarController.listBars', () => {
     expect(res.json).toHaveBeenCalledWith([
       expect.objectContaining({ id: barWithCheckIn._id, hasActiveCheckIn: true }),
       expect.objectContaining({ id: barWithoutCheckIn._id, hasActiveCheckIn: false }),
+    ])
+  })
+
+  it('computes accumulatedPoints via a single aggregation across ALL of the user\'s groupIds (multi-group, no N+1), filtering out bars with 0 or negative balance', async () => {
+    const groupIdA = new Types.ObjectId()
+    const groupIdB = new Types.ObjectId()
+    const barWithPoints = buildMockBar()
+    const barWithoutPoints = buildMockBar()
+
+    vi.mocked(Bar.find).mockReturnValue(buildSelectSortLeanQuery([barWithPoints, barWithoutPoints]) as any)
+    vi.mocked(User.findById).mockReturnValue(
+      buildSelectLeanQuery({ memberships: [{ group: groupIdA }, { group: groupIdB }] }) as any
+    )
+    vi.mocked(Outing.find).mockReturnValue(buildSelectLeanQuery([]) as any)
+    vi.mocked(PointsTransaction.aggregate).mockResolvedValue([
+      { _id: barWithPoints._id, points: 150 },
+    ])
+
+    const req = buildMockRequest({ user: { _id: new Types.ObjectId() } as any, query: {} })
+    const res = buildMockResponse()
+
+    await BarController.listBars(req, res)
+
+    expect(PointsTransaction.aggregate).toHaveBeenCalledTimes(1)
+    expect(PointsTransaction.aggregate).toHaveBeenCalledWith([
+      { $match: { group: { $in: [groupIdA, groupIdB] } } },
+      { $group: { _id: '$bar', points: { $sum: '$amount' } } },
+      { $match: { points: { $gt: 0 } } },
+    ])
+    expect(res.json).toHaveBeenCalledWith([
+      expect.objectContaining({ id: barWithPoints._id, accumulatedPoints: 150 }),
+      expect.objectContaining({ id: barWithoutPoints._id, accumulatedPoints: 0 }),
     ])
   })
 })

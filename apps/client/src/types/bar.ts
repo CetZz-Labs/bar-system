@@ -64,10 +64,11 @@ export interface BarPublicDetail {
 }
 
 /**
- * Item de listado de exploración de bares (LB-79), `GET /bars?search=`.
- * Espejo manual de `BarController.listBars` — NO reusa `BarPublicDetail`
- * (le falta `todayAttendancePoints` y ese tipo trae el mapa completo de
- * `attendancePointsByDay`, no el valor de HOY ya resuelto por el backend).
+ * Item de listado de exploración de bares (LB-79, extendido por LB-112),
+ * `GET /bars?search=`. Espejo manual de `BarController.listBars` — NO reusa
+ * `BarPublicDetail` (le falta `todayAttendancePoints` y ese tipo trae el
+ * mapa completo de `attendancePointsByDay`, no el valor de HOY ya resuelto
+ * por el backend).
  */
 export interface ExploreBar {
   id: string;
@@ -76,6 +77,12 @@ export interface ExploreBar {
   closingTime: string;
   todayAttendancePoints: number;
   hasActiveCheckIn: boolean;
+  /**
+   * LB-112: saldo de puntos acumulados por el usuario en este bar, agregado
+   * sobre TODOS los grupos del usuario (no un grupo puntual). > 0 ubica al
+   * bar en la sección "con puntos" de `ExploreBarsView`.
+   */
+  accumulatedPoints: number;
 }
 
 export interface MyBar extends Bar {
