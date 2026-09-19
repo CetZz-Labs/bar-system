@@ -39,6 +39,7 @@ import CashierLayout from './layouts/CashierLayout'
 import SelectContextView from './views/auth/SelectContextView'
 import { RequireBarOwner } from './components/auth/RequireBarOwner'
 import NotFound from './views/NotFound'
+import { TermsView, PrivacyView } from './views/legal/LegalViews'
 
 export default function Router() {
     return (
@@ -65,6 +66,8 @@ export default function Router() {
                     <Route path="/login" element={<LoginView />} />
                     <Route path="/forgot-password" element={<ForgotPasswordView />} />
                     <Route path="/new-password" element={<NewPasswordView />} />
+                    <Route path="/legal/terminos" element={<TermsView />} />
+                    <Route path="/legal/privacidad" element={<PrivacyView />} />
                 </Route>
 
                 <Route path='/profile' element={<MainLayout />}>

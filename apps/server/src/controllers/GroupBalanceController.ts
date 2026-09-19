@@ -176,6 +176,19 @@ export class GroupBalanceController {
                         },
                     };
                 }
+                // LB-104: REDEMPTION → "canje" (antes caía en fallthrough "asistencia").
+                if (t.type === PointsTransactionType.REDEMPTION) {
+                    return {
+                        id: t._id.toString(),
+                        groupId,
+                        barId,
+                        barName: barNameById.get(barId) ?? "Bar",
+                        type: "canje" as const,
+                        points: t.amount,
+                        createdAt: t.createdAt.toISOString(),
+                        metadata: { label: t.label },
+                    };
+                }
                 return {
                     id: t._id.toString(),
                     groupId,

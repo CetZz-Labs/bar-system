@@ -10,6 +10,7 @@ import { motion, AnimatePresence } from "motion/react"
 import { ArrowLeft, ArrowRight, Eye, EyeOff, Check, Zap } from "lucide-react"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
+import { CURRENT_TERMS_VERSION, PRIVACY_PATH, TERMS_PATH } from "@/constants/legal"
 
 export default function RegisterView() {
     const navigate = useNavigate()
@@ -17,7 +18,7 @@ export default function RegisterView() {
     const [showPassword, setShowPassword] = useState(false)
 
     // Extended auth type just for the form
-    type RegisterForm = Auth & { fullName?: string, phone?: string, referralCode?: string }
+    type RegisterForm = Auth & { fullName?: string, phone?: string, referralCode?: string, acceptedTerms?: boolean }
     
     const defaultValues: RegisterForm = {
         name: "",
@@ -28,7 +29,8 @@ export default function RegisterView() {
         birthdate: "",
         password: "",
         confirmPassword: "",
-        referralCode: ""
+        referralCode: "",
+        acceptedTerms: false,
     }
 
     const { register, handleSubmit, trigger, watch, formState: { errors } } = useForm<RegisterForm>({ 
@@ -59,7 +61,10 @@ export default function RegisterView() {
             formData.name = parts[0]
             formData.lastName = parts.slice(1).join(" ") || "."
         }
-        mutate(formData)
+        mutate({
+            ...formData,
+            acceptedTerms: true,
+        })
     }
 
     // Watched values for summary in Step 3
@@ -343,9 +348,44 @@ export default function RegisterView() {
                             </div>
 
                             <div className="mt-auto pt-8 pb-4">
-                                <p className="text-text-secondary text-center text-xs px-4 mb-6 leading-relaxed">
-                                    Al registrarte aceptás los <span className="text-lime">Términos y condiciones</span> y la <span className="text-lime">Política de privacidad</span>
-                                </p>
+                                <label className="flex items-start gap-3 mb-6 px-1 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        className="mt-1 h-4 w-4 accent-[var(--color-lime)] shrink-0"
+                                        {...register("acceptedTerms", {
+                                            required: "Debés aceptar para crear la cuenta",
+                                            validate: (v) =>
+                                                v === true || "Debés aceptar para crear la cuenta",
+                                        })}
+                                    />
+                                    <span className="text-text-secondary text-xs leading-relaxed">
+                                        Acepto los{" "}
+                                        <Link
+                                            to={TERMS_PATH}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="text-lime font-semibold no-underline"
+                                        >
+                                            Términos y condiciones
+                                        </Link>
+                                        {" "}y la{" "}
+                                        <Link
+                                            to={PRIVACY_PATH}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="text-lime font-semibold no-underline"
+                                        >
+                                            Política de privacidad
+                                        </Link>
+                                        , y declaro bajo juramento ser mayor de 18 años
+                                        (v. {CURRENT_TERMS_VERSION}).
+                                    </span>
+                                </label>
+                                {errors.acceptedTerms?.message && (
+                                    <p className="text-error text-xs mb-4 px-1">
+                                        {errors.acceptedTerms.message}
+                                    </p>
+                                )}
                                 
                                 <Button 
                                     type="button" 

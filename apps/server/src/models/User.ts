@@ -37,6 +37,11 @@ export interface IUser extends Document {
     profileComplete: boolean;
     memberships: IMembership[];
     notificationPreferences: INotificationPreferences;
+    /** LB-110: aceptación de T&C + Política + declaración +18. */
+    termsAccepted: boolean;
+    termsAcceptedAt?: Date;
+    termsVersion?: string;
+    legalAgeDeclared: boolean;
 }
 
 const userSchema = new Schema<IUser>({
@@ -114,7 +119,23 @@ const userSchema = new Schema<IUser>({
             type: Boolean,
             default: true,
         },
-    }
+    },
+    // LB-110: evidencia de aceptación legal al alta (booleano + timestamp + versión).
+    termsAccepted: {
+        type: Boolean,
+        default: false,
+    },
+    termsAcceptedAt: {
+        type: Date,
+    },
+    termsVersion: {
+        type: String,
+        trim: true,
+    },
+    legalAgeDeclared: {
+        type: Boolean,
+        default: false,
+    },
 }, {
     timestamps: true
 })

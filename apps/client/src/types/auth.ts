@@ -7,6 +7,8 @@ export interface Auth {
     phone?: string;
     fullName?: string;
     birthdate?: string;
+    /** LB-110: aceptación de T&C + Política + declaración +18. */
+    acceptedTerms?: boolean;
 }
 
 export type RequestToken = Pick<Auth, 'email'>

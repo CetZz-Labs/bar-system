@@ -51,11 +51,12 @@ const renderSelectContext = (route = '/select-context') =>
       <Route path="/onboarding" element={<div>Onboarding Page</div>} />
       <Route path="/" element={<div>Home Page</div>} />
       <Route path="/bar/:barId/cajero" element={<div>Cashier Panel Page</div>} />
+      <Route path="/bar/:barId/dashboard" element={<div>Owner Dashboard Page</div>} />
     </Routes>,
     { route }
   );
 
-describe('SelectContextView (LB-66)', () => {
+describe('SelectContextView (LB-66 / LB-117)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockUseAuth.mockReturnValue({
@@ -165,5 +166,21 @@ describe('SelectContextView (LB-66)', () => {
       expect.objectContaining({ mode: 'cashier', barId: 'bar-1' })
     );
     expect(await screen.findByText('Cashier Panel Page')).toBeInTheDocument();
+  });
+
+  it('LB-117: selecting owner navigates to bar dashboard without selectContext(owner)', async () => {
+    mockGetContextOptions.mockResolvedValue({
+      user: true,
+      cashier: [],
+      owner: [{ barId: 'bar-2', barName: 'Bar Dos' }],
+    } satisfies ContextOptions);
+
+    const user = userEvent.setup();
+    renderSelectContext();
+
+    await user.click(await screen.findByText('Dueño de Bar Dos'));
+
+    expect(mockSelectContext).not.toHaveBeenCalled();
+    expect(await screen.findByText('Owner Dashboard Page')).toBeInTheDocument();
   });
 });

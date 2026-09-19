@@ -51,6 +51,7 @@ describe('AuthController.createAccount', () => {
     password: 'password123',
     confirmPassword: 'password123',
     birthdate: '1990-01-15',
+    acceptedTerms: true,
   }
 
   function mockCreatedUser(overrides: Record<string, unknown> = {}) {
@@ -80,19 +81,25 @@ describe('AuthController.createAccount', () => {
 
     await AuthController.createAccount(req, res)
 
-    expect(User.create).toHaveBeenCalledWith({
-      name: validBody.name,
-      lastName: validBody.lastName,
-      email: validBody.email,
-      password: validBody.password,
-      birthdate: validBody.birthdate,
-    })
+    expect(User.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: validBody.name,
+        lastName: validBody.lastName,
+        email: validBody.email,
+        password: validBody.password,
+        birthdate: validBody.birthdate,
+        termsAccepted: true,
+        legalAgeDeclared: true,
+        termsVersion: expect.any(String),
+      })
+    )
     // Ninguno de los campos peligrosos debe filtrarse al payload de Mongoose.
     const createArg = vi.mocked(User.create).mock.calls[0][0] as Record<string, unknown>
     expect(createArg).not.toHaveProperty('role')
     expect(createArg).not.toHaveProperty('isActive')
     expect(createArg).not.toHaveProperty('profileComplete')
     expect(createArg).not.toHaveProperty('memberships')
+    expect(createArg).not.toHaveProperty('acceptedTerms')
   })
 
   it('creates the account with only the legitimate registration fields on a clean body', async () => {
@@ -104,14 +111,37 @@ describe('AuthController.createAccount', () => {
 
     await AuthController.createAccount(req, res)
 
-    expect(User.create).toHaveBeenCalledWith({
-      name: validBody.name,
-      lastName: validBody.lastName,
-      email: validBody.email,
-      password: validBody.password,
-      birthdate: validBody.birthdate,
-    })
+    expect(User.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: validBody.name,
+        lastName: validBody.lastName,
+        email: validBody.email,
+        password: validBody.password,
+        birthdate: validBody.birthdate,
+        termsAccepted: true,
+        legalAgeDeclared: true,
+        termsAcceptedAt: expect.any(Date),
+        termsVersion: expect.any(String),
+      })
+    )
     expect(res.send).toHaveBeenCalled()
+  })
+
+  it('LB-110: returns 400 when acceptedTerms is missing/false', async () => {
+    vi.mocked(User.findOne).mockResolvedValue(null)
+
+    const req = buildMockRequest({ body: { ...validBody, acceptedTerms: false } })
+    const res = buildMockResponse()
+
+    await AuthController.createAccount(req, res)
+
+    expect(res.status).toHaveBeenCalledWith(400)
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: expect.stringMatching(/aceptar/i),
+      })
+    )
+    expect(User.create).not.toHaveBeenCalled()
   })
 
   it('returns 400 when the email is already registered', async () => {

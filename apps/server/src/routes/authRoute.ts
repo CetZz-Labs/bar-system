@@ -22,6 +22,10 @@ router.post('/register',
             }
             return true;
         }),
+    // LB-110: checkbox de T&C + Política + declaración +18 (obligatorio).
+    body('acceptedTerms')
+        .custom((value) => value === true || value === 'true')
+        .withMessage('Debés aceptar los Términos, la Política de Privacidad y declarar ser mayor de 18 años'),
     handleInputErrors,
     AuthController.createAccount
 )
