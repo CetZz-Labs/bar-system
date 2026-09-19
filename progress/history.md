@@ -1511,3 +1511,49 @@ navegador mucho antes de que el token firmado expire realmente.
   este cierre: comentario en LB-94 documentando los scripts de load test listos para correr en el
   futuro, y apertura de un ticket de seguimiento para `closeOutingsForBar` (paralelización, fuera
   de alcance de este ticket).
+
+### [2026-09-01] - LB-87: Consistencia de datos entre módulos (auditoría cross-cutting, solo lectura)
+- **Dominio afectado:** Backend (análisis, sin cambios de código)
+- **Subagentes involucrados:** Explorer (`progress/explorers/exp_LB-87.md`), Reviewer
+  (`progress/reviewers/review_LB-87.md`). Sin Implementer — ticket explícitamente de solo lectura
+  ("si hay bugs, se tickean a los owners correspondientes, no se modifican acá").
+- **Contexto:** rama nueva `feat/LB-87-data-consistency-audit` creada desde `development` (decisión
+  explícita del usuario de no seguir encadenando sobre `feat/LB-96-group-membership-check`, a
+  diferencia de LB-96/LB-97/LB-94). Sin acceso a Bash/staging real en la corrida del Explorer, así
+  que el método sugerido por el ticket ("scripts SQL contra staging con seed data") se reemplazó
+  por reconstrucción estática de cada invariante contra el código real (modelos, controllers,
+  utils), verificando todos los paths de escritura (creación, edición, cancelación, reversión,
+  idempotencia).
+- **Resumen de hallazgos:** los 4 invariantes "core" se sostienen sin gaps — atomicidad
+  saldo↔ledger de `PointsTransaction` (4 escritores, todos transaccionales con re-lectura fresca),
+  silencio de asistencia en 0 puntos (garantizado incluso a nivel de schema, no solo por
+  convención), decremento atómico de stock de `Reward` al entregar un canje, y cobertura completa
+  de los 19 `eventType` de `AuditLog`. Se encontraron 7 gaps reales, todos confirmados línea por
+  línea por el Reviewer contra el código (ninguno es falso positivo, ninguno omitido): (1) Media —
+  consumo confirmado vía disputa `ACCEPTED` del OWNER no dispara `awardAttendancePointsIfFirst`
+  (`DashboardController.resolveConsumptionDispute`, a diferencia de
+  `LeaderConsumptionController.accept`); (2) Media — canjes entregados (`PointsTransactionType.
+  REDEMPTION`) se etiquetan como `"asistencia"` en `GroupBalanceController.getHistory`, mientras
+  `apps/client/src/types/points.ts` ya tiene el tipo `"canje"` listo y nunca lo recibe; (3) Media —
+  no existe "stock inicial" ni ledger de entregas de `Reward`, `RewardController.updateReward`
+  sobrescribe `stock` sin transacción ni registro de before/after; (4) **Alta** —
+  `ShiftSummary.redemptionCount` hardcodeado en 0 (comentario obsoleto de antes de que existiera el
+  modelo `Redemption`), mismo patrón en `closeOuting.ts` — siempre diverge del dashboard OWNER real
+  (`barDashboard.getCashierTable`); (5) Media-Alta — `calculatePoints` de un turno puede duplicar
+  puntos de `ATTENDANCE`/`REDEMPTION` de otro turno que confirmó consumos de la misma `Outing`
+  (agrupa por `outing`, no por `consumption`/ventana temporal del turno); (6) Baja-Media —
+  `buildShiftSummary.totalAmount` no cuenta consumos `RESOLVED_BY_OWNER`/`ACCEPTED`, a diferencia
+  del dashboard OWNER; (7) Media-Alta — `AuditLog.bar` es `required` y no existe campo `group`, por
+  lo que cambios de rol, bans y sucesión de líder en `GroupController` no son auditables aunque se
+  quisiera (gap de diseño de schema, no bug puntual de un método).
+- **Decisión explícita del usuario:** no abrir tickets de seguimiento en Jira para los 7 gaps (a
+  diferencia del precedente de LB-100 tras LB-94). Quedan documentados en un comentario en LB-87 y
+  en esta entrada, con severidad y módulo/owner sugerido, para no perderse como hallazgos sueltos
+  si en el futuro se decide tiquetearlos.
+- **Veredicto del Reviewer:** `[APPROVED]` - dado que el ticket no modifica código, C1-C4 de
+  `CHECKPOINTS.md` no aplican de la forma habitual (no hay build/test/lint que correr); el gate fue
+  la fidelidad del reporte del Explorer, verificada releyendo el Reviewer cada cita de
+  archivo/línea y cada conclusión lógica contra el código real, sin aceptar ninguna sin comprobarla
+  él mismo. Sin cambios de código, sin commits — evidencia completa en
+  `progress/explorers/exp_LB-87.md` y `progress/reviewers/review_LB-87.md`. Transicionado a
+  "Finalizada" en Jira.
