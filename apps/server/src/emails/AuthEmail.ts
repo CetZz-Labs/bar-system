@@ -6,6 +6,13 @@ interface IEmail {
     token: string
 }
 
+// LB-115: variante de IEmail para la invitación de cajero — agrega el
+// nombre del bar para personalizar el mensaje (el resto de las emails de
+// AuthEmail no lo necesitan porque son flujos de un único usuario/cuenta).
+interface ICashierInviteEmail extends IEmail {
+    barName: string
+}
+
 export class AuthEmail {
 
     static sendConfirmationEmail = async ({ email, name, token }: IEmail) => {
@@ -111,6 +118,63 @@ export class AuthEmail {
                 </div>
             </div>
         `
+        })
+    }
+
+    /**
+     * LB-115: invitación de cajero — el OWNER da de alta el email de un
+     * candidato que todavía no tiene cuenta en La Banda. El link apunta a
+     * `/activate-cashier-account` (distinto de `/confirm-account`, que
+     * asume que el usuario ya eligió su propia contraseña al registrarse):
+     * acá el candidato entra el código y recién ahí fija su contraseña.
+     */
+    static sendCashierInviteEmail = async ({ email, name, token, barName }: ICashierInviteEmail) => {
+        const info = await transporter.sendMail({
+            from: '"La Banda" <cetzzlabs@gmail.com>',
+            to: email,
+            subject: `Te invitaron a ser cajero de ${barName} en La Banda`,
+            text: `Hola ${name}, te dieron de alta como cajero de ${barName} en La Banda. Tu código de activación es: ${token}. Ingrésalo en: ${process.env.FRONTEND_URL}/activate-cashier-account para elegir tu contraseña. Este código expira en 10 minutos.`,
+            html: `
+                <div style="font-family: Arial, Helvetica, sans-serif; background-color: #f4f4f5; padding: 40px 20px; color: #333;">
+                    <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+
+                        <div style="background-color: #0f172a; padding: 20px; text-align: center;">
+                            <h1 style="color: #ffffff; margin: 0; font-size: 24px; letter-spacing: 1px;">La Banda</h1>
+                        </div>
+
+                        <div style="padding: 30px;">
+                            <h2 style="color: #1e293b; margin-top: 0;">¡Hola, ${name}! 👋</h2>
+                            <p style="font-size: 16px; line-height: 1.5; color: #475569;">
+                                Te dieron de alta como <strong>cajero de ${barName}</strong> en <strong>La Banda</strong>. Para empezar a usar tu cuenta, elegí tu contraseña con el siguiente código.
+                            </p>
+
+                            <div style="text-align: center; margin: 35px 0;">
+                                <p style="font-size: 14px; color: #64748b; margin-bottom: 10px; text-transform: uppercase; font-weight: bold;">Tu código de activación es:</p>
+                                <div style="background-color: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 8px; padding: 15px; display: inline-block;">
+                                    <strong style="font-size: 28px; letter-spacing: 6px; color: #0f172a;">${token}</strong>
+                                </div>
+                            </div>
+
+                            <div style="text-align: center; margin-bottom: 30px;">
+                                <a href="${process.env.FRONTEND_URL}/activate-cashier-account" style="background-color: #3b82f6; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 6px; font-weight: bold; font-size: 16px; display: inline-block;">
+                                    Activar mi cuenta de cajero
+                                </a>
+                            </div>
+
+                            <p style="font-size: 14px; color: #ef4444; text-align: center; margin-bottom: 0; background-color: #fef2f2; padding: 10px; border-radius: 6px;">
+                                ⏳ Recuerda que este código expira en <strong>10 minutos</strong>.
+                            </p>
+                        </div>
+
+                        <div style="background-color: #f8fafc; padding: 20px; text-align: center; border-top: 1px solid #e2e8f0;">
+                            <p style="font-size: 12px; color: #94a3b8; margin: 0;">
+                                Si no esperabas esta invitación, podés ignorar este correo de forma segura.
+                            </p>
+                        </div>
+
+                    </div>
+                </div>
+            `
         })
     }
 }

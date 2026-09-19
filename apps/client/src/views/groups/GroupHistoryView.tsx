@@ -6,7 +6,6 @@ import { ArrowLeft, Beer, CalendarCheck, Gift, Loader2 } from "lucide-react";
 import { getGroupBySlug } from "@/API/GroupAPI";
 import { getGroupHistory } from "@/API/PointsAPI";
 import { useQuery } from "@tanstack/react-query";
-import { EmptyState } from "@/components/ui/EmptyState";
 import { CoachMark } from "@/components/onboarding/CoachMark";
 import { FIRST_VISIT_KEYS } from "@/utils/firstVisit";
 import { useGroupPointsSocket } from "@/hooks/useGroupPointsSocket";

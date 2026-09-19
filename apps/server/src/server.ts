@@ -17,6 +17,7 @@ import outingCloseRouter from './routes/outingCloseRoute'
 import cashierRouter from './routes/cashierRoute'
 import contextRouter from './routes/contextRoute'
 import rewardRouter from './routes/rewardRoute'
+import cashierManagementRouter from './routes/cashierManagementRoute'
 import rewardAvailableRouter from './routes/rewardAvailableRoute'
 import groupRewardsRouter from './routes/groupRewardsRoute'
 import groupRedemptionsRouter from './routes/groupRedemptionsRoute'
@@ -66,6 +67,10 @@ app.use('/api/cashier', cashierRouter)
 app.use('/api/context', contextRouter)
 app.use('/api/push', pushRouter)
 app.use('/api/bars/:barId/rewards', rewardRouter)
+// LB-115: ABM de cajeros — registrado junto al resto de los sub-routers de
+// /api/bars/:barId (antes del mount plano de /api/bars más abajo, mismo
+// motivo de orden documentado para rewardRouter/barsRouter, LB-79).
+app.use('/api/bars/:barId/cashiers', cashierManagementRouter)
 app.use('/api/bars/:barId/audit-logs', auditLogRouter)
 app.use('/api/bars/:barId/reports', reportRouter)
 app.use('/api/bars/:barId', dashboardRouter)

@@ -78,6 +78,51 @@ export class AuthController {
         }
     }
 
+    /**
+     * LB-115: activa la cuenta de un cajero dado de alta por un OWNER
+     * (User creado con isActive:false y password aleatorio no comunicado,
+     * ver CashierManagementController.createCashier) y le permite fijar su
+     * propia contraseña, en un solo paso. Distinto de `confirmAccount`
+     * (asume que el usuario ya eligió su password al registrarse) y de
+     * `updatePasswordWithToken` (asume que el usuario ya está activo) — ver
+     * decisión documentada en progress/implementers/impl_LB-115.md.
+     */
+    static activateCashierAccount = async (req: Request, res: Response) => {
+        try {
+            const { token, password } = req.body
+
+            const tokenExists = await Token.findOne({ token })
+
+            if (!tokenExists) {
+                const error = new Error('Token no valido')
+                res.status(404).json({ message: error.message })
+                return
+            }
+
+            const user = await User.findById(tokenExists.user)
+
+            if (!user) {
+                const error = new Error('Usuario no encontrado')
+                res.status(404).json({ message: error.message })
+                return
+            }
+
+            if (user.isActive) {
+                await tokenExists.deleteOne()
+                res.status(409).json({ message: 'La cuenta ya fue activada' })
+                return
+            }
+
+            user.password = password
+            user.isActive = true
+
+            await Promise.allSettled([user.save(), tokenExists.deleteOne()])
+            res.send('Cuenta activada, ya podés iniciar sesión')
+        } catch (error) {
+            res.status(500).json({ message: 'Hubo un error' })
+        }
+    }
+
     static requestConfirmationCode = async (req: Request, res: Response) => {
         try {
             const { email } = req.body

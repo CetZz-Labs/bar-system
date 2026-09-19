@@ -1,4 +1,4 @@
-import type { Auth, ConfirmToken, ForgotPasswordForm, LoginFormDataType, NewPasswordForm, RequestToken, User } from "@/types/auth";
+import type { ActivateCashierAccountFormData, Auth, ConfirmToken, ForgotPasswordForm, LoginFormDataType, NewPasswordForm, RequestToken, User } from "@/types/auth";
 import api from "@/libs/axios";
 import { throwStandardError } from "@/utils/apiError";
 
@@ -59,6 +59,21 @@ export async function validateToken(formData: ConfirmToken) {
 export async function updatePasswordWithToken({ formData, token }: { formData: NewPasswordForm, token: ConfirmToken['token'] }) {
     try {
         const url = `/auth/update-password/${token}`
+        const { data } = await api.post<string>(url, formData)
+        return data
+    } catch (error) {
+        throwStandardError(error)
+    }
+}
+
+/**
+ * LB-115: activa la cuenta de un cajero dado de alta por un OWNER (fija
+ * contraseña + isActive:true en un solo paso). Ver
+ * AuthController.activateCashierAccount.
+ */
+export async function activateCashierAccount(formData: ActivateCashierAccountFormData) {
+    try {
+        const url = '/auth/activate-cashier-account'
         const { data } = await api.post<string>(url, formData)
         return data
     } catch (error) {

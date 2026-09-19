@@ -5,6 +5,7 @@ import AuthLayout from './layouts/AuthLayout'
 import RegisterView from './views/auth/RegisterView'
 import RequestNewCodeView from './views/auth/RequestNewCodeView'
 import ConfirmAccountView from './views/auth/ConfirmAccountView'
+import ActivateCashierAccountView from './views/auth/ActivateCashierAccountView'
 import LoginView from './views/auth/LoginView'
 import MainLayout from './layouts/MainLayout'
 import ProfileView from './views/user/ProfileView'
@@ -25,6 +26,7 @@ import MyBarsView from './views/bar/MyBarsView'
 import BarProfileView from './views/bar/BarProfileView'
 import BarDetailView from './views/bar/BarDetailView'
 import BarRewardsView from './views/bar/BarRewardsView'
+import BarCashiersView from './views/bar/BarCashiersView'
 import ExploreBarsView from './views/bar/ExploreBarsView'
 import BarDashboardView from './views/bar/BarDashboardView'
 import BarAuditLogView from './views/bar/BarAuditLogView'
@@ -62,6 +64,7 @@ export default function Router() {
                     <Route path="/register" element={<RegisterView />} />
                     <Route path="/request-code" element={<RequestNewCodeView />} />
                     <Route path="/confirm-account" element={<ConfirmAccountView />} />
+                    <Route path="/activate-cashier-account" element={<ActivateCashierAccountView />} />
                     <Route path="/login" element={<LoginView />} />
                     <Route path="/forgot-password" element={<ForgotPasswordView />} />
                     <Route path="/new-password" element={<NewPasswordView />} />
@@ -94,6 +97,14 @@ export default function Router() {
                         }
                     />
                     <Route path="/bar/:id/rewards" element={<BarRewardsView />} />
+                    <Route
+                        path="/bar/:barId/cashiers"
+                        element={
+                            <RequireBarOwner>
+                                <BarCashiersView />
+                            </RequireBarOwner>
+                        }
+                    />
                     <Route
                         path="/bar/:id/categorias"
                         element={
