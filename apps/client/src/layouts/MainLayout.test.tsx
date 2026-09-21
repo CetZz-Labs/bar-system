@@ -157,6 +157,78 @@ describe('MainLayout', () => {
     expect(screen.getByText('Profile Content')).toBeInTheDocument();
   });
 
+  it('should NOT render the bottom nav on an OWNER-gated route (LB-114)', () => {
+    mockUseAuth.mockReturnValue({
+      data: { _id: '1', name: 'Test', lastName: 'User', birthdate: '2000-01-15', email: 'test@example.com', isActive: true, role: 'user' },
+      isLoading: false,
+      isError: false,
+      logoutUser: vi.fn(),
+      isProfileComplete: true,
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/bar/123/dashboard']}>
+        <Routes>
+          <Route path="/bar/:barId/dashboard" element={<MainLayout />}>
+            <Route index element={<div>Owner Dashboard</div>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(screen.getByText('Owner Dashboard')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Inicio')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Grupos')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Bares')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Perfil')).not.toBeInTheDocument();
+  });
+
+  it('should still render the bottom nav on a consumer route', () => {
+    mockUseAuth.mockReturnValue({
+      data: { _id: '1', name: 'Test', lastName: 'User', birthdate: '2000-01-15', email: 'test@example.com', isActive: true, role: 'user' },
+      isLoading: false,
+      isError: false,
+      logoutUser: vi.fn(),
+      isProfileComplete: true,
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/groups']}>
+        <Routes>
+          <Route path="/groups" element={<MainLayout />}>
+            <Route index element={<div>Groups Content</div>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(screen.getByText('Groups Content')).toBeInTheDocument();
+    expect(screen.getByLabelText('Inicio')).toBeInTheDocument();
+  });
+
+  it('should still render the bottom nav on /bar/:id/rewards (no RequireBarOwner guard)', () => {
+    mockUseAuth.mockReturnValue({
+      data: { _id: '1', name: 'Test', lastName: 'User', birthdate: '2000-01-15', email: 'test@example.com', isActive: true, role: 'user' },
+      isLoading: false,
+      isError: false,
+      logoutUser: vi.fn(),
+      isProfileComplete: true,
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/bar/123/rewards']}>
+        <Routes>
+          <Route path="/bar/:id/rewards" element={<MainLayout />}>
+            <Route index element={<div>Bar Rewards</div>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(screen.getByText('Bar Rewards')).toBeInTheDocument();
+    expect(screen.getByLabelText('Inicio')).toBeInTheDocument();
+  });
+
   it('should NOT redirect when on /onboarding path with incomplete profile', () => {
     mockUseAuth.mockReturnValue({
       data: { _id: '1', name: '', lastName: '', email: 'test@example.com', isActive: true, role: 'user' },

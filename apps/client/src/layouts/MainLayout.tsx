@@ -1,10 +1,27 @@
 import { useAuth } from "@/hooks/useAuth";
 import { useActiveContext } from "@/hooks/useActiveContext";
-import { Outlet, Navigate, useLocation, Link } from "react-router";
+import { Outlet, Navigate, useLocation, Link, matchPath } from "react-router";
 import { Home, Users, User, Store } from "lucide-react";
 import { Spinner } from "@/components/ui/Spinner";
 import { WelcomeWizard } from "@/components/onboarding/WelcomeWizard";
 import { AddToHomeScreenPrompt } from "@/components/onboarding/AddToHomeScreenPrompt";
+
+// LB-114: rutas OWNER gateadas con `RequireBarOwner` en router.tsx. El dueño
+// no debe ver el nav/shell de consumidor en estas vistas. Deliberadamente NO
+// incluye "/bar/:id/rewards" ni "/bar/:id" (sin guard, accesibles también a
+// CASHIER o de exploración pública).
+const OWNER_ROUTE_PATTERNS = [
+    "/bar/:id/perfil",
+    "/bar/:barId/cashiers",
+    "/bar/:id/categorias",
+    "/bar/:barId/dashboard",
+    "/bar/:barId/auditoria",
+    "/bar/:barId/reportes",
+]
+
+function isOwnerRoute(pathname: string): boolean {
+    return OWNER_ROUTE_PATTERNS.some((pattern) => matchPath(pattern, pathname) !== null)
+}
 
 export default function MainLayout() {
     const { data, isLoading, isProfileComplete } = useAuth()
@@ -30,7 +47,7 @@ export default function MainLayout() {
         return <Navigate to="/onboarding" />
     }
 
-    const showNav = location.pathname !== "/onboarding"
+    const showNav = location.pathname !== "/onboarding" && !isOwnerRoute(location.pathname)
     const showProductOnboarding = isProfileComplete && showNav
 
     return (
