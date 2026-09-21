@@ -1912,3 +1912,32 @@ navegador mucho antes de que el token firmado expire realmente.
   (dispara deploy real en Render/Vercel). Sin tickets Jira propios que cerrar (LB-115/87/104/110/113/117
   ya estaban `Finalizada`; los tickets de `development` incluidos ya tenían su propio cierre
   documentado en sus entradas respectivas de esta bitácora).
+
+### [2026-09-21] - LB-114: Home del dueño
+- **Dominio afectado:** Frontend (`apps/client`).
+- **Subagentes involucrados:** Explorer (`progress/explorers/exp_LB-114.md`, 2 pasadas — la segunda
+  tras el merge de la rama de Franco de la entrada anterior), Implementer
+  (`progress/implementers/impl_LB-114.md`), Reviewer (`progress/reviewers/review_LB-114.md`).
+- **Contexto:** el título de Jira ("Home del dueño + ruteo por rol al login") estaba desactualizado
+  — un comentario de Mariano (15/09) había sacado el ruteo automático al login del alcance, quedaba
+  solo diseñar+construir la pantalla, alcanzable vía cambio de modo desde perfil (LB-117). La primera
+  pasada de Explorer encontró que LB-117 no existía en el código (ver entrada anterior de esta
+  bitácora — motivó el merge de la rama de Franco). La segunda pasada, post-merge, confirmó que 3 de
+  los 4 gaps se habían resuelto solos con ese merge: `SelectContextView.tsx` (LB-117) ya navega la
+  rama `owner` directo a `/bar/:barId/dashboard` (LB-74, sin pasar por panel de cajero), sin
+  necesidad de tocar `useActiveContext.ts`. Gap real remanente, único: el bottom nav de consumidor de
+  `MainLayout.tsx` se renderizaba también sobre las rutas OWNER.
+- **Resumen de Cambios:** `MainLayout.tsx` — nueva `isOwnerRoute(pathname)` vía `matchPath` de
+  `react-router` sobre `OWNER_ROUTE_PATTERNS` (los 6 paths ya gateados con `RequireBarOwner` en
+  `router.tsx`: perfil/cashiers/categorias/dashboard/auditoria/reportes), `showNav` extendido para
+  ocultar el nav en esas rutas. Deliberadamente **no** se tocó `useActiveContext.ts`,
+  `SelectContextView.tsx` ni ningún guard — cambio mínimo y mecánico. `/bar/:id/rewards` y `/bar/:id`
+  (sin guard `RequireBarOwner`) quedaron explícitamente fuera del matching, verificado por el
+  Reviewer ruta por ruta.
+- **Veredicto del Reviewer:** `[APPROVED]` — C1-C4 verificados contra el código real (diff exacto de
+  2 archivos, `OWNER_ROUTE_PATTERNS` comparado 6-de-6 contra `router.tsx`, `matchPath` sin falsos
+  positivos), los 5 comandos de `CHECKPOINTS.md` corridos en vivo por el propio Reviewer (server
+  lint/test verde, client lint con los 10 warnings preexistentes no bloqueantes ya conocidos, client
+  build verde, 695 tests server, 347 tests client). Sin cambios requeridos.
+- **Estado:** commit `dfb4cbb` en `main` local, sin push. Transicionado a "Finalizada" en Jira
+  (2026-09-21).
