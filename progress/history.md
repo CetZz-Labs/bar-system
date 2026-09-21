@@ -1941,3 +1941,41 @@ navegador mucho antes de que el token firmado expire realmente.
   build verde, 695 tests server, 347 tests client). Sin cambios requeridos.
 - **Estado:** commit `dfb4cbb` en `main` local, sin push. Transicionado a "Finalizada" en Jira
   (2026-09-21).
+
+### [2026-09-21] - LB-111: Vista Salida (canje + recompensas + puntos del grupo)
+- **Dominio afectado:** Monorepo (Backend + Frontend).
+- **Subagentes involucrados:** Explorer (`progress/explorers/exp_LB-111.md`), Implementer
+  (`progress/implementers/impl_LB-111.md`), Reviewer (`progress/reviewers/review_LB-111.md`).
+- **Contexto:** decisión de producto de Mariano (15/09): el Home del grupo queda liviano (saldo +
+  salida activa + accesos), el detalle vive en una vista "Salida" nueva — "Home = mirar, Salida =
+  actuar". El Explorer confirmó que no existía ninguna vista/ruta de salida, que el canje (LB-68/72)
+  vivía empaquetado entero dentro de `GroupRewardsView.tsx` (no como pieza reutilizable), y que el
+  filtro de movimientos por `outing` específico no existía en backend pese a que `PointsTransaction`
+  ya tiene el campo. Dos decisiones de alcance resueltas con el usuario vía `AskUserQuestion` antes
+  de implementar: (1) agregar el filtro real en backend en vez de una aproximación solo-frontend, (2)
+  recortar `GroupHomeView.tsx` de verdad (no solo agregar navegación) para cumplir la decisión de no
+  duplicar contenido.
+- **Resumen de Cambios:** Backend — `GET /groups/:groupId/history` (`GroupBalanceController.getHistory`
+  + `groupBalanceRoute.ts`) gana filtro opcional `outingId` (`express-validator` `isMongoId()`), y
+  `outingId` se expone en los 3 tipos de item de la respuesta (antes no se devolvía pese a que el
+  modelo ya lo tenía indexado). Frontend — nueva `GroupOutingView.tsx` (`/groups/:slug/salida`):
+  ensambla saldo del grupo, salida activa/pendiente, canje end-to-end y movimientos filtrados por esa
+  salida. El flujo de canje se extrajo de `GroupRewardsView.tsx` a `GroupRewardsSection.tsx`
+  (componente montable, reutilizado sin duplicación por ambas vistas — `GroupRewardsView.tsx` sigue
+  existiendo, accesible desde el acceso rápido "Recompensas" del Home). `GroupHomeView.tsx` recortado:
+  se sacaron "Saldo por bar" y "Últimos movimientos" con todo su estado/imports asociados; los botones
+  de la card de salida activa navegan ahora a la vista Salida nueva en vez de `GroupDetailView`.
+- **Decisiones/bloqueos documentados por el Implementer, evaluados como no bloqueantes por el
+  Reviewer:** (a) el payload WS `points_movement` no incluye `outing` (fuera de alcance tocar
+  `pointsHub.ts`), así que la vista Salida usa `refetch()` sobre el REST ya filtrado en vez de merge
+  optimista — correcto, menos instantáneo; (b) `GroupOutingView` + `GroupRewardsSection` anidada abren
+  2 conexiones WebSocket en la misma pantalla, mismo patrón ya existente en el resto de la app (cada
+  vista abre su propio socket), no es una regresión de arquitectura nueva.
+- **Veredicto del Reviewer:** `[APPROVED]` — C1-C4 verificados contra el código real (incluido
+  `git diff --staged` de los 12 archivos), los 5 comandos de `CHECKPOINTS.md` corridos en vivo por el
+  propio Reviewer (server lint/test verde — 696 tests —, client lint con los 10 warnings preexistentes
+  ya conocidos, client build verde, 359 tests client). El test nuevo del filtro `outingId` verificado
+  como no neutralizado (captura el argumento real pasado a `PointsTransaction.find`). Sin cambios
+  requeridos.
+- **Estado:** commit `e5a26ab` en `main` local, sin push. Transicionado a "Finalizada" en Jira
+  (2026-09-21).
