@@ -32,6 +32,22 @@ router.post('/confirm-account',
     AuthController.confirmAccount
 )
 
+// LB-115: activación de cuenta de cajero dado de alta por un OWNER (fija
+// contraseña + isActive:true en un solo paso). Ver AuthController.activateCashierAccount.
+router.post('/activate-cashier-account',
+    body('token').notEmpty().withMessage('El token es requerido'),
+    body('password')
+        .isLength({ min: 8 }).withMessage('La contraseña debe tener al menos 8 caracteres'),
+    body('confirmPassword').custom((value, { req }) => {
+        if (req.body.password !== value) {
+            throw new Error('Las contraseñas no son iguales')
+        }
+        return true
+    }),
+    handleInputErrors,
+    AuthController.activateCashierAccount
+)
+
 router.post('/request-code',
     body('email').isEmail().withMessage('E-mail no valido'),
     handleInputErrors,

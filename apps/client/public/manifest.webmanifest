@@ -1,0 +1,17 @@
+{
+  "name": "La Banda",
+  "short_name": "La Banda",
+  "description": "Grupos, salidas y puntos en el bar",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a0a",
+  "theme_color": "#c8f542",
+  "icons": [
+    {
+      "src": "/vite.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

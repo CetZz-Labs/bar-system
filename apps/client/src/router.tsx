@@ -5,6 +5,7 @@ import AuthLayout from './layouts/AuthLayout'
 import RegisterView from './views/auth/RegisterView'
 import RequestNewCodeView from './views/auth/RequestNewCodeView'
 import ConfirmAccountView from './views/auth/ConfirmAccountView'
+import ActivateCashierAccountView from './views/auth/ActivateCashierAccountView'
 import LoginView from './views/auth/LoginView'
 import MainLayout from './layouts/MainLayout'
 import ProfileView from './views/user/ProfileView'
@@ -25,6 +26,7 @@ import MyBarsView from './views/bar/MyBarsView'
 import BarProfileView from './views/bar/BarProfileView'
 import BarDetailView from './views/bar/BarDetailView'
 import BarRewardsView from './views/bar/BarRewardsView'
+import BarCashiersView from './views/bar/BarCashiersView'
 import ExploreBarsView from './views/bar/ExploreBarsView'
 import BarDashboardView from './views/bar/BarDashboardView'
 import BarAuditLogView from './views/bar/BarAuditLogView'
@@ -37,6 +39,7 @@ import CashierShiftSummaryView from './views/cashier/CashierShiftSummaryView'
 import CashierRedemptionsView from './views/cashier/CashierRedemptionsView'
 import CashierLayout from './layouts/CashierLayout'
 import SelectContextView from './views/auth/SelectContextView'
+import { RequireBarOwner } from './components/auth/RequireBarOwner'
 import NotFound from './views/NotFound'
 
 export default function Router() {
@@ -61,6 +64,7 @@ export default function Router() {
                     <Route path="/register" element={<RegisterView />} />
                     <Route path="/request-code" element={<RequestNewCodeView />} />
                     <Route path="/confirm-account" element={<ConfirmAccountView />} />
+                    <Route path="/activate-cashier-account" element={<ActivateCashierAccountView />} />
                     <Route path="/login" element={<LoginView />} />
                     <Route path="/forgot-password" element={<ForgotPasswordView />} />
                     <Route path="/new-password" element={<NewPasswordView />} />
@@ -84,13 +88,56 @@ export default function Router() {
                     <Route path="/bar/registro" element={<BarRegisterView />} />
                     <Route path="/bar/explorar" element={<ExploreBarsView />} />
                     <Route path="/bar/mis-bares" element={<MyBarsView />} />
-                    <Route path="/bar/:id/perfil" element={<BarProfileView />} />
+                    <Route
+                        path="/bar/:id/perfil"
+                        element={
+                            <RequireBarOwner>
+                                <BarProfileView />
+                            </RequireBarOwner>
+                        }
+                    />
                     <Route path="/bar/:id/rewards" element={<BarRewardsView />} />
-                    <Route path="/bar/:id/categorias" element={<BarCategoriesView />} />
+                    <Route
+                        path="/bar/:barId/cashiers"
+                        element={
+                            <RequireBarOwner>
+                                <BarCashiersView />
+                            </RequireBarOwner>
+                        }
+                    />
+                    <Route
+                        path="/bar/:id/categorias"
+                        element={
+                            <RequireBarOwner>
+                                <BarCategoriesView />
+                            </RequireBarOwner>
+                        }
+                    />
                     <Route path="/bar/:id" element={<BarDetailView />} />
-                    <Route path="/bar/:barId/dashboard" element={<BarDashboardView />} />
-                    <Route path="/bar/:barId/auditoria" element={<BarAuditLogView />} />
-                    <Route path="/bar/:barId/reportes" element={<BarReportsView />} />
+                    <Route
+                        path="/bar/:barId/dashboard"
+                        element={
+                            <RequireBarOwner>
+                                <BarDashboardView />
+                            </RequireBarOwner>
+                        }
+                    />
+                    <Route
+                        path="/bar/:barId/auditoria"
+                        element={
+                            <RequireBarOwner>
+                                <BarAuditLogView />
+                            </RequireBarOwner>
+                        }
+                    />
+                    <Route
+                        path="/bar/:barId/reportes"
+                        element={
+                            <RequireBarOwner>
+                                <BarReportsView />
+                            </RequireBarOwner>
+                        }
+                    />
                 </Route>
                 <Route path="/unirse/:inviteCode" element={<JoinGroupView />} />
 

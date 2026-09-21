@@ -17,6 +17,7 @@ import {
   Gift,
   Wine,
   LayoutDashboard,
+  Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -313,6 +314,22 @@ export default function BarProfileView() {
         >
           <LayoutDashboard size={20} className="text-lime" />
           DASHBOARD DEL BAR
+        </Button>
+
+        {/* Entry point al ABM de cajeros (LB-115). Mismo criterio que el
+            resto de los botones de esta vista: BarProfileView solo es
+            alcanzable siendo OWNER, sin chequeo de rol adicional acá. El
+            propio historial de LB-67 documenta como hallazgo no bloqueante
+            olvidarse de este paso — ver progress/history.md. */}
+        <Button
+          type="button"
+          variant="surface"
+          size="md"
+          fullWidth
+          onClick={() => navigate(`/bar/${id}/cashiers`)}
+        >
+          <Users size={20} className="text-lime" />
+          CAJEROS DEL BAR
         </Button>
       </div>
 

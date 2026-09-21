@@ -3,18 +3,35 @@ import { render, screen } from '@testing-library/react';
 import { Routes, Route, MemoryRouter } from 'react-router';
 import MainLayout from './MainLayout';
 
-// Mock the useAuth hook
 vi.mock('@/hooks/useAuth', () => ({
   useAuth: vi.fn(),
 }));
 
+vi.mock('@/hooks/useActiveContext', () => ({
+  useActiveContext: vi.fn(),
+}));
+
 import { useAuth } from '@/hooks/useAuth';
+import { useActiveContext } from '@/hooks/useActiveContext';
 
 const mockUseAuth = vi.mocked(useAuth);
+const mockUseActiveContext = vi.mocked(useActiveContext);
+
+const userContext = {
+  mode: 'user' as const,
+  barId: undefined,
+  barRole: undefined,
+  isLoading: false,
+  isBarContext: false,
+  isUserContext: true,
+  roleHome: '/',
+  cashierProbeFailed: true,
+};
 
 describe('MainLayout', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockUseActiveContext.mockReturnValue(userContext);
   });
 
   it('should show loading state while session is loading', () => {
@@ -60,6 +77,39 @@ describe('MainLayout', () => {
     );
 
     expect(screen.getByText('Login Page')).toBeInTheDocument();
+  });
+
+  it('should redirect bar context JWT to cashier home (LB-85)', () => {
+    mockUseAuth.mockReturnValue({
+      data: { _id: '1', name: 'Test', lastName: 'User', birthdate: '2000-01-15', email: 'test@example.com', isActive: true, role: 'user' },
+      isLoading: false,
+      isError: false,
+      logoutUser: vi.fn(),
+      isProfileComplete: true,
+    });
+    mockUseActiveContext.mockReturnValue({
+      ...userContext,
+      mode: 'bar',
+      barId: 'bar-1',
+      barRole: 'CASHIER',
+      isBarContext: true,
+      isUserContext: false,
+      roleHome: '/bar/bar-1/cajero',
+      cashierProbeFailed: false,
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/groups']}>
+        <Routes>
+          <Route path="/bar/bar-1/cajero" element={<div>Cashier Home</div>} />
+          <Route path="/groups" element={<MainLayout />}>
+            <Route index element={<div>Groups</div>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(screen.getByText('Cashier Home')).toBeInTheDocument();
   });
 
   it('should redirect to /onboarding when profile is incomplete and not on /onboarding', () => {

@@ -18,6 +18,8 @@ import { getActiveOuting } from "@/API/OutingAPI";
 import { getGroupRewards } from "@/API/RewardAPI";
 import { createRedemption, cancelRedemption, getGroupRedemptions } from "@/API/RedemptionAPI";
 import { useGroupPointsSocket } from "@/hooks/useGroupPointsSocket";
+import { CoachMark } from "@/components/onboarding/CoachMark";
+import { FIRST_VISIT_KEYS } from "@/utils/firstVisit";
 import { toastApiError } from "@/utils/apiError";
 import type { Reward } from "@/types/reward";
 import type { Redemption, RedemptionQrResult } from "@/types/redemption";
@@ -262,8 +264,13 @@ export default function GroupRewardsView() {
     [activeOuting]
   );
 
+  const onResync = useCallback(() => {
+    void redemptionsQuery.refetch();
+    void refetchRewards();
+  }, [redemptionsQuery, refetchRewards]);
+
   // Saldo global (points_balance_updated) no aplica al header por-bar; se ignora.
-  useGroupPointsSocket(groupId, () => {}, onAvailablePoints);
+  useGroupPointsSocket(groupId, () => {}, onAvailablePoints, undefined, onResync);
 
   // LB-90: timer local para que un canje HELD cuyo `expiresAt` ya pasó
   // transicione visiblemente a "vencido" sin esperar un refetch.
@@ -324,7 +331,7 @@ export default function GroupRewardsView() {
       transition={{ duration: 0.12, ease: [0.4, 0, 0.2, 1] }}
       className="flex flex-col flex-1 pb-nav pt-5 px-4 min-h-[100dvh] max-w-sm mx-auto w-full"
     >
-      <header className="flex items-center gap-4 mb-6">
+      <header className="flex items-center gap-4 mb-6 relative">
         <IconButton
           aria-label="Volver"
           onClick={() => navigate(slug ? `/groups/${slug}` : "/groups")}
@@ -332,6 +339,13 @@ export default function GroupRewardsView() {
           <ArrowLeft size={20} className="text-text-secondary" />
         </IconButton>
         <h1 className="text-2xl font-display font-bold tracking-tight m-0">Recompensas</h1>
+        <CoachMark
+          storageKey={FIRST_VISIT_KEYS.coachRewards}
+          title="Canjeá puntos"
+          body="Con check-in activo podés canjear recompensas del bar. El saldo se actualiza en vivo."
+          placement="bottom"
+          className="left-12"
+        />
       </header>
 
       {isGroupError && (

@@ -20,6 +20,9 @@ import { getActiveOuting } from "@/API/OutingAPI";
 import { getGroupBalance, getGroupHistory } from "@/API/PointsAPI";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { CoachMark } from "@/components/onboarding/CoachMark";
+import { FIRST_VISIT_KEYS } from "@/utils/firstVisit";
 import { useGroupPointsSocket } from "@/hooks/useGroupPointsSocket";
 import type { PointsBalanceUpdatedPayload } from "@/hooks/useGroupPointsSocket";
 import type { PointsMovement } from "@/types/points";
@@ -89,7 +92,12 @@ export default function GroupHomeView() {
     });
   }, []);
 
-  useGroupPointsSocket(groupId, onBalance, undefined, onMovement);
+  const onResync = useCallback(() => {
+    void balanceQuery.refetch();
+    void historyQuery.refetch();
+  }, [balanceQuery, historyQuery]);
+
+  useGroupPointsSocket(groupId, onBalance, undefined, onMovement, onResync);
 
   const total = liveTotal ?? balanceQuery.data?.total ?? 0;
   const byBar = balanceQuery.data?.byBar ?? [];
@@ -146,8 +154,14 @@ export default function GroupHomeView() {
         >
           <ArrowLeft size={18} className="text-text-secondary" />
         </button>
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 relative">
           <h1 className="text-2xl font-display font-bold m-0 truncate">{group.name}</h1>
+          <CoachMark
+            storageKey={FIRST_VISIT_KEYS.coachHome}
+            title="Home del grupo"
+            body="Acá ves saldo en vivo, la salida en curso y atajos a recompensas e historial."
+            placement="bottom"
+          />
           <div className="flex items-center gap-2 mt-2">
             <div className="flex -space-x-2">
               {group.members.slice(0, 5).map((m) => (
@@ -218,19 +232,25 @@ export default function GroupHomeView() {
           </Button>
         </section>
       ) : (
-        <section className="rounded-xl border border-border bg-surface-2 p-4 flex flex-col gap-3">
-          <p className="text-text-secondary text-sm m-0">No hay una salida en curso.</p>
-          {canCreate && (
-            <Button
-              variant="primary"
-              size="md"
-              fullWidth
-              onClick={() => navigate(`/groups/${slug}`)}
-            >
-              <PlusCircle size={18} />
-              Crear nueva salida
-            </Button>
-          )}
+        <section className="rounded-xl border border-border bg-surface-2 p-4">
+          <EmptyState
+            icon={PlusCircle}
+            title="Todavía no hay una salida"
+            description="Creá una salida para invitar al grupo y empezar a sumar puntos en el bar."
+            className="py-6"
+            action={
+              canCreate ? (
+                <Button
+                  variant="primary"
+                  size="md"
+                  onClick={() => navigate(`/groups/${slug}`)}
+                >
+                  <PlusCircle size={18} />
+                  Crear salida
+                </Button>
+              ) : undefined
+            }
+          />
         </section>
       )}
 

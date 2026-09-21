@@ -39,6 +39,12 @@ export const AUDIT_EVENT_TYPES = [
     'reward.created',
     'reward.edited',
     'reward.deleted',
+    // LB-115: ABM de cajeros (BarUser{role:CASHIER}) por el OWNER. Sin
+    // evento de "deleted" — es soft (BarUser.isActive), igual que
+    // reward.edited cubre el toggle de status de Reward (ver
+    // RewardController.updateReward).
+    'cashier.created',
+    'cashier.edited',
 ] as const;
 export type AuditEventType = typeof AUDIT_EVENT_TYPES[number];
 

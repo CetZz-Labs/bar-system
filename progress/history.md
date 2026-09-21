@@ -1512,6 +1512,56 @@ navegador mucho antes de que el token firmado expire realmente.
   futuro, y apertura de un ticket de seguimiento para `closeOutingsForBar` (paralelización, fuera
   de alcance de este ticket).
 
+### [2026-09-01] - LB-87: Consistencia de datos entre módulos (auditoría cross-cutting, solo lectura)
+- **Dominio afectado:** Backend (análisis, sin cambios de código)
+- **Subagentes involucrados:** Explorer (`progress/explorers/exp_LB-87.md`), Reviewer
+  (`progress/reviewers/review_LB-87.md`). Sin Implementer — ticket explícitamente de solo lectura
+  ("si hay bugs, se tickean a los owners correspondientes, no se modifican acá").
+- **Contexto:** rama nueva `feat/LB-87-data-consistency-audit` creada desde `development` (decisión
+  explícita del usuario de no seguir encadenando sobre `feat/LB-96-group-membership-check`, a
+  diferencia de LB-96/LB-97/LB-94). Sin acceso a Bash/staging real en la corrida del Explorer, así
+  que el método sugerido por el ticket ("scripts SQL contra staging con seed data") se reemplazó
+  por reconstrucción estática de cada invariante contra el código real (modelos, controllers,
+  utils), verificando todos los paths de escritura (creación, edición, cancelación, reversión,
+  idempotencia).
+- **Resumen de hallazgos:** los 4 invariantes "core" se sostienen sin gaps — atomicidad
+  saldo↔ledger de `PointsTransaction` (4 escritores, todos transaccionales con re-lectura fresca),
+  silencio de asistencia en 0 puntos (garantizado incluso a nivel de schema, no solo por
+  convención), decremento atómico de stock de `Reward` al entregar un canje, y cobertura completa
+  de los 19 `eventType` de `AuditLog`. Se encontraron 7 gaps reales, todos confirmados línea por
+  línea por el Reviewer contra el código (ninguno es falso positivo, ninguno omitido): (1) Media —
+  consumo confirmado vía disputa `ACCEPTED` del OWNER no dispara `awardAttendancePointsIfFirst`
+  (`DashboardController.resolveConsumptionDispute`, a diferencia de
+  `LeaderConsumptionController.accept`); (2) Media — canjes entregados (`PointsTransactionType.
+  REDEMPTION`) se etiquetan como `"asistencia"` en `GroupBalanceController.getHistory`, mientras
+  `apps/client/src/types/points.ts` ya tiene el tipo `"canje"` listo y nunca lo recibe; (3) Media —
+  no existe "stock inicial" ni ledger de entregas de `Reward`, `RewardController.updateReward`
+  sobrescribe `stock` sin transacción ni registro de before/after; (4) **Alta** —
+  `ShiftSummary.redemptionCount` hardcodeado en 0 (comentario obsoleto de antes de que existiera el
+  modelo `Redemption`), mismo patrón en `closeOuting.ts` — siempre diverge del dashboard OWNER real
+  (`barDashboard.getCashierTable`); (5) Media-Alta — `calculatePoints` de un turno puede duplicar
+  puntos de `ATTENDANCE`/`REDEMPTION` de otro turno que confirmó consumos de la misma `Outing`
+  (agrupa por `outing`, no por `consumption`/ventana temporal del turno); (6) Baja-Media —
+  `buildShiftSummary.totalAmount` no cuenta consumos `RESOLVED_BY_OWNER`/`ACCEPTED`, a diferencia
+  del dashboard OWNER; (7) Media-Alta — `AuditLog.bar` es `required` y no existe campo `group`, por
+  lo que cambios de rol, bans y sucesión de líder en `GroupController` no son auditables aunque se
+  quisiera (gap de diseño de schema, no bug puntual de un método).
+- **Decisión explícita del usuario:** no abrir tickets de seguimiento en Jira para los 7 gaps (a
+  diferencia del precedente de LB-100 tras LB-94). Quedan documentados en un comentario en LB-87 y
+  en esta entrada, con severidad y módulo/owner sugerido, para no perderse como hallazgos sueltos
+  si en el futuro se decide tiquetearlos.
+- **Veredicto del Reviewer:** `[APPROVED]` - dado que el ticket no modifica código, C1-C4 de
+  `CHECKPOINTS.md` no aplican de la forma habitual (no hay build/test/lint que correr); el gate fue
+  la fidelidad del reporte del Explorer, verificada releyendo el Reviewer cada cita de
+  archivo/línea y cada conclusión lógica contra el código real, sin aceptar ninguna sin comprobarla
+  él mismo. Sin cambios de código, sin commits — evidencia completa en
+  `progress/explorers/exp_LB-87.md` y `progress/reviewers/review_LB-87.md`. Transicionado a
+  "Finalizada" en Jira.
+- **Nota de seguimiento:** los 3 gaps de severidad Media/Media-Alta/Alta sobre consistencia
+  resumen-de-turno-vs-dashboard-OWNER se consolidaron después en **LB-103** (Sprint 5, crítico), y
+  el gap de disputa `ACCEPTED` sin bono de asistencia en **LB-105** (Sprint 5, opcional) — ambos
+  creados por el usuario/PM a partir de este reporte, ver sus propias entradas cuando se cierren.
+
 ### [2026-09-02] - LB-101: Migrar almacenamiento de imágenes (avatares/logos/portadas) a Cloudinary
 - **Dominio afectado:** Backend (`apps/server`).
 - **Subagentes involucrados:** Explorer (`progress/explorers/exp_LB-101.md`), Implementer
@@ -1771,3 +1821,54 @@ navegador mucho antes de que el token firmado expire realmente.
   pausados — dependen de avances de Facundo (aprobación del modelo de
   LB-116) y Franco (LB-85/LB-117) respectivamente. Ver
   `progress/current.md` para el razonamiento completo de la cola.
+
+### [2026-09-19] - LB-115: Creación de cajero por OWNER + login de cajero (BLOQUEANTE PILOTO)
+- **Dominio afectado:** Monorepo (Backend + Frontend)
+- **Subagentes involucrados:** Explorer (`progress/explorers/exp_LB-115.md`), Implementer
+  (`progress/implementers/impl_LB-115.md`), Reviewer (`progress/reviewers/review_LB-115.md`).
+- **Contexto:** rama nueva `feat/LB-115-cashier-creation-login` desde `development` (ya con
+  LB-85/88/91 mergeado). El ticket asumía "hoy NO existe forma de crear un cajero" y dependencia de
+  LB-66 "ya cerrado" — el Explorer confirmó que LB-66 (login unificado, `ContextController`,
+  `authenticateCashier`, sesión/turno de cajero) está completo y en uso real y que el 100% del
+  trabajo real era el ABM que faltaba: crear/editar/desactivar `BarUser{role:CASHIER}`. También
+  detectó que no hay ningún precedente de PIN en el código (un cajero es un `User` completo,
+  email+password) y que `User.isActive` solo se activa hoy vía `confirmAccount` — no existía forma
+  de que un OWNER "active" la cuenta de otra persona. Decisión de arquitectura resuelta con el
+  usuario vía `AskUserQuestion` antes de implementar: si el email ya tiene `User`, el OWNER solo
+  vincula (`BarUser` nuevo, sin tocar el `User`); si no existe, se crea el `User` inactivo +
+  transacción Mongo + token de activación por email para que el cajero fije su propia password.
+- **Resumen de Cambios:** `POST/GET/PUT /api/bars/:barId/cashiers` (`CashierManagementController`,
+  nuevo), gateados con `resolveOwnerAccess`. Alta con `User` existente: solo `BarUser.create`, 409
+  explícito si ya tenía relación con el bar (más catch de `code 11000` como red de carrera). Alta
+  sin `User`: `User.create`+`BarUser.create` en la misma transacción Mongo
+  (`mongoose.startSession()`), password aleatorio (`crypto.randomBytes`) nunca expuesto en ninguna
+  respuesta HTTP. Nuevo endpoint `POST /api/auth/activate-cashier-account`
+  (`AuthController.activateCashierAccount`) — mismo mecanismo de `Token` que `confirmAccount`, pero
+  en un solo paso: valida token, setea password propio del cajero y `isActive: true`. Email nuevo
+  `AuthEmail.sendCashierInviteEmail`. "Editar" y "desactivar" cajero resultaron ser la misma
+  operación (`PUT` con `{isActive}}`, `BarUser` no tiene más campos propios) — documentado
+  explícitamente en vez de inventar campos nuevos. `AUDIT_EVENT_TYPES` gana `cashier.created`/
+  `cashier.edited`. Frontend: `BarCashiersView.tsx` (dominio `bar/`, ruta `/bar/:barId/cashiers`
+  gateada con `RequireBarOwner`, mismo patrón de bloqueo total que `/perfil`/`/dashboard`) +
+  `ActivateCashierAccountView.tsx` (dominio `auth/`) + botón "CAJEROS DEL BAR" nuevo en
+  `BarProfileView.tsx` — explícitamente para no repetir el hallazgo no bloqueante de LB-67 (feature
+  solo alcanzable por URL directa). No se tocó `ContextController`/`authenticateCashier`/login de
+  cajero, ya completo desde LB-66. **Fix de alcance acotado autorizado explícitamente por el
+  usuario** (mismo precedente que LB-51/LB-60): import muerto de `EmptyState` en
+  `GroupHistoryView.tsx` (ajeno a LB-115, de LB-89/90, bloqueaba `tsc -b`/checkpoint C4) —
+  verificado independientemente por el Leader (`pnpm install --frozen-lockfile` en limpio +
+  `tsc -b` reproducido) y por el Reviewer (`git show HEAD` sobre el archivo) antes de aplicarlo.
+- **Hallazgo dejado aparte, sin autorización de tocarlo en este ticket:** 2 errores de lint
+  preexistentes y ajenos (`react-hooks/set-state-in-effect` en `CoachMark.tsx` y
+  `WelcomeWizard.tsx`, de LB-85/88/91), confirmados por el Reviewer vía `git log`/`git show HEAD`
+  como no relacionados a LB-115. Decisión explícita del usuario: dejarlos aparte por ahora, sin
+  ticket de seguimiento abierto todavía.
+- **Veredicto del Reviewer:** `[APPROVED]` - C1-C4 verificados contra el código real y los 5
+  comandos de `CHECKPOINTS.md` corridos en vivo por el propio Reviewer (server lint verde, client
+  lint con los 2 errores ajenos ya aceptados como no bloqueantes, client build verde, 74/651 tests
+  server, 56/340 tests client). Dos observaciones no bloqueantes: `normalizeEmail` aplicado en el
+  alta de cajero pero no en `/register` (riesgo de cuenta duplicada en edge case de Gmail), y el
+  catch de `code 11000` sin test dedicado que fuerce ese branch específico.
+- **Estado:** rama `feat/LB-115-cashier-creation-login`, commit `734e40b` (+ `df3148b`,
+  cherry-pick del cierre de LB-87 que había quedado varado sin mergear a `development`), sin push.
+  Transicionado a "Finalizada" en Jira.
