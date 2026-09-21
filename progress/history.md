@@ -1872,3 +1872,43 @@ navegador mucho antes de que el token firmado expire realmente.
 - **Estado:** rama `feat/LB-115-cashier-creation-login`, commit `734e40b` (+ `df3148b`,
   cherry-pick del cierre de LB-87 que había quedado varado sin mergear a `development`), sin push.
   Transicionado a "Finalizada" en Jira.
+
+### [2026-09-21] - Merge `development` → `main` + integración de rama sin mergear de Franco (LB-104/110/113/117)
+- **Dominio afectado:** Monorepo (Backend + Frontend), tarea ad-hoc de git, sin ticket Jira propio.
+- **Subagentes involucrados:** Implementer (`impl_merge-development-main.md`,
+  `impl_fix-lint-coachmark-welcomewizard.md`, `impl_fix-franco-backlog-checkpoints.md`), Reviewer
+  (`review_merge-development-main.md`, `review_merge-franco-backlog.md`). Sin Explorer para el merge
+  en sí (sin ambigüedad arquitectónica); sí se usó Explorer para LB-114 (ver entrada siguiente),
+  cuya investigación destapó el segundo merge de esta entrada.
+- **Contexto:** a pedido del usuario, mergear `development` (tip `98aa60d`) → `main` (tip
+  `3943e4d`). Divergieron después de `87150fd`; 2 conflictos reales: `pointsHub.ts` (envelope LB-88
+  de `development` vs. CORS allowlist dinámico `isOriginAllowed` de LB-102 en `main`, resuelto
+  combinando ambos) y `progress/history.md` (aditivo, ambas bitácoras conservadas). Reviewer dio
+  `[CHANGES_REQUESTED]` en primera pasada solo por 2 errores de lint preexistentes y ajenos
+  (`react-hooks/set-state-in-effect` en `CoachMark.tsx`/`WelcomeWizard.tsx`, ya señalados en LB-115)
+  heredados de `development` — el usuario, a diferencia del criterio usado en LB-115, esta vez
+  decidió arreglarlos en vez de aceptar el riesgo (lazy initializer de `useState` en vez de
+  `useEffect` + `setState` síncrono). `[APPROVED]` en segunda pasada, commit `8c1f309`.
+- **Hallazgo durante la exploración de LB-114 (ver entrada siguiente):** LB-117 figuraba
+  `Finalizada` en Jira pero no existía en `development`/`main` — el commit real de Franco
+  (`fda45f1`, incluye `ProfileModeSection.tsx`) vivía solo en la rama remota
+  `origin/feat/LB-104-113-110-117-franco-backlog` (cubre también LB-104/LB-110/LB-113, las 4
+  cerradas en Jira por Franco sin integrar nunca a `development`/`main`). Decisión del usuario:
+  mergear esa rama también, ahora. Auto-merge sin conflictos, pero como este código nunca había
+  pasado por nuestro ciclo propio, el Reviewer lo auditó completo contra C1-C4 (primera vez, no
+  solo la resolución de conflictos). `[CHANGES_REQUESTED]`: build roto (alias `@/constants/*`
+  faltante en `apps/client/tsconfig.app.json`) y `ProfileView.test.tsx` desactualizado tras la
+  remoción de "Mis grupos" en LB-113 (3 tests caídos), más 2 componentes nuevos sin test
+  (`ProfileModeSection.tsx`, `LegalViews.tsx`). Corregido, `[APPROVED]` en segunda pasada, commit
+  `810f60a`.
+- **Notas dejadas para revisión futura (no bloqueantes, no generadas por este merge):**
+  `GroupBalanceController.ts` usa `PointsTransactionType.REDEMPTION` apoyado en modelos
+  (`PointsTransaction`/`Consumption`/`Redemption`) que contradicen literalmente
+  `.claude/rules/backend.md` §3 ("no existe sistema de gamificación/puntos") — la regla quedó
+  desactualizada respecto al código real, ya en producción antes de este merge. `RegisterView.tsx`
+  sigue sin `zodResolver` en su `useForm()` (deuda preexistente, `.claude/rules/frontend.md` §2).
+- **Estado:** `main` local con 2 commits de merge nuevos (`8c1f309`, `810f60a`) sobre los 4 previos
+  de LB-101/102/112 ya existentes sin pushear — **sin push, a criterio explícito del usuario**
+  (dispara deploy real en Render/Vercel). Sin tickets Jira propios que cerrar (LB-115/87/104/110/113/117
+  ya estaban `Finalizada`; los tickets de `development` incluidos ya tenían su propio cierre
+  documentado en sus entradas respectivas de esta bitácora).
