@@ -11,12 +11,18 @@ export async function getGroupBalance(groupId: string) {
   }
 }
 
-export async function getGroupHistory(groupId: string, cursor?: string | null, limit = 20) {
+export async function getGroupHistory(
+  groupId: string,
+  cursor?: string | null,
+  limit = 20,
+  outingId?: string
+) {
   try {
     const { data } = await api.get<GroupHistoryPage>(`/groups/${groupId}/history`, {
       params: {
         ...(cursor ? { cursor } : {}),
         limit,
+        ...(outingId ? { outingId } : {}),
       },
     });
     return data;

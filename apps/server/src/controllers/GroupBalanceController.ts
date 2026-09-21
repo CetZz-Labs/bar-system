@@ -76,8 +76,10 @@ export class GroupBalanceController {
     };
 
     /**
-     * GET /api/groups/:groupId/history?cursor=&limit=20
+     * GET /api/groups/:groupId/history?cursor=&limit=20&outingId=
      * LB-71 — historial paginado por cursor (`createdAt|_id`).
+     * LB-111: `outingId` opcional filtra las transacciones de una salida
+     * puntual (campo `outing`, indexado en `{outing:1, type:1}`).
      */
     static getHistory = async (req: Request, res: Response) => {
         try {
@@ -88,6 +90,7 @@ export class GroupBalanceController {
                 ? Math.min(Math.max(Math.floor(limitRaw), 1), 50)
                 : 20;
             const cursor = typeof req.query.cursor === "string" ? req.query.cursor : undefined;
+            const outingId = typeof req.query.outingId === "string" ? req.query.outingId : undefined;
 
             const group = await Group.findById(groupId).select("memberships").lean();
             if (!group) {
@@ -103,6 +106,10 @@ export class GroupBalanceController {
             const txFilter: Record<string, unknown> = {
                 group: new Types.ObjectId(groupId),
             };
+
+            if (outingId) {
+                txFilter.outing = new Types.ObjectId(outingId);
+            }
 
             if (cursor) {
                 const [iso, id] = cursor.split("|");
@@ -165,6 +172,7 @@ export class GroupBalanceController {
                         groupId,
                         barId,
                         barName: barNameById.get(barId) ?? "Bar",
+                        outingId: t.outing.toString(),
                         type: "consumo" as const,
                         points: t.amount,
                         createdAt: t.createdAt.toISOString(),
@@ -183,6 +191,7 @@ export class GroupBalanceController {
                         groupId,
                         barId,
                         barName: barNameById.get(barId) ?? "Bar",
+                        outingId: t.outing.toString(),
                         type: "canje" as const,
                         points: t.amount,
                         createdAt: t.createdAt.toISOString(),
@@ -194,6 +203,7 @@ export class GroupBalanceController {
                     groupId,
                     barId,
                     barName: barNameById.get(barId) ?? "Bar",
+                    outingId: t.outing.toString(),
                     type: "asistencia" as const,
                     points: t.amount,
                     createdAt: t.createdAt.toISOString(),

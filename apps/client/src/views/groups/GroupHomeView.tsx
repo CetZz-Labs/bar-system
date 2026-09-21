@@ -1,23 +1,19 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "motion/react";
 import {
   ArrowLeft,
-  Beer,
   CalendarClock,
-  ChevronDown,
-  ChevronUp,
   Gift,
   History,
   MapPin,
   PlusCircle,
   Users,
-  Wallet,
 } from "lucide-react";
 import { getGroupBySlug } from "@/API/GroupAPI";
 import { getActiveOuting } from "@/API/OutingAPI";
-import { getGroupBalance, getGroupHistory } from "@/API/PointsAPI";
+import { getGroupBalance } from "@/API/PointsAPI";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -25,26 +21,18 @@ import { CoachMark } from "@/components/onboarding/CoachMark";
 import { FIRST_VISIT_KEYS } from "@/utils/firstVisit";
 import { useGroupPointsSocket } from "@/hooks/useGroupPointsSocket";
 import type { PointsBalanceUpdatedPayload } from "@/hooks/useGroupPointsSocket";
-import type { PointsMovement } from "@/types/points";
 
-function relativeTime(iso: string) {
-  const diff = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "ahora";
-  if (mins < 60) return `hace ${mins}m`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `hace ${hours}h`;
-  const days = Math.floor(hours / 24);
-  return `hace ${days}d`;
-}
-
+/**
+ * LB-111: "Home = mirar, Salida = actuar" (decisión de Mariano, 15/09). Esta
+ * vista quedó liviana a propósito — saldo total + salida activa + accesos
+ * rápidos — el detalle (saldo por bar, últimos movimientos, recompensas,
+ * canje) vive en `GroupOutingView.tsx` (`/groups/:slug/salida`).
+ */
 export default function GroupHomeView() {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
-  const [showAllBars, setShowAllBars] = useState(false);
   const [floatDelta, setFloatDelta] = useState<number | null>(null);
   const [liveTotal, setLiveTotal] = useState<number | null>(null);
-  const [liveMovements, setLiveMovements] = useState<PointsMovement[]>([]);
 
   const groupQuery = useQuery({
     queryKey: ["group", slug],
@@ -58,12 +46,6 @@ export default function GroupHomeView() {
   const balanceQuery = useQuery({
     queryKey: ["groupBalance", groupId],
     queryFn: () => getGroupBalance(groupId!),
-    enabled: !!groupId,
-  });
-
-  const historyQuery = useQuery({
-    queryKey: ["groupHistoryPreview", groupId],
-    queryFn: () => getGroupHistory(groupId!, null, 3),
     enabled: !!groupId,
   });
 
@@ -85,33 +67,13 @@ export default function GroupHomeView() {
     [balanceQuery]
   );
 
-  const onMovement = useCallback((payload: PointsMovement) => {
-    setLiveMovements((prev) => {
-      if (prev.some((m) => m.id === payload.id)) return prev;
-      return [payload, ...prev].slice(0, 3);
-    });
-  }, []);
-
   const onResync = useCallback(() => {
     void balanceQuery.refetch();
-    void historyQuery.refetch();
-  }, [balanceQuery, historyQuery]);
+  }, [balanceQuery]);
 
-  useGroupPointsSocket(groupId, onBalance, undefined, onMovement, onResync);
+  useGroupPointsSocket(groupId, onBalance, undefined, undefined, onResync);
 
   const total = liveTotal ?? balanceQuery.data?.total ?? 0;
-  const byBar = balanceQuery.data?.byBar ?? [];
-  const visibleBars = showAllBars ? byBar : byBar.slice(0, 5);
-  const previewItems = useMemo(() => {
-    const fromApi = historyQuery.data?.items ?? [];
-    const merged = [...liveMovements, ...fromApi];
-    const seen = new Set<string>();
-    return merged.filter((m) => {
-      if (seen.has(m.id)) return false;
-      seen.add(m.id);
-      return true;
-    }).slice(0, 3);
-  }, [historyQuery.data?.items, liveMovements]);
 
   const outing = outingQuery.data;
   const canCreate =
@@ -226,7 +188,7 @@ export default function GroupHomeView() {
             variant="primary"
             size="md"
             fullWidth
-            onClick={() => navigate(`/groups/${slug}`)}
+            onClick={() => navigate(`/groups/${slug}/salida`)}
           >
             Ver detalle
           </Button>
@@ -243,7 +205,7 @@ export default function GroupHomeView() {
                 <Button
                   variant="primary"
                   size="md"
-                  onClick={() => navigate(`/groups/${slug}`)}
+                  onClick={() => navigate(`/groups/${slug}/salida`)}
                 >
                   <PlusCircle size={18} />
                   Crear salida
@@ -276,87 +238,6 @@ export default function GroupHomeView() {
           <History size={18} className="text-lime" />
           <span className="text-xs font-medium">Historial</span>
         </Link>
-      </section>
-
-      <section>
-        <div className="flex items-center justify-between mb-2">
-          <p className="overline m-0 flex items-center gap-1">
-            <Wallet size={12} /> Saldo por bar
-          </p>
-          <Link to={`/groups/${slug}/saldo`} className="text-xs text-lime no-underline">
-            Ver saldo
-          </Link>
-        </div>
-        {visibleBars.length === 0 ? (
-          <p className="text-sm text-text-secondary m-0">Todavía no hay puntos acreditados.</p>
-        ) : (
-          <ul className="list-none p-0 m-0 flex flex-col gap-2">
-            {visibleBars.map((row) => (
-              <li
-                key={row.barId}
-                className="rounded-md border border-border bg-surface-2 px-3 py-2 flex justify-between gap-2"
-              >
-                <span className="truncate text-sm">{row.barName}</span>
-                <span className="text-lime font-bold tabular-nums text-sm">{row.points} pts</span>
-              </li>
-            ))}
-          </ul>
-        )}
-        {byBar.length > 5 && (
-          <button
-            type="button"
-            className="mt-2 text-xs text-lime flex items-center gap-1 bg-transparent border-0 cursor-pointer p-0"
-            onClick={() => setShowAllBars((v) => !v)}
-          >
-            {showAllBars ? (
-              <>
-                Ver menos <ChevronUp size={14} />
-              </>
-            ) : (
-              <>
-                Ver más <ChevronDown size={14} />
-              </>
-            )}
-          </button>
-        )}
-      </section>
-
-      <section>
-        <div className="flex items-center justify-between mb-2">
-          <p className="overline m-0">Últimos movimientos</p>
-          <Link to={`/groups/${slug}/historial`} className="text-xs text-lime no-underline">
-            Ver todo
-          </Link>
-        </div>
-        {previewItems.length === 0 ? (
-          <p className="text-sm text-text-secondary m-0">Sin movimientos todavía.</p>
-        ) : (
-          <ul className="list-none p-0 m-0 flex flex-col gap-2">
-            {previewItems.map((item) => (
-              <li
-                key={item.id}
-                className="rounded-md border border-border bg-surface-2 px-3 py-2 flex items-center justify-between gap-2"
-              >
-                <div className="min-w-0 flex items-center gap-2">
-                  <Beer size={16} className="text-text-secondary shrink-0" />
-                  <div className="min-w-0">
-                    <p className="text-sm m-0 truncate">{item.barName}</p>
-                    <p className="text-xs text-text-secondary m-0 capitalize">
-                      {item.type} · {relativeTime(item.createdAt)}
-                    </p>
-                  </div>
-                </div>
-                <span
-                  className={`text-sm font-bold tabular-nums ${
-                    item.points >= 0 ? "text-lime" : "text-text-secondary"
-                  }`}
-                >
-                  {item.points >= 0 ? `+${item.points}` : item.points}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
       </section>
     </motion.div>
   );

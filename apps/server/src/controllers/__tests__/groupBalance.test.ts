@@ -110,6 +110,7 @@ describe('GroupBalanceController.getHistory (LB-104 mapping)', () => {
     const txAttendanceId = new Types.ObjectId()
     const txConsumptionId = new Types.ObjectId()
     const txRedemptionId = new Types.ObjectId()
+    const outingId = new Types.ObjectId()
     const createdAt = new Date('2026-09-02T12:00:00Z')
 
     vi.mocked(Group.findById).mockReturnValue({
@@ -127,6 +128,7 @@ describe('GroupBalanceController.getHistory (LB-104 mapping)', () => {
             {
               _id: txRedemptionId,
               bar: barId,
+              outing: outingId,
               type: PointsTransactionType.REDEMPTION,
               amount: -80,
               label: 'Canje cerveza',
@@ -135,6 +137,7 @@ describe('GroupBalanceController.getHistory (LB-104 mapping)', () => {
             {
               _id: txAttendanceId,
               bar: barId,
+              outing: outingId,
               type: PointsTransactionType.ATTENDANCE,
               amount: 10,
               label: 'Asistencia',
@@ -143,6 +146,7 @@ describe('GroupBalanceController.getHistory (LB-104 mapping)', () => {
             {
               _id: txConsumptionId,
               bar: barId,
+              outing: outingId,
               type: PointsTransactionType.CONSUMPTION,
               amount: 50,
               label: 'Consumo',
@@ -190,16 +194,19 @@ describe('GroupBalanceController.getHistory (LB-104 mapping)', () => {
       expect.arrayContaining([
         expect.objectContaining({
           id: txRedemptionId.toString(),
+          outingId: outingId.toString(),
           type: 'canje',
           points: -80,
         }),
         expect.objectContaining({
           id: txAttendanceId.toString(),
+          outingId: outingId.toString(),
           type: 'asistencia',
           points: 10,
         }),
         expect.objectContaining({
           id: txConsumptionId.toString(),
+          outingId: outingId.toString(),
           type: 'consumo',
           points: 50,
           metadata: expect.objectContaining({
@@ -208,6 +215,78 @@ describe('GroupBalanceController.getHistory (LB-104 mapping)', () => {
           }),
         }),
       ])
+    )
+  })
+
+  it('filters by outingId when provided and includes outingId in each item (LB-111)', async () => {
+    const groupId = new Types.ObjectId()
+    const userId = new Types.ObjectId()
+    const barId = new Types.ObjectId()
+    const outingId = new Types.ObjectId()
+    const txId = new Types.ObjectId()
+    const createdAt = new Date('2026-09-10T12:00:00Z')
+
+    vi.mocked(Group.findById).mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        lean: vi.fn().mockResolvedValue({
+          memberships: [{ user: userId, role: MembershipRole.MEMBER }],
+        }),
+      }),
+    } as any)
+
+    const findMock = vi.fn().mockReturnValue({
+      sort: vi.fn().mockReturnValue({
+        limit: vi.fn().mockReturnValue({
+          lean: vi.fn().mockResolvedValue([
+            {
+              _id: txId,
+              bar: barId,
+              outing: outingId,
+              type: PointsTransactionType.ATTENDANCE,
+              amount: 10,
+              label: 'Asistencia',
+              createdAt,
+            },
+          ]),
+        }),
+      }),
+    })
+    vi.mocked(PointsTransaction.find).mockImplementation(findMock)
+
+    vi.mocked(Bar.find).mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        lean: vi.fn().mockResolvedValue([{ _id: barId, name: 'El Bar' }]),
+      }),
+    } as any)
+
+    vi.mocked(Consumption.find).mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        lean: vi.fn().mockResolvedValue([]),
+      }),
+    } as any)
+
+    vi.mocked(User.find).mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        lean: vi.fn().mockResolvedValue([]),
+      }),
+    } as any)
+
+    const req: any = {
+      user: { _id: userId },
+      params: { groupId: groupId.toString() },
+      query: { outingId: outingId.toString() },
+    }
+    const res = mockRes()
+    await GroupBalanceController.getHistory(req, res)
+
+    expect(res.status).toHaveBeenCalledWith(200)
+
+    const filterArg = findMock.mock.calls[0][0]
+    expect(filterArg.outing?.toString()).toBe(outingId.toString())
+
+    const payload = res.json.mock.calls[0][0]
+    expect(payload.items[0]).toEqual(
+      expect.objectContaining({ id: txId.toString(), outingId: outingId.toString() })
     )
   })
 })

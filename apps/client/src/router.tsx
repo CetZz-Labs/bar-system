@@ -19,6 +19,7 @@ import JoinGroupView from './views/groups/JoinGroupView'
 import ConfirmConsumptionView from './views/groups/ConfirmConsumptionView'
 import GroupRewardsView from './views/groups/GroupRewardsView'
 import GroupHomeView from './views/groups/GroupHomeView'
+import GroupOutingView from './views/groups/GroupOutingView'
 import GroupBalanceView from './views/groups/GroupBalanceView'
 import GroupHistoryView from './views/groups/GroupHistoryView'
 import BarRegisterView from './views/bar/BarRegisterView'
@@ -84,6 +85,7 @@ export default function Router() {
                     <Route path="/groups/create" element={<GroupCreateView />} />
                     <Route path="/groups/:slug" element={<GroupDetailView />} />
                     <Route path="/groups/:slug/home" element={<GroupHomeView />} />
+                    <Route path="/groups/:slug/salida" element={<GroupOutingView />} />
                     <Route path="/groups/:slug/saldo" element={<GroupBalanceView />} />
                     <Route path="/groups/:slug/historial" element={<GroupHistoryView />} />
                     <Route path="/groups/:slug/confirmar-consumo" element={<ConfirmConsumptionView />} />

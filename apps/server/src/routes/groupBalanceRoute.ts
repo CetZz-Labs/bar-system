@@ -20,6 +20,7 @@ router.get(
     param("groupId").isMongoId().withMessage("El ID del grupo es requerido"),
     query("cursor").optional().isString(),
     query("limit").optional().isInt({ min: 1, max: 50 }),
+    query("outingId").optional().isMongoId().withMessage("outingId inválido"),
     handleInputErrors,
     GroupBalanceController.getHistory
 );
