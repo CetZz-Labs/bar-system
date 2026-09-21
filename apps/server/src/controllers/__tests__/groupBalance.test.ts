@@ -1,10 +1,11 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { GroupBalanceController } from '../GroupBalanceController'
 import Group from '../../models/Group'
-import PointsTransaction from '../../models/PointsTransaction'
+import PointsTransaction, { PointsTransactionType } from '../../models/PointsTransaction'
 import Bar from '../../models/Bar'
+import Consumption from '../../models/Consumption'
+import User, { MembershipRole } from '../../models/User'
 import { Types } from 'mongoose'
-import { MembershipRole } from '../../models/User'
 
 vi.mock('../../models/Group')
 vi.mock('../../models/PointsTransaction')
@@ -91,5 +92,122 @@ describe('GroupBalanceController.getBalance', () => {
     const res = mockRes()
     await GroupBalanceController.getBalance(req, res)
     expect(res.status).toHaveBeenCalledWith(403)
+  })
+})
+
+describe('GroupBalanceController.getHistory (LB-104 mapping)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('maps CONSUMPTION→consumo, ATTENDANCE→asistencia, REDEMPTION→canje', async () => {
+    const groupId = new Types.ObjectId()
+    const userId = new Types.ObjectId()
+    const barId = new Types.ObjectId()
+    const consumptionId = new Types.ObjectId()
+    const cashierId = new Types.ObjectId()
+
+    const txAttendanceId = new Types.ObjectId()
+    const txConsumptionId = new Types.ObjectId()
+    const txRedemptionId = new Types.ObjectId()
+    const createdAt = new Date('2026-09-02T12:00:00Z')
+
+    vi.mocked(Group.findById).mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        lean: vi.fn().mockResolvedValue({
+          memberships: [{ user: userId, role: MembershipRole.MEMBER }],
+        }),
+      }),
+    } as any)
+
+    vi.mocked(PointsTransaction.find).mockReturnValue({
+      sort: vi.fn().mockReturnValue({
+        limit: vi.fn().mockReturnValue({
+          lean: vi.fn().mockResolvedValue([
+            {
+              _id: txRedemptionId,
+              bar: barId,
+              type: PointsTransactionType.REDEMPTION,
+              amount: -80,
+              label: 'Canje cerveza',
+              createdAt,
+            },
+            {
+              _id: txAttendanceId,
+              bar: barId,
+              type: PointsTransactionType.ATTENDANCE,
+              amount: 10,
+              label: 'Asistencia',
+              createdAt,
+            },
+            {
+              _id: txConsumptionId,
+              bar: barId,
+              type: PointsTransactionType.CONSUMPTION,
+              amount: 50,
+              label: 'Consumo',
+              consumption: consumptionId,
+              createdAt,
+            },
+          ]),
+        }),
+      }),
+    } as any)
+
+    vi.mocked(Bar.find).mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        lean: vi.fn().mockResolvedValue([{ _id: barId, name: 'El Bar' }]),
+      }),
+    } as any)
+
+    vi.mocked(Consumption.find).mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        lean: vi.fn().mockResolvedValue([
+          { _id: consumptionId, amount: 5000, cashier: cashierId },
+        ]),
+      }),
+    } as any)
+
+    vi.mocked(User.find).mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        lean: vi.fn().mockResolvedValue([
+          { _id: cashierId, name: 'Cajero', lastName: 'Uno' },
+        ]),
+      }),
+    } as any)
+
+    const req: any = {
+      user: { _id: userId },
+      params: { groupId: groupId.toString() },
+      query: {},
+    }
+    const res = mockRes()
+    await GroupBalanceController.getHistory(req, res)
+
+    expect(res.status).toHaveBeenCalledWith(200)
+    const payload = res.json.mock.calls[0][0]
+    expect(payload.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: txRedemptionId.toString(),
+          type: 'canje',
+          points: -80,
+        }),
+        expect.objectContaining({
+          id: txAttendanceId.toString(),
+          type: 'asistencia',
+          points: 10,
+        }),
+        expect.objectContaining({
+          id: txConsumptionId.toString(),
+          type: 'consumo',
+          points: 50,
+          metadata: expect.objectContaining({
+            amount: 5000,
+            cashierName: 'Cajero Uno',
+          }),
+        }),
+      ])
+    )
   })
 })

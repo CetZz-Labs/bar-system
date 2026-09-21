@@ -14,12 +14,10 @@ import type { ContextBarOption, ContextMode } from "@/types/context"
 type LocationState = { from?: string } | null
 
 /**
- * Selector de contexto post-login (LB-24/LB-66). Se navega acá
- * explícitamente desde LoginView cuando el usuario tiene más de una opción
- * de contexto disponible (usuario / cajero de un bar / dueño de un bar).
- * Si solo tiene la opción "usuario" (sin ningún BarUser activo), LoginView
- * ni siquiera navega hasta acá — y si de todos modos se llega por URL
- * directa, este componente hace el mismo salto automático.
+ * Selector de contexto (LB-66 / LB-117).
+ * LB-117: ya no se fuerza post-login. Se usa desde perfil (cambio de modo)
+ * y sigue disponible en `/select-context` para cajeros/dueños que quieran
+ * volver a modo usuario o cambiar de bar.
  */
 export default function SelectContextView() {
     const { data: user, isLoading: isAuthLoading, isProfileComplete } = useAuth()
@@ -43,10 +41,9 @@ export default function SelectContextView() {
                 navigate(fromState || '/', { replace: true })
                 return
             }
-            // El access_token ya trae el turno recién abierto (ver
-            // ContextController.select); precargamos ['cashier-session']
-            // para que CashierLayout/useCashierAuth no dependan de un
-            // refetch en caliente al montar.
+            // Cajero: JWT de bar + turno (CashierLayout).
+            // Dueño: el home admin vive en MainLayout con JWT de usuario
+            // (LB-85); ver handleSelect — no se usa mode=owner acá.
             const cashierData = await cashierSession()
             queryClient.setQueryData(['cashier-session'], cashierData)
             navigate(`/bar/${variables.barId}/cajero`, { replace: true })
@@ -65,6 +62,13 @@ export default function SelectContextView() {
     }
 
     const handleSelect = (mode: ContextMode, barId?: string) => {
+        // LB-117 + LB-85: modo dueño = home admin en shell de usuario
+        // (dashboard), sin JWT de bar. El endpoint select(owner) abre turno
+        // de cajero y MainLayout lo redirige al panel — no sirve para el home.
+        if (mode === 'owner' && barId) {
+            navigate(`/bar/${barId}/dashboard`, { replace: true })
+            return
+        }
         mutate({ mode, barId, deviceInfo: getDeviceInfo() })
     }
 
@@ -99,7 +103,7 @@ export default function SelectContextView() {
             </header>
 
             <div className="mb-10">
-                <h1 className="mb-2">¿Cómo querés entrar?</h1>
+                <h1 className="mb-2">Cambiar modo</h1>
                 <p className="text-text-secondary text-base">
                     Elegí con qué rol continuar en esta sesión
                 </p>

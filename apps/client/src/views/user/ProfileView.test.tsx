@@ -13,7 +13,6 @@ vi.mock('motion/react', async () => {
 // Mock UserAPI
 vi.mock('@/API/UserAPI', () => ({
   getUserProfile: vi.fn(),
-  getUserGroups: vi.fn(),
   updateUserProfile: vi.fn(),
   uploadAvatar: vi.fn(),
 }));
@@ -36,11 +35,10 @@ vi.mock('@/utils/cropImageToSquare', () => ({
   cropImageToSquare: vi.fn((file: File) => Promise.resolve(file)),
 }));
 
-import { getUserProfile, getUserGroups, updateUserProfile } from '@/API/UserAPI';
+import { getUserProfile, updateUserProfile } from '@/API/UserAPI';
 import { useAuth } from '@/hooks/useAuth';
 
 const mockGetUserProfile = vi.mocked(getUserProfile);
-const mockGetUserGroups = vi.mocked(getUserGroups);
 const mockUpdateUserProfile = vi.mocked(updateUserProfile);
 const mockUseAuth = vi.mocked(useAuth);
 
@@ -58,11 +56,6 @@ describe('ProfileView', () => {
     birthdate: '1990-05-15',
   };
 
-  const mockGroups = [
-    { groupId: 'g1', slug: 'la-banda', name: 'La Banda', role: 'LEADER' as const, avatarUrl: 'https://example.com/g1.jpg' },
-    { groupId: 'g2', slug: 'amigos', name: 'Amigos', role: 'MEMBER' as const },
-  ];
-
   beforeEach(() => {
     vi.resetAllMocks();
     mockUseAuth.mockReturnValue({
@@ -76,7 +69,6 @@ describe('ProfileView', () => {
 
   it('renders loading state initially', () => {
     mockGetUserProfile.mockImplementation(() => new Promise(() => {}));
-    mockGetUserGroups.mockImplementation(() => new Promise(() => {}));
 
     renderWithProviders(<ProfileView />);
 
@@ -85,7 +77,6 @@ describe('ProfileView', () => {
 
   it('renders profile data after loading', async () => {
     mockGetUserProfile.mockResolvedValue(mockProfile);
-    mockGetUserGroups.mockResolvedValue(mockGroups);
 
     renderWithProviders(<ProfileView />);
 
@@ -94,11 +85,6 @@ describe('ProfileView', () => {
     });
 
     expect(screen.getByText('Juan Pérez')).toBeInTheDocument();
-
-    await waitFor(() => {
-      expect(screen.getByText('La Banda')).toBeInTheDocument();
-    });
-    expect(screen.getByText('Amigos')).toBeInTheDocument();
   });
 
   it('shows error state when profile fails to load', async () => {
@@ -113,7 +99,6 @@ describe('ProfileView', () => {
 
   it('enters inline edit mode when name is clicked', async () => {
     mockGetUserProfile.mockResolvedValue(mockProfile);
-    mockGetUserGroups.mockResolvedValue([]);
     const user = userEvent.setup();
 
     renderWithProviders(<ProfileView />);
@@ -132,7 +117,6 @@ describe('ProfileView', () => {
 
   it('saves name on confirm click', async () => {
     mockGetUserProfile.mockResolvedValue(mockProfile);
-    mockGetUserGroups.mockResolvedValue([]);
     mockUpdateUserProfile.mockResolvedValue('Nombre actualizado');
 
     renderWithProviders(<ProfileView />);
@@ -161,7 +145,6 @@ describe('ProfileView', () => {
 
   it('shows validation error for short name', async () => {
     mockGetUserProfile.mockResolvedValue(mockProfile);
-    mockGetUserGroups.mockResolvedValue([]);
 
     renderWithProviders(<ProfileView />);
 
@@ -188,7 +171,6 @@ describe('ProfileView', () => {
 
   it('shows validation error for single word name', async () => {
     mockGetUserProfile.mockResolvedValue(mockProfile);
-    mockGetUserGroups.mockResolvedValue([]);
 
     renderWithProviders(<ProfileView />);
 
@@ -213,7 +195,6 @@ describe('ProfileView', () => {
 
   it('cancels name editing', async () => {
     mockGetUserProfile.mockResolvedValue(mockProfile);
-    mockGetUserGroups.mockResolvedValue([]);
 
     renderWithProviders(<ProfileView />);
 
@@ -245,7 +226,6 @@ describe('ProfileView', () => {
     });
 
     mockGetUserProfile.mockResolvedValue(mockProfile);
-    mockGetUserGroups.mockResolvedValue([]);
 
     renderWithProviders(<ProfileView />);
 
@@ -281,7 +261,6 @@ describe('ProfileView', () => {
     });
 
     mockGetUserProfile.mockResolvedValue(mockProfile);
-    mockGetUserGroups.mockResolvedValue([]);
 
     renderWithProviders(<ProfileView />);
 
@@ -304,29 +283,5 @@ describe('ProfileView', () => {
     });
 
     expect(mockLogout).not.toHaveBeenCalled();
-  });
-
-  it('renders empty groups state', async () => {
-    mockGetUserProfile.mockResolvedValue(mockProfile);
-    mockGetUserGroups.mockResolvedValue([]);
-
-    renderWithProviders(<ProfileView />);
-
-    await waitFor(() => {
-      expect(screen.getByText('Todavía no pertenecés a ningún grupo')).toBeInTheDocument();
-    });
-  });
-
-  it('renders groups error state with retry', async () => {
-    mockGetUserProfile.mockResolvedValue(mockProfile);
-    mockGetUserGroups.mockRejectedValue(new Error('Groups failed'));
-
-    renderWithProviders(<ProfileView />);
-
-    await waitFor(() => {
-      expect(screen.getByText('Error al cargar grupos')).toBeInTheDocument();
-    }, { timeout: 3000 });
-
-    expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument();
   });
 });

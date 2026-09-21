@@ -1,12 +1,12 @@
 import { useState, useRef, useCallback } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { getUserProfile, updateUserProfile, uploadAvatar, getUserGroups } from "@/API/UserAPI";
+import { getUserProfile, updateUserProfile, uploadAvatar } from "@/API/UserAPI";
 import { useAuth } from "@/hooks/useAuth";
 import { toastApiError } from "@/utils/apiError";
 import { cropImageToSquare } from "@/utils/cropImageToSquare";
 import { motion } from "motion/react";
-import { ArrowLeft, Check, X, Pencil, Loader2, LogOut, Users } from "lucide-react";
+import { ArrowLeft, Check, X, Pencil, Loader2, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Avatar } from "@/components/ui/Avatar";
@@ -14,6 +14,7 @@ import { Modal } from "@/components/ui/Modal";
 import { FileUpload } from "@/components/ui/FileUpload";
 import { useNavigate } from "react-router";
 import PushNotificationsSection from "./PushNotificationsSection";
+import ProfileModeSection from "./ProfileModeSection";
 
 function getFullName(profile: { name?: string; lastName?: string; fullName?: string }): string {
   if (profile.fullName) return profile.fullName;
@@ -51,14 +52,6 @@ export default function ProfileView() {
     queryFn: getUserProfile,
     retry: 1,
     refetchOnWindowFocus: false,
-  });
-
-  const { data: groups, isLoading: groupsLoading, isError: groupsError } = useQuery({
-    queryKey: ['userGroups'],
-    queryFn: getUserGroups,
-    retry: 1,
-    refetchOnWindowFocus: false,
-    enabled: !!profile,
   });
 
   // Inline name editing state
@@ -311,60 +304,10 @@ export default function ProfileView() {
       {/* Push Notifications Section (LB-80) */}
       <PushNotificationsSection preferences={profile.notificationPreferences} />
 
-      {/* Groups Section */}
-      <div className="mb-8">
-        <h2 className="text-lg font-display font-bold tracking-tight mb-4 flex items-center gap-2">
-          <Users size={20} className="text-lime" />
-          Mis grupos
-        </h2>
+      {/* LB-117: cambio de modo cajero/dueño (solo si hay roles de bar) */}
+      <ProfileModeSection />
 
-        {groupsLoading && (
-          <div className="flex items-center justify-center py-6">
-            <Loader2 size={24} className="text-lime animate-spin" />
-          </div>
-        )}
-
-        {groupsError && (
-          <div className="text-center py-4">
-            <p className="text-error text-sm mb-2">Error al cargar grupos</p>
-            <Button variant="outline" size="sm" onClick={() => queryClient.invalidateQueries({ queryKey: ['userGroups'] })}>
-              Reintentar
-            </Button>
-          </div>
-        )}
-
-        {!groupsLoading && !groupsError && groups && groups.length === 0 && (
-          <div className="text-center py-6 bg-surface-2 rounded-xl border border-border">
-            <Users size={32} className="text-text-muted mx-auto mb-2" />
-            <p className="text-text-secondary text-sm">Todavía no pertenecés a ningún grupo</p>
-          </div>
-        )}
-
-        {!groupsLoading && !groupsError && groups && groups.length > 0 && (
-          <div className="flex flex-col gap-3">
-            {groups.map((group) => (
-              <div
-                key={group.groupId}
-                className="flex items-center gap-4 p-4 bg-surface-2 rounded-xl border border-border transition-colors hover:border-border-hover"
-              >
-                <Avatar
-                  src={group.avatarUrl}
-                  alt={group.name}
-                  size="sm"
-                />
-                <div className="flex-1 min-w-0">
-                  <p className="font-ui font-semibold text-text-primary truncate">
-                    {group.name}
-                  </p>
-                  <p className="text-text-secondary text-sm capitalize">
-                    {group.role}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      {/* LB-113: listado de grupos removido del perfil (queda solo la vista de grupos). */}
 
       {/* Logout */}
       <div className="mt-auto pt-4 pb-4">

@@ -5,12 +5,13 @@ import Token from "../models/Token";
 import { AuthEmail } from "../emails/AuthEmail";
 import { checkPassword, hashPassword } from "../utils/auth";
 import { generateJWT } from "../utils/jwt";
+import { CURRENT_TERMS_VERSION } from "../constants/legal";
 
 export class AuthController {
 
     static createAccount = async (req: Request, res: Response) => {
         try {
-            const { name, lastName, email, password, confirmPassword, birthdate } = req.body
+            const { name, lastName, email, password, confirmPassword, birthdate, acceptedTerms } = req.body
 
             const userExists = await User.findOne({ email })
 
@@ -22,12 +23,30 @@ export class AuthController {
                 return res.status(400).json({ message: "Las contraseñas no coinciden" })
             }
 
+            // LB-110: sin aceptación explícita de T&C / +18 no se crea la cuenta.
+            const termsOk = acceptedTerms === true || acceptedTerms === "true";
+            if (!termsOk) {
+                return res.status(400).json({
+                    message: "Debés aceptar los Términos, la Política de Privacidad y declarar ser mayor de 18 años",
+                })
+            }
+
             // LB-84: whitelist explícita de campos de registro — nunca pasar
             // req.body completo a User.create. `role`/`isActive`/
             // `profileComplete`/`memberships` no son campos de registro y no
             // deben poder setearse desde el body (mass assignment /
             // escalación de privilegios, ver progress/explorers/exp_LB-84.md §2).
-            const user = await User.create({ name, lastName, email, password, birthdate })
+            const user = await User.create({
+                name,
+                lastName,
+                email,
+                password,
+                birthdate,
+                termsAccepted: true,
+                termsAcceptedAt: new Date(),
+                termsVersion: CURRENT_TERMS_VERSION,
+                legalAgeDeclared: true,
+            })
 
             const token = new Token()
             token.token = generateToken()
